@@ -53,23 +53,23 @@ __global__ void ProjectionNorm(float * Norm, int view, float ex, float ey, float
 	if ((i < d_Px) && (j < d_Py))
 	{
 		//Define image location
-		float dx1 = ((float)i - (d_Px2 - 0.5f)) * d_PitchPx;
-		float dy1 = ((float)j - (d_Py2 - 0.5f)) * d_PitchPy;
+		float dx1 = ((float)i - (d_HalfPx2 - 0.5f)) * d_PitchPx;
+		float dy1 = ((float)j - (d_HalfPy2 - 0.5f)) * d_PitchPy;
 		float dx2 = ez / sqrtf((dx1 - ex)*(dx1 - ex) + ez*ez);
 		float dy2 = ez / sqrtf((dy1 - ey)*(dy1 - ey) + ez*ez);
 		float scale = 1.0f / (dx2*dx2);
 
 		//Define image location
-		dx1 = (((float)i - (d_Px2)) * d_PitchPx - ex)*d_PitchNx2;
-		dy1 = (((float)j - (d_Py2)) * d_PitchPy - ey)*d_PitchNy2;
-		dx2 = (((float)i - (d_Px2 - 1.0f)) * d_PitchPx - ex) *d_PitchNx2;
-		dy2 = (((float)j - (d_Py2 - 1.0f)) * d_PitchPy - ey)*d_PitchNy2;
+		dx1 = (((float)i - (d_HalfPx2)) * d_PitchPx - ex)*d_PitchNxInv;
+		dy1 = (((float)j - (d_HalfPy2)) * d_PitchPy - ey)*d_PitchNyInv;
+		dx2 = (((float)i - (d_HalfPx2 - 1.0f)) * d_PitchPx - ex) *d_PitchNxInv;
+		dy2 = (((float)j - (d_HalfPy2 - 1.0f)) * d_PitchPy - ey)*d_PitchNyInv;
 
 		//Get first x and y location
-		float x1 = dx1 + (d_Nx2 - 0.5f) + ex * d_PitchNx2;
-		float y1 = dy1 + (d_Ny2 - 0.5f) + ey * d_PitchNy2;
-		float x2 = dx2 + (d_Nx2 - 0.5f) + ex * d_PitchNx2;
-		float y2 = dy2 + (d_Ny2 - 0.5f) + ey * d_PitchNy2;
+		float x1 = dx1 + (d_HalfNx2 - 0.5f) + ex * d_PitchNxInv;
+		float y1 = dy1 + (d_HalfNy2 - 0.5f) + ey * d_PitchNyInv;
+		float x2 = dx2 + (d_HalfNx2 - 0.5f) + ex * d_PitchNxInv;
+		float y2 = dy2 + (d_HalfNy2 - 0.5f) + ey * d_PitchNyInv;
 
 		float Pro = 0;
 
@@ -247,7 +247,7 @@ __global__ void ScatterCorrect(float * Sino, unsigned short * Proj,
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
-//SART part of the reconstuction code
+//START part of the reconstuction code
 __global__ void ProjectImage(float * Sino, float * Norm,
 	float *Error, int view, float ex, float ey, float ez)
 {
@@ -255,35 +255,33 @@ __global__ void ProjectImage(float * Sino, float * Norm,
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
 
-	//Image is not a power of 2
-	if ((i < d_Px) && (j < d_Py))
-	{
+	//within image boudary
+	if ((i < d_Px) && (j < d_Py)){
 		//Check to make sure the ray passes through the image
 		float NP = Norm[(j + view*d_MPy)*d_MPx + i];
 		float err = 0;
 
-		if (NP != 0)
-		{
+		if (NP != 0){
 			//Define image location
-			float dx1 = ((float)i - (d_Px2 - 0.5f)) * d_PitchPx;
-			float dy1 = ((float)j - (d_Py2 - 0.5f)) * d_PitchPy;
+			float dx1 = ((float)i - (d_HalfPx2 - 0.5f)) * d_PitchPx;
+			float dy1 = ((float)j - (d_HalfPy2 - 0.5f)) * d_PitchPy;
 			float dx2 = ez / sqrtf((dx1 - ex)*(dx1 - ex) + ez*ez);
 			float dy2 = ez / sqrtf((dy1 - ey)*(dy1 - ey) + ez*ez);
-			float scale = 1.0f / (dx2*dx2);
+			float scale = 1.0f / (dx2*dy2);
 
 			//Define image location
-			dx1 = (((float)i - (d_Px2)) * d_PitchPx - ex)*d_PitchNx2;
-			dy1 = (((float)j - (d_Py2)) * d_PitchPy - ey)*d_PitchNy2;
-			dx2 = (((float)i - (d_Px2 - 1.0f)) * d_PitchPx - ex) *d_PitchNx2;
-			dy2 = (((float)j - (d_Py2 - 1.0f)) * d_PitchPy - ey)*d_PitchNy2;
+			dx1 = (((float)i - (d_HalfPx2)) * d_PitchPx - ex)*d_PitchNxInv;
+			dy1 = (((float)j - (d_HalfPy2)) * d_PitchPy - ey)*d_PitchNyInv;
+			dx2 = (((float)i - (d_HalfPx2 - 1.0f)) * d_PitchPx - ex) *d_PitchNxInv;
+			dy2 = (((float)j - (d_HalfPy2 - 1.0f)) * d_PitchPy - ey)*d_PitchNyInv;
 
 			float Pro = 0.0f;
 			float count = 0.0f;
 
-			float x1 = dx1 + (d_Nx2 - 0.5f) + ex * d_PitchNx2;
-			float y1 = dy1 + (d_Ny2 - 0.5f) + ey * d_PitchNy2;
-			float x2 = dx2 + (d_Nx2 - 0.5f) + ex * d_PitchNx2;
-			float y2 = dy2 + (d_Ny2 - 0.5f) + ey * d_PitchNy2;
+			float x1 = dx1 + (d_HalfNx2 - 0.5f) + ex * d_PitchNxInv;
+			float y1 = dy1 + (d_HalfNy2 - 0.5f) + ey * d_PitchNyInv;
+			float x2 = dx2 + (d_HalfNx2 - 0.5f) + ex * d_PitchNxInv;
+			float y2 = dy2 + (d_HalfNy2 - 0.5f) + ey * d_PitchNyInv;
 
 			//Add slice offset
 			x1 += ((((float)d_PitchNz)*dx1) / ez) * (float)d_Z_Offset;
@@ -293,8 +291,7 @@ __global__ void ProjectImage(float * Sino, float * Norm,
 			
 
 			//Step through the image space by slice in z direction
-			for (int z = 0; z < d_Nz; z++)
-			{
+			for (int z = 0; z < d_Nz; z++){
 				//Get the next n and x
 				x1 += (((float)d_PitchNz)*dx1) / ez;
 				x2 += (((float)d_PitchNz)*dx2) / ez;
@@ -314,8 +311,7 @@ __global__ void ProjectImage(float * Sino, float * Norm,
 				float xs = x1;
 
 				//Cycle through pixels x and y and used to calculate projection
-				for (int x = xx1; x < xx2; x++)
-				{
+				for (int x = xx1; x < xx2; x++){
 					float ys = y1;
 					float xend = min((float)(x + 1), x2);
 
@@ -331,19 +327,19 @@ __global__ void ProjectImage(float * Sino, float * Norm,
 						count += weight;
 
 						ys = yend;
-					}
+					}//y loop
 					xs = xend;
-				}
-			}
-			//If the ray passes through the image region get propjection error
+				}//x loop
+			}//z loop
+
+			//If the ray passes through the image region get projection error
 			err = (tex2D(textSino, (float)i + 0.5f, (float)j + 0.5f + view*d_MPy)
 				- Pro*NP) / (max(count, 1.0f));
-
-		}
+		}//Norm check
 
 		//Add Calculated error to an error image to back project
 		Error[j*d_MPx + i] = err;
-	}
+	}//image boudary check
 }
 
 __global__ void BackProjectError(float * IM, float * IM2, 
@@ -361,16 +357,16 @@ __global__ void BackProjectError(float * IM, float * IM2,
 		float r = (ez) / (((float)(k+ d_Z_Offset)*d_PitchNz) + ez);
 
 		//Use r to get detecor x and y
-		float dx1 = ex + r * (((float)i - (d_Nx2))*d_PitchNx - ex);
-		float dy1 = ey + r * (((float)j - (d_Ny2))*d_PitchNy - ey);
-		float dx2 = ex + r * (((float)i - (d_Nx2 - 1.0f))*d_PitchNx - ex);
-		float dy2 = ey + r * (((float)j - (d_Ny2 - 1.0f))*d_PitchNy - ey);
+		float dx1 = ex + r * (((float)i - (d_HalfNx2))*d_PitchNx - ex);
+		float dy1 = ey + r * (((float)j - (d_HalfNy2))*d_PitchNy - ey);
+		float dx2 = ex + r * (((float)i - (d_HalfNx2 - 1.0f))*d_PitchNx - ex);
+		float dy2 = ey + r * (((float)j - (d_HalfNy2 - 1.0f))*d_PitchNy - ey);
 
 		//Use detector x and y to get pixels
-		float x1 = dx1 * d_PitchPx2 + (d_Px2 - 0.5f);
-		float x2 = dx2 * d_PitchPx2 + (d_Px2 - 0.5f);
-		float y1 = dy1 * d_PitchPy2 + (d_Py2 - 0.5f);
-		float y2 = dy2 * d_PitchPy2 + (d_Py2 - 0.5f);
+		float x1 = dx1 * d_PitchPxInv + (d_HalfPx2 - 0.5f);
+		float x2 = dx2 * d_PitchPxInv + (d_HalfPx2 - 0.5f);
+		float y1 = dy1 * d_PitchPyInv + (d_HalfPy2 - 0.5f);
+		float y2 = dy2 * d_PitchPyInv + (d_HalfPy2 - 0.5f);
 
 		//Get the first and last pixels in x and y the ray passes through
 		int xx1 = max((int)floorf(min(x1, x2)), 0);
@@ -387,8 +383,8 @@ __global__ void BackProjectError(float * IM, float * IM2,
 
 		//Set the first x value to the first pixel
 		float ezz = 1.0f / (ez*ez);
-		float xx = (d_Px2 - 0.5f)*d_PitchPx - ex;
-		float yy = (d_Py2 - 0.5f)*d_PitchPy - ey;
+		float xx = (d_HalfPx2 - 0.5f)*d_PitchPx - ex;
+		float yy = (d_HalfPy2 - 0.5f)*d_PitchPy - ey;
 
 		float xs = x1;
 		//Cycle through pixels x and y and used to calculate projection
@@ -1100,14 +1096,14 @@ void SetUpGPUMemory(struct SystemControl * Sys)
 	ChkErr(cudaMemcpy(d_alpha, AlphaSlice, sizeSlice, cudaMemcpyHostToDevice));
 	delete[] AlphaSlice;
 
-	float Px2 = (float)Sys->Proj->Nx / 2.0f;
-	float Py2 = (float)Sys->Proj->Ny / 2.0f;
-	float Nx2 = (float)Sys->Recon->Nx / 2.0f;
-	float Ny2 = (float)Sys->Recon->Ny / 2.0f;
-	float PitchPx2 = 1.0f / Sys->Proj->Pitch_x;
-	float PitchPy2 = 1.0f / Sys->Proj->Pitch_y;
-	float PitchNx2 = 1.0f / Sys->Recon->Pitch_x;
-	float PitchNy2 = 1.0f / Sys->Recon->Pitch_y;
+	float HalfPx2 = (float)Sys->Proj->Nx / 2.0f;
+	float HalfPy2 = (float)Sys->Proj->Ny / 2.0f;
+	float HalfNx2 = (float)Sys->Recon->Nx / 2.0f;
+	float HalfNy2 = (float)Sys->Recon->Ny / 2.0f;
+	float PitchPxInv = 1.0f / Sys->Proj->Pitch_x;
+	float PitchPyInv = 1.0f / Sys->Proj->Pitch_y;
+	float PitchNxInv = 1.0f / Sys->Recon->Pitch_x;
+	float PitchNyInv = 1.0f / Sys->Recon->Pitch_y;
 	int Sice_Offset =(int)(((float)Sys->Recon->Slice_0_z)
 		/(float)(Sys->Recon->Pitch_z));
 
@@ -1121,21 +1117,19 @@ void SetUpGPUMemory(struct SystemControl * Sys)
 	ChkErr(cudaMemcpyToSymbol(d_MNx, &MemR_Nx, sizeof(int)));
 	ChkErr(cudaMemcpyToSymbol(d_MNy, &MemR_Ny, sizeof(int)));
 
-	ChkErr(cudaMemcpyToSymbol(d_Px2, &Px2, sizeof(float)));
-	ChkErr(cudaMemcpyToSymbol(d_Py2, &Py2, sizeof(float)));
-	ChkErr(cudaMemcpyToSymbol(d_Nx, &Sys->Recon->Nx, sizeof(int)));
-	ChkErr(cudaMemcpyToSymbol(d_Ny, &Sys->Recon->Ny, sizeof(int)));
-	ChkErr(cudaMemcpyToSymbol(d_Nx2, &Nx2, sizeof(float)));
-	ChkErr(cudaMemcpyToSymbol(d_Ny2, &Ny2, sizeof(float)));
+	ChkErr(cudaMemcpyToSymbol(d_HalfPx2, &HalfPx2, sizeof(float)));
+	ChkErr(cudaMemcpyToSymbol(d_HalfPy2, &HalfPy2, sizeof(float)));
+	ChkErr(cudaMemcpyToSymbol(d_HalfNx2, &HalfNx2, sizeof(float)));
+	ChkErr(cudaMemcpyToSymbol(d_HalfNy2, &HalfNy2, sizeof(float)));
 	ChkErr(cudaMemcpyToSymbol(d_Nz, &Sys->Recon->Nz, sizeof(int)));
 	ChkErr(cudaMemcpyToSymbol(d_PitchPx, &Sys->Proj->Pitch_x, sizeof(float)));
 	ChkErr(cudaMemcpyToSymbol(d_PitchPy, &Sys->Proj->Pitch_y, sizeof(float)));
-	ChkErr(cudaMemcpyToSymbol(d_PitchPx2, &PitchPx2, sizeof(float)));
-	ChkErr(cudaMemcpyToSymbol(d_PitchPy2, &PitchPy2, sizeof(float)));
+	ChkErr(cudaMemcpyToSymbol(d_PitchPxInv, &PitchPxInv, sizeof(float)));
+	ChkErr(cudaMemcpyToSymbol(d_PitchPyInv, &PitchPyInv, sizeof(float)));
 	ChkErr(cudaMemcpyToSymbol(d_PitchNx, &Sys->Recon->Pitch_x, sizeof(float)));
 	ChkErr(cudaMemcpyToSymbol(d_PitchNy, &Sys->Recon->Pitch_y, sizeof(float)));
-	ChkErr(cudaMemcpyToSymbol(d_PitchNx2, &PitchNx2, sizeof(float)));
-	ChkErr(cudaMemcpyToSymbol(d_PitchNy2, &PitchNy2, sizeof(float)));
+	ChkErr(cudaMemcpyToSymbol(d_PitchNxInv, &PitchNxInv, sizeof(float)));
+	ChkErr(cudaMemcpyToSymbol(d_PitchNyInv, &PitchNyInv, sizeof(float)));
 	ChkErr(cudaMemcpyToSymbol(d_PitchNz, &Sys->Recon->Pitch_z, sizeof(float)));
 	ChkErr(cudaMemcpyToSymbol(d_Views, &Sys->Proj->NumViews, sizeof(int)));
 	ChkErr(cudaMemcpyToSymbol(d_rmax, &rmax, sizeof(float)));

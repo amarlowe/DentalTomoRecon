@@ -25,12 +25,17 @@
 #include <Windows.h>
 #include <WinBase.h>
 
+#pragma comment(lib, "Shlwapi.lib")
+
 /********************************************************************************************/
 /* Filepaths																				*/
 /********************************************************************************************/
 #define GEOMETRYFILE	"C:\\Users\\jdean\\Desktop\\recon_files\\geometry_files\\FocalSpotGeometry.txt"
 #define GAINFILE	"C:\\Users\\jdean\\Desktop\\recon_files\\calibration_files\\Blank"
 #define DARKFILE	"C:\\Users\\jdean\\Desktop\\recon_files\\calibration_files\\Dark"
+//#define GEOMETRYFILE	"C:\\Users\\jdean\\Google Drive\\software\\Xinvivo_software\\Recon\\recon_files\\geometry_files\\FocalSpotGeometry.txt"
+//#define GAINFILE	"C:\\Users\\jdean\\Google Drive\\software\\Xinvivo_software\\Recon\recon_files\\calibration_files\\Blank"
+//#define DARKFILE	"C:\\Users\\jdean\\Google Drive\\software\\Xinvivo_software\\Recon\\recon_files\\calibration_files\\Dark"
 
 #define NUMVIEWS 7
 
