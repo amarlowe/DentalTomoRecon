@@ -25,6 +25,15 @@
 #include <Windows.h>
 #include <WinBase.h>
 
+/********************************************************************************************/
+/* Filepaths																				*/
+/********************************************************************************************/
+#define GEOMETRYFILE	"C:\\Users\\jdean\\Desktop\\recon_files\\geometry_files\\FocalSpotGeometry.txt"
+#define GAINFILE	"C:\\Users\\jdean\\Desktop\\recon_files\\calibration_files\\Blank"
+#define DARKFILE	"C:\\Users\\jdean\\Desktop\\recon_files\\calibration_files\\Dark"
+
+#define NUMVIEWS 7
+
 
 /********************************************************************************************/
 /* System Structures (All units are in millimeters)											*/

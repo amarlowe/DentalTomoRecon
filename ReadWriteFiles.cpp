@@ -297,8 +297,7 @@ void SetUpSystemAndReadGeometry(struct SystemControl * Sys, int NumViews, std::s
 	Sys->SysGeo.IsoY = 0;
 	Sys->SysGeo.IsoZ = 0;
 	
-	std::string FilePath;
-	FilePath = "D:\\recon_files\\geometry_files\\FocalSpotGeometry.txt";
+	std::string FilePath = GEOMETRYFILE;
 
 	//Open fstream to text file
 	std::ifstream file(FilePath.c_str());
@@ -712,8 +711,7 @@ void ReadDarkImages(struct  SystemControl * Sys, int NumViews)
 	Sys->Norm->DarkData = new unsigned short[size_single_proj];
 
 	//Define paths to dark data
-	std::string DarkPath;
-	DarkPath = "D:\\recon_files\\calibration_files\\Dark";
+	std::string DarkPath = DARKFILE;
 	std::string darkSearchPath = DarkPath + "/*";
 
 	std::string avgFilePath;
@@ -727,6 +725,8 @@ void ReadDarkImages(struct  SystemControl * Sys, int NumViews)
 
 	if (fileptr == NULL)
 	{
+		std::cout << "Error opening the file: " << avgFilePath.c_str() << std::endl;
+		std::cout << "Please check the path and re-run the program." << std::endl;
 		status = 1;
 		exit(1);
 	}
@@ -741,13 +741,12 @@ void ReadGainImages(struct  SystemControl * Sys, int NumViews)
 	int size_single_proj = Sys->Proj->Nx * Sys->Proj->Ny;
 	int size_single_proj_bytes = size_single_proj * 2;
 
-	std::string GainPath;
+	std::string GainPath = GAINFILE;
 
 	std::string avgFilePath;
 
 	FILE* fileptr = NULL;
 
-	GainPath = "D:\\recon_files\\calibration_files\\Blank";
 	std::string gainSearchPath;
 
 	avgFilePath = GainPath;
@@ -832,6 +831,8 @@ void ReadGainImages(struct  SystemControl * Sys, int NumViews)
 						{
 							//							status = 1;
 							//							return status;
+							std::cout << "Error opening the file: " << avgFilePath.c_str() << std::endl;
+							std::cout << "Please check the path and re-run the program." << std::endl;
 							exit(1);
 						}
 
@@ -857,6 +858,8 @@ void ReadGainImages(struct  SystemControl * Sys, int NumViews)
 							{
 								//								status = 1;
 								//								return status;
+								std::cout << "Error opening the file: " << avgFilePath.c_str() << std::endl;
+								std::cout << "Please check the path and re-run the program." << std::endl;
 								exit(1);
 							}
 
@@ -870,6 +873,8 @@ void ReadGainImages(struct  SystemControl * Sys, int NumViews)
 						{
 							//							status = 1;
 							//							return status;
+							std::cout << "Error opening the file: " << avgFilePath.c_str() << std::endl;
+							std::cout << "Please check the path and re-run the program." << std::endl;
 							exit(1);
 						}
 					}
@@ -920,6 +925,8 @@ void ReadGainImages(struct  SystemControl * Sys, int NumViews)
 			{
 				//				status = 1;
 				//				return status;
+				std::cout << "Error opening the file: " << avgFilePath.c_str() << std::endl;
+				std::cout << "Please check the path and re-run the program." << std::endl;
 				exit(1);
 			}
 			//			fwrite(&(GainData[view*size_single_proj]), sizeof(USHORT), numPerProj, fileptr);

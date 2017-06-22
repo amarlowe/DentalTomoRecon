@@ -1,0 +1,14 @@
+TomoRecon
+
+-------------Features------------------
+- File system that saves calbiration data system independently
+- Fix readGainAndDearkimages
+- Remove magic numbers and filepaths
+- Cuda profiler compiler switch
+
+--------------Bugs---------------------
+- selecting an image runs normally with no errors
+- Number of Slices to Reconstruct too large may crash program
+- texture memory accesses are not locally spaced, they're scattered
+- image edges given tails that are not explicitly dealt with
+- Check optimization of block and grid sizes

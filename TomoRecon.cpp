@@ -21,7 +21,8 @@
 int main(int argc, char ** argv)
 {
 	//Step 1: Get and example file for get the path
-	char filename[MAX_PATH];
+	char filename[] = "C:\\Users\\jdean\\Desktop\\Patient471\\Series1 20161118\\AcquiredImage1_0.raw";
+	/*char filename[MAX_PATH];
 
 	OPENFILENAME ofn;
 	ZeroMemory(&filename, sizeof(filename));
@@ -34,7 +35,7 @@ int main(int argc, char ** argv)
 	ofn.lpstrTitle = "Select one raw image file";
 	ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST;
 
-	GetOpenFileNameA(&ofn);
+	GetOpenFileNameA(&ofn);*/
 
 	//Seperate base path from the example file path
 	char * GetFilePath;
@@ -61,7 +62,7 @@ int main(int argc, char ** argv)
 	std::cout << "Reconstructing image set entitled: "<< FileName << std::endl;
 
 	//Step 2. Initialize structure and read emitter geometry
-	int NumViews = 7;
+	const int NumViews = NUMVIEWS;
 	struct SystemControl * Sys = new SystemControl;
 	SetUpSystemAndReadGeometry(Sys, NumViews,BasePath);
 
