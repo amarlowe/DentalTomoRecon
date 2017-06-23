@@ -14,7 +14,7 @@
 /* Change of path to new data																*/
 /********************************************************************************************/
 
-#include "TomoRecon.h"
+#include "../MainCode/TomoRecon.h"
 
 /********************************************************************************************/
 /* Functions to get the size and location of the data										*/

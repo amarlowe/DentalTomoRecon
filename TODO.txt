@@ -12,3 +12,6 @@ TomoRecon
 - texture memory accesses are not locally spaced, they're scattered
 - image edges given tails that are not explicitly dealt with
 - Check optimization of block and grid sizes
+- index out of bounds and other conditions set array values to an explicit -10
+- color inversion on low z layer counts
+- additional lines included on increasing z size
