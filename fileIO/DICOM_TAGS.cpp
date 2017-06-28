@@ -8,7 +8,7 @@
 /* Date: Septmeber 28, 2015																	*/
 /* Author: Brian Gonzales																	*/
 /********************************************************************************************/
-#include "../MainCode/TomoRecon.h"
+#include "../reconstruction/TomoRecon.h"
 #include "DICOM_TAGS.h"
 
 /********************************************************************************************/

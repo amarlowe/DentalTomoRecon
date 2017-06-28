@@ -39,6 +39,8 @@
 
 #define NUMVIEWS 7
 
+//#define PROFILER
+
 
 /********************************************************************************************/
 /* System Structures (All units are in millimeters)											*/

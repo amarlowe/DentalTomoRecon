@@ -13,8 +13,6 @@
 /********************************************************************************************/
 /* Include a general header																	*/
 /********************************************************************************************/
-//#include "../UICode/stdafx.h"
-//#include "../UICode/Geometry.h"
 #include "TomoRecon.h"
 
 /********************************************************************************************/
@@ -23,8 +21,10 @@
 int main(int argc, char ** argv)
 {
 	//Step 1: Get and example file for get the path
+#ifdef PROFILER
 	char filename[] = "C:\\Users\\jdean\\Desktop\\Patient471\\Series1 20161118\\AcquiredImage1_0.raw";
-	/*char filename[MAX_PATH];
+#else
+	char filename[MAX_PATH];
 
 	OPENFILENAME ofn;
 	ZeroMemory(&filename, sizeof(filename));
@@ -37,7 +37,8 @@ int main(int argc, char ** argv)
 	ofn.lpstrTitle = "Select one raw image file";
 	ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST;
 
-	GetOpenFileNameA(&ofn);*/
+	GetOpenFileNameA(&ofn);
+#endif
 
 	//Seperate base path from the example file path
 	char * GetFilePath;
