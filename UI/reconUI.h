@@ -46,13 +46,11 @@ class mainWindow : public wxFrame
 		wxMenu* file;
 		wxMenu* config;
 		wxMenu* help;
-		wxAuiNotebook* m_auinotebook6;
-		wxPanel* m_panel7;
-		wxPanel* m_panel8;
-		wxPanel* m_panel9;
+		wxPanel* m_panel10;
 		wxStatusBar* m_statusBar1;
 		
 		// Virtual event handlers, overide them in your derived class
+		virtual void onNew( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onOpen( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onQuit( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onConfig( wxCommandEvent& event ) { event.Skip(); }
@@ -60,6 +58,7 @@ class mainWindow : public wxFrame
 		
 	
 	public:
+		wxAuiNotebook* m_auinotebook6;
 		
 		mainWindow( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Tomogrophy Reconstruction"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 1074,681 ), long style = wxDEFAULT_FRAME_STYLE|wxTAB_TRAVERSAL );
 		wxAuiManager m_mgr;

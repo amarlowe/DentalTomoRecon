@@ -32,10 +32,39 @@ bool MyApp::OnInit()
 // ----------------------------------------------------------------------------
 
 DTRMainWindow::DTRMainWindow(wxWindow* parent) : mainWindow(parent){
-	//empty constructor, mainWindow handles everything
+	wxConfigBase *pConfig = wxConfigBase::Get();
+	if (pConfig == NULL)
+		return;
+
+	//size edits
+	if (pConfig->Read(wxT("/dialog/max"), 0l) == 1)
+		wxTopLevelWindow::Maximize(true);
+	else {
+		int x = pConfig->Read(wxT("/dialog/x"), 50),
+			y = pConfig->Read(wxT("/dialog/y"), 50),
+			w = pConfig->Read(wxT("/dialog/w"), 350),
+			h = pConfig->Read(wxT("/dialog/h"), 200);
+		Move(x, y);
+		SetClientSize(w, h);
+	}
 }
 
 // event handlers
+void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
+	static unsigned s_pageAdded = 0;
+	m_auinotebook6->AddPage(CreateNewPage(),
+		wxString::Format
+		(
+			wxT("%u"),
+			++s_pageAdded
+		),
+		true);
+}
+
+wxPanel *DTRMainWindow::CreateNewPage() const{
+	return new GLFrame(m_auinotebook6);
+}
+
 void DTRMainWindow::onOpen(wxCommandEvent& WXUNUSED(event)) {
 	wxMessageBox(wxT("TODO"),
 		wxT("TODO"),
@@ -63,6 +92,25 @@ void DTRMainWindow::onAbout(wxCommandEvent& WXUNUSED(event)){
 		"About Tomography Reconstruction",
 		wxOK | wxICON_INFORMATION,
 		this);
+}
+
+DTRMainWindow::~DTRMainWindow() {
+	wxConfigBase *pConfig = wxConfigBase::Get();
+	if (pConfig == NULL)
+		return;
+
+	// save the frame position
+	int x, y, w, h;
+	GetClientSize(&w, &h);
+	GetPosition(&x, &y);
+	pConfig->Write(wxT("/dialog/x"), (long)x);
+	pConfig->Write(wxT("/dialog/y"), (long)y);
+	pConfig->Write(wxT("/dialog/w"), (long)w);
+	pConfig->Write(wxT("/dialog/h"), (long)h);
+	if (wxTopLevelWindow::IsMaximized())
+		pConfig->Write(wxT("/dialog/max"), 1);
+	else
+		pConfig->Write(wxT("/dialog/max"), 0);
 }
 
 // ----------------------------------------------------------------------------
@@ -182,4 +230,322 @@ void DTRConfigDialog::onOK(wxCommandEvent& event) {
 
 void DTRConfigDialog::onCancel(wxCommandEvent& WXUNUSED(event)) {
 	Close(true);
+}
+
+DTRConfigDialog::~DTRConfigDialog() {
+	
+}
+
+//---------------------------------------------------------------------------
+// GLFrame
+//---------------------------------------------------------------------------
+
+GLFrame::GLFrame(wxAuiNotebook *frame, const wxPoint& pos,
+	const wxSize& size, long style)
+	: wxPanel(frame, wxID_ANY, pos, size),
+	m_canvas(NULL){
+	// Make a TestGLCanvas
+
+	//Set up sizer to make the canvas take up the entire panel (wxWidgets handles garbage collection)
+	wxBoxSizer* bSizer2;
+	bSizer2 = new wxBoxSizer(wxVERTICAL);
+
+	//initialize the canvas to this object
+	m_canvas = new TestGLCanvas(this, wxID_ANY, NULL, GetClientSize());
+
+	bSizer2->Add(m_canvas, 1, wxEXPAND | wxALL, 5);
+	this->SetSizer(bSizer2);
+	this->Layout();
+	bSizer2->Fit(this);
+
+	// Show the frame
+	Show(true);
+	Raise();//grab attention when the frame has finished rendering
+
+	m_canvas->InitGL();
+}
+
+GLFrame::~GLFrame()
+{
+	delete m_canvas;
+}
+
+//---------------------------------------------------------------------------
+// TestGLCanvas
+//---------------------------------------------------------------------------
+
+wxBEGIN_EVENT_TABLE(TestGLCanvas, wxGLCanvas)
+EVT_PAINT(TestGLCanvas::OnPaint)
+EVT_CHAR(TestGLCanvas::OnChar)
+EVT_MOUSE_EVENTS(TestGLCanvas::OnMouseEvent)
+wxEND_EVENT_TABLE()
+
+TestGLCanvas::TestGLCanvas(wxWindow *parent,
+	wxWindowID id,
+	int* gl_attrib, wxSize size)
+	: wxGLCanvas(parent, id, gl_attrib,
+		wxDefaultPosition, size,
+		wxFULL_REPAINT_ON_RESIZE)
+{
+	m_xrot = 0;
+	m_yrot = 0;
+	m_numverts = 0;
+
+	const wxSize ClientSize = GetClientSize();
+	// Explicitly create a new rendering context instance for this canvas.
+	m_glRC = new wxGLContext(this);
+}
+
+TestGLCanvas::~TestGLCanvas()
+{
+	delete m_glRC;
+}
+
+void TestGLCanvas::LoadSurface(const wxString& filename)
+{
+	// FIXME
+	// we need to set english locale to force wxTextInputStream's calls to
+	// wxStrtod to use the point and not the comma as decimal separator...
+	// (the isosurf.dat contains points and not commas)...
+	wxLocale l(wxLANGUAGE_ENGLISH);
+
+	wxZlibInputStream* stream =
+		new wxZlibInputStream(new wxFFileInputStream(filename));
+	if (!stream || !stream->IsOk())
+	{
+		wxLogError("Cannot load '%s' type of files!", filename.c_str());
+		delete stream;
+		return;
+	}
+
+	{
+		// we suppose to have in input a text file containing floating numbers
+		// space/newline-separated... first 3 numbers are the coordinates of a
+		// vertex and the following 3 are the relative vertex normal and so on...
+
+		wxTextInputStream inFile(*stream);
+		m_numverts = 0;
+
+		while (!stream->Eof() && m_numverts < MAXVERTS)// && m_numverts<MAXVERTS)
+		{
+			inFile >> m_verts[m_numverts][0] >> m_verts[m_numverts][1] >> m_verts[m_numverts][2];
+			inFile >> m_norms[m_numverts][0] >> m_norms[m_numverts][1] >> m_norms[m_numverts][2];
+
+			m_numverts++;
+		}
+
+		// discard last vertex; it is a zero caused by the EOF
+		m_numverts--;
+	}
+
+	delete stream;
+
+	/*wxLogMessage(wxT("Loaded %d vertices, %d triangles from '%s'"),
+		m_numverts, m_numverts - 2, filename.c_str());*/
+
+	// NOTE: for some reason under wxGTK the following is required to avoid that
+	//       the surface gets rendered in a small rectangle in the top-left corner of the frame
+	PostSizeEventToParent();
+}
+
+void TestGLCanvas::OnPaint(wxPaintEvent& WXUNUSED(event))
+{
+	// This is a dummy, to avoid an endless succession of paint messages.
+	// OnPaint handlers must always create a wxPaintDC.
+	wxPaintDC dc(this);
+
+	// This is normally only necessary if there is more than one wxGLCanvas
+	// or more than one wxGLContext in the application.
+	SetCurrent(*m_glRC);
+
+	const wxSize ClientSize = GetClientSize();
+
+	//TestGLContext& canvas = wxGetApp().GetContext(this, m_useStereo);
+	glViewport(0, 0, ClientSize.x, ClientSize.y);
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glPushMatrix();
+	glRotatef(m_yrot, 0.0f, 1.0f, 0.0f);
+	glRotatef(m_xrot, 1.0f, 0.0f, 0.0f);
+
+	// draw the surface
+	if (g_use_vertex_arrays)
+	{
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, m_numverts);
+	}
+	else
+	{
+		glBegin(GL_TRIANGLE_STRIP);
+
+		for (int i = 0; i<m_numverts; i++)
+		{
+			glNormal3fv(m_norms[i]);
+			glVertex3fv(m_verts[i]);
+		}
+
+		glEnd();
+	}
+
+	glPopMatrix();
+	glFlush(); // Not really necessary: buffer swapping below implies glFlush()
+
+	SwapBuffers();
+
+	/*if (!IsShownOnScreen())
+		return;
+	// This is normally only necessary if there is more than one wxGLCanvas
+	// or more than one wxGLContext in the application.
+	SetCurrent(*m_glRC);
+
+	// It's up to the application code to update the OpenGL viewport settings.
+	// This is OK here only because there is only one canvas that uses the
+	// context. See the cube sample for that case that multiple canvases are
+	// made current with one context.
+	glViewport(0, 0, event.GetSize().x, event.GetSize().y);*/
+}
+
+void TestGLCanvas::OnChar(wxKeyEvent& event)
+{
+	switch (event.GetKeyCode())
+	{
+	case WXK_ESCAPE:
+		wxTheApp->ExitMainLoop();
+		return;
+
+	case WXK_LEFT:
+		m_yrot -= 15.0;
+		break;
+
+	case WXK_RIGHT:
+		m_yrot += 15.0;
+		break;
+
+	case WXK_UP:
+		m_xrot += 15.0;
+		break;
+
+	case WXK_DOWN:
+		m_xrot -= 15.0;
+		break;
+
+	case 's': case 'S':
+		g_smooth = !g_smooth;
+		if (g_smooth)
+			glShadeModel(GL_SMOOTH);
+		else
+			glShadeModel(GL_FLAT);
+		break;
+
+	case 'l': case 'L':
+		g_lighting = !g_lighting;
+		if (g_lighting)
+			glEnable(GL_LIGHTING);
+		else
+			glDisable(GL_LIGHTING);
+		break;
+
+	default:
+		event.Skip();
+		return;
+	}
+
+	Refresh(false);
+}
+
+void TestGLCanvas::OnMouseEvent(wxMouseEvent& event)
+{
+	static int dragging = 0;
+	static float last_x, last_y;
+
+	// Allow default processing to happen, or else the canvas cannot gain focus
+	// (for key events).
+	event.Skip();
+
+	if (event.LeftIsDown())
+	{
+		if (!dragging)
+		{
+			dragging = 1;
+		}
+		else
+		{
+			m_yrot += (event.GetX() - last_x)*1.0;
+			m_xrot += (event.GetY() - last_y)*1.0;
+			Refresh(false);
+		}
+		last_x = event.GetX();
+		last_y = event.GetY();
+	}
+	else
+	{
+		dragging = 0;
+	}
+}
+
+void TestGLCanvas::InitMaterials()
+{
+	static const GLfloat ambient[4] = { 0.1f, 0.1f, 0.1f, 1.0f };
+	static const GLfloat diffuse[4] = { 0.5f, 1.0f, 1.0f, 1.0f };
+	static const GLfloat position0[4] = { 0.0f, 0.0f, 20.0f, 0.0f };
+	static const GLfloat position1[4] = { 0.0f, 0.0f, -20.0f, 0.0f };
+	static const GLfloat front_mat_shininess[1] = { 60.0f };
+	static const GLfloat front_mat_specular[4] = { 0.2f, 0.2f, 0.2f, 1.0f };
+	static const GLfloat front_mat_diffuse[4] = { 0.5f, 0.28f, 0.38f, 1.0f };
+	/*
+	static const GLfloat back_mat_shininess[1] = {60.0f};
+	static const GLfloat back_mat_specular[4] = {0.5f, 0.5f, 0.2f, 1.0f};
+	static const GLfloat back_mat_diffuse[4] = {1.0f, 1.0f, 0.2f, 1.0f};
+	*/
+	static const GLfloat lmodel_ambient[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+	static const GLfloat lmodel_twoside[1] = { GL_FALSE };
+
+	glLightfv(GL_LIGHT0, GL_AMBIENT, ambient);
+	glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuse);
+	glLightfv(GL_LIGHT0, GL_POSITION, position0);
+	glEnable(GL_LIGHT0);
+
+	glLightfv(GL_LIGHT1, GL_AMBIENT, ambient);
+	glLightfv(GL_LIGHT1, GL_DIFFUSE, diffuse);
+	glLightfv(GL_LIGHT1, GL_POSITION, position1);
+	glEnable(GL_LIGHT1);
+
+	glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lmodel_ambient);
+	glLightModelfv(GL_LIGHT_MODEL_TWO_SIDE, lmodel_twoside);
+	glEnable(GL_LIGHTING);
+
+	glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, front_mat_shininess);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, front_mat_specular);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, front_mat_diffuse);
+}
+
+void TestGLCanvas::InitGL()
+{
+	// Make the new context current (activate it for use) with this canvas.
+	SetCurrent(*m_glRC);
+
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+
+	glShadeModel(GL_SMOOTH);
+	glEnable(GL_DEPTH_TEST);
+
+	InitMaterials();
+
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glFrustum(-1.0, 1.0, -1.0, 1.0, 5.0, 25.0);
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	glTranslatef(0.0, 0.0, -6.0);
+
+	if (g_use_vertex_arrays)
+	{
+		glVertexPointer(3, GL_FLOAT, 0, m_verts);
+		glNormalPointer(GL_FLOAT, 0, m_norms);
+		glEnable(GL_VERTEX_ARRAY);
+		glEnable(GL_NORMAL_ARRAY);
+	}
+
+	InitMaterials();
+	LoadSurface("isosurf.dat.gz");
 }
