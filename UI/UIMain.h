@@ -3,13 +3,23 @@
 // For compilers that support precompilation, includes "wx/wx.h".
 #include "wx/wxprec.h"
 #include "wx/confbase.h"
-#include "reconUI.h"
-#include <GL/gl.h>
-#include <GL/glu.h>
-#include "wx/glcanvas.h"
+
 #include "wx/wfstream.h"
 #include "wx/zstream.h"
 #include "wx/txtstrm.h"
+
+#include "reconUI.h"
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdbool.h>
+
+#include <wx/toplevel.h>
+#include "wx/glcanvas.h"
+
+#include "interop.h"
+
+#include <GL/freeglut.h>
 
 // the maximum number of vertex in the loaded .dat file
 #define MAXVERTS     10000

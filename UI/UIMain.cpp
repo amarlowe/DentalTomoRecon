@@ -107,10 +107,10 @@ DTRMainWindow::~DTRMainWindow() {
 	pConfig->Write(wxT("/dialog/y"), (long)y);
 	pConfig->Write(wxT("/dialog/w"), (long)w);
 	pConfig->Write(wxT("/dialog/h"), (long)h);
-	if (wxTopLevelWindow::IsMaximized())
+	/*if (wxTopLevelWindow::IsMaximized())
 		pConfig->Write(wxT("/dialog/max"), 1);
 	else
-		pConfig->Write(wxT("/dialog/max"), 0);
+		pConfig->Write(wxT("/dialog/max"), 0);*/
 }
 
 // ----------------------------------------------------------------------------
@@ -280,13 +280,8 @@ EVT_CHAR(TestGLCanvas::OnChar)
 EVT_MOUSE_EVENTS(TestGLCanvas::OnMouseEvent)
 wxEND_EVENT_TABLE()
 
-TestGLCanvas::TestGLCanvas(wxWindow *parent,
-	wxWindowID id,
-	int* gl_attrib, wxSize size)
-	: wxGLCanvas(parent, id, gl_attrib,
-		wxDefaultPosition, size,
-		wxFULL_REPAINT_ON_RESIZE)
-{
+TestGLCanvas::TestGLCanvas(wxWindow *parent, wxWindowID id, int* gl_attrib, wxSize size)
+	: wxGLCanvas(parent, id, gl_attrib, wxDefaultPosition, size, wxFULL_REPAINT_ON_RESIZE){
 	m_xrot = 0;
 	m_yrot = 0;
 	m_numverts = 0;
@@ -294,6 +289,17 @@ TestGLCanvas::TestGLCanvas(wxWindow *parent,
 	const wxSize ClientSize = GetClientSize();
 	// Explicitly create a new rendering context instance for this canvas.
 	m_glRC = new wxGLContext(this);
+	wxGLContextAttrs cxtArrs;
+	cxtArrs.CoreProfile().OGLVersion(4, 5).Robust().ResetIsolation().EndList();
+
+	SetCurrent(*m_glRC);
+
+	int argc = 1;
+	wxString test = wxString((wxTheApp->argv)[0]);
+	char* argv[1] = { (char*)test.ToUTF8().data() };
+
+	externalLaunch(&argc, argv, GetSize().x, GetSize().y);
+	//externalLaunch(&argc, argv, 1000, 1000);
 }
 
 TestGLCanvas::~TestGLCanvas()
@@ -301,64 +307,19 @@ TestGLCanvas::~TestGLCanvas()
 	delete m_glRC;
 }
 
-void TestGLCanvas::LoadSurface(const wxString& filename)
-{
-	// FIXME
-	// we need to set english locale to force wxTextInputStream's calls to
-	// wxStrtod to use the point and not the comma as decimal separator...
-	// (the isosurf.dat contains points and not commas)...
-	wxLocale l(wxLANGUAGE_ENGLISH);
-
-	wxZlibInputStream* stream =
-		new wxZlibInputStream(new wxFFileInputStream(filename));
-	if (!stream || !stream->IsOk())
-	{
-		wxLogError("Cannot load '%s' type of files!", filename.c_str());
-		delete stream;
-		return;
-	}
-
-	{
-		// we suppose to have in input a text file containing floating numbers
-		// space/newline-separated... first 3 numbers are the coordinates of a
-		// vertex and the following 3 are the relative vertex normal and so on...
-
-		wxTextInputStream inFile(*stream);
-		m_numverts = 0;
-
-		while (!stream->Eof() && m_numverts < MAXVERTS)// && m_numverts<MAXVERTS)
-		{
-			inFile >> m_verts[m_numverts][0] >> m_verts[m_numverts][1] >> m_verts[m_numverts][2];
-			inFile >> m_norms[m_numverts][0] >> m_norms[m_numverts][1] >> m_norms[m_numverts][2];
-
-			m_numverts++;
-		}
-
-		// discard last vertex; it is a zero caused by the EOF
-		m_numverts--;
-	}
-
-	delete stream;
-
-	/*wxLogMessage(wxT("Loaded %d vertices, %d triangles from '%s'"),
-		m_numverts, m_numverts - 2, filename.c_str());*/
-
-	// NOTE: for some reason under wxGTK the following is required to avoid that
-	//       the surface gets rendered in a small rectangle in the top-left corner of the frame
-	PostSizeEventToParent();
-}
-
 void TestGLCanvas::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
 	// This is a dummy, to avoid an endless succession of paint messages.
 	// OnPaint handlers must always create a wxPaintDC.
-	wxPaintDC dc(this);
+	wxPaintDC(this);
+
+	display();
+	SwapBuffers();
 
 	// This is normally only necessary if there is more than one wxGLCanvas
 	// or more than one wxGLContext in the application.
-	SetCurrent(*m_glRC);
 
-	const wxSize ClientSize = GetClientSize();
+	/*const wxSize ClientSize = GetClientSize();
 
 	//TestGLContext& canvas = wxGetApp().GetContext(this, m_useStereo);
 	glViewport(0, 0, ClientSize.x, ClientSize.y);
@@ -389,7 +350,7 @@ void TestGLCanvas::OnPaint(wxPaintEvent& WXUNUSED(event))
 	glPopMatrix();
 	glFlush(); // Not really necessary: buffer swapping below implies glFlush()
 
-	SwapBuffers();
+	SwapBuffers();*/
 
 	/*if (!IsShownOnScreen())
 		return;
@@ -406,7 +367,7 @@ void TestGLCanvas::OnPaint(wxPaintEvent& WXUNUSED(event))
 
 void TestGLCanvas::OnChar(wxKeyEvent& event)
 {
-	switch (event.GetKeyCode())
+	/*switch (event.GetKeyCode())
 	{
 	case WXK_ESCAPE:
 		wxTheApp->ExitMainLoop();
@@ -449,12 +410,12 @@ void TestGLCanvas::OnChar(wxKeyEvent& event)
 		return;
 	}
 
-	Refresh(false);
+	Refresh(false);*/
 }
 
 void TestGLCanvas::OnMouseEvent(wxMouseEvent& event)
 {
-	static int dragging = 0;
+	/*static int dragging = 0;
 	static float last_x, last_y;
 
 	// Allow default processing to happen, or else the canvas cannot gain focus
@@ -479,50 +440,16 @@ void TestGLCanvas::OnMouseEvent(wxMouseEvent& event)
 	else
 	{
 		dragging = 0;
-	}
-}
-
-void TestGLCanvas::InitMaterials()
-{
-	static const GLfloat ambient[4] = { 0.1f, 0.1f, 0.1f, 1.0f };
-	static const GLfloat diffuse[4] = { 0.5f, 1.0f, 1.0f, 1.0f };
-	static const GLfloat position0[4] = { 0.0f, 0.0f, 20.0f, 0.0f };
-	static const GLfloat position1[4] = { 0.0f, 0.0f, -20.0f, 0.0f };
-	static const GLfloat front_mat_shininess[1] = { 60.0f };
-	static const GLfloat front_mat_specular[4] = { 0.2f, 0.2f, 0.2f, 1.0f };
-	static const GLfloat front_mat_diffuse[4] = { 0.5f, 0.28f, 0.38f, 1.0f };
-	/*
-	static const GLfloat back_mat_shininess[1] = {60.0f};
-	static const GLfloat back_mat_specular[4] = {0.5f, 0.5f, 0.2f, 1.0f};
-	static const GLfloat back_mat_diffuse[4] = {1.0f, 1.0f, 0.2f, 1.0f};
-	*/
-	static const GLfloat lmodel_ambient[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
-	static const GLfloat lmodel_twoside[1] = { GL_FALSE };
-
-	glLightfv(GL_LIGHT0, GL_AMBIENT, ambient);
-	glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuse);
-	glLightfv(GL_LIGHT0, GL_POSITION, position0);
-	glEnable(GL_LIGHT0);
-
-	glLightfv(GL_LIGHT1, GL_AMBIENT, ambient);
-	glLightfv(GL_LIGHT1, GL_DIFFUSE, diffuse);
-	glLightfv(GL_LIGHT1, GL_POSITION, position1);
-	glEnable(GL_LIGHT1);
-
-	glLightModelfv(GL_LIGHT_MODEL_AMBIENT, lmodel_ambient);
-	glLightModelfv(GL_LIGHT_MODEL_TWO_SIDE, lmodel_twoside);
-	glEnable(GL_LIGHTING);
-
-	glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, front_mat_shininess);
-	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, front_mat_specular);
-	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, front_mat_diffuse);
+	}*/
 }
 
 void TestGLCanvas::InitGL()
 {
-	// Make the new context current (activate it for use) with this canvas.
-	SetCurrent(*m_glRC);
+	const wxSize ClientSize = GetClientSize();
 
+	// Make the new context current (activate it for use) with this canvas.
+	//SetCurrent(*m_glRC);
+	/*
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
 	glShadeModel(GL_SMOOTH);
@@ -547,5 +474,7 @@ void TestGLCanvas::InitGL()
 	}
 
 	InitMaterials();
-	LoadSurface("isosurf.dat.gz");
+	LoadSurface("isosurf.dat.gz");*/
+
+	//wxPaintDC(this);
 }
