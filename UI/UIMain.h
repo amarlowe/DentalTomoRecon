@@ -7,15 +7,13 @@
 #include "wx/wfstream.h"
 #include "wx/zstream.h"
 #include "wx/txtstrm.h"
+#include "wx/glcanvas.h"
 
 #include "reconUI.h"
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
-
-#include <wx/toplevel.h>
-#include "wx/glcanvas.h"
 
 #include "interop.h"
 
@@ -45,6 +43,8 @@ GLboolean g_use_vertex_arrays = GL_FALSE;
 GLboolean g_doubleBuffer = GL_TRUE;
 GLboolean g_smooth = GL_TRUE;
 GLboolean g_lighting = GL_TRUE;
+
+bool first = true;
 
 class DTRMainWindow : public mainWindow
 {
@@ -99,6 +99,7 @@ public:
 
 private:
 	wxGLContext* m_glRC;
+	interop* m_inter;
 
 	GLfloat m_verts[MAXVERTS][3];
 	GLfloat m_norms[MAXVERTS][3];

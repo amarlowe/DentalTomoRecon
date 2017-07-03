@@ -2,9 +2,20 @@ TomoRecon
 
 -------------Features------------------
 - File system that saves calbiration data system independently
-- Fix readGainAndDearkimages
+- Fix readGainAndDarkimages
 - Remove magic numbers and filepaths
 - Cuda profiler compiler switch
+- Implement cjson struct building
+- Save and load json files based on user input
+- Switch between inputs in form using tab and/or enter
+- Confirm cancel or load when values have been edited
+- Run program from new UI
+- Check values for input before allowing running, prompt a visit to config
+- Implement a visualizer on a per project basis
+- output console output to status bar, include a progress meter
+- Implement start page in main window with instructions
+- New prompts for opening of raw files, processes and displays
+- Open opens a render, not the raw files (used for self comparisons)
 
 --------------Bugs---------------------
 - selecting an image runs normally with no errors
@@ -15,3 +26,5 @@ TomoRecon
 - index out of bounds and other conditions set array values to an explicit -10
 - color inversion on low z layer counts
 - additional lines included on increasing z size
+- debug mode causes a crash and failure (problem likely persists in release, it just gets ignored)
+- wxwidget drag draws artifacts on the wrong screen
