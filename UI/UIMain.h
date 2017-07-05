@@ -10,17 +10,13 @@
 #include "wx/glcanvas.h"
 
 #include "reconUI.h"
+#include "interop.h"
+#include "../reconstruction/TomoRecon.h"
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
-
-#include "interop.h"
-
-#include <GL/freeglut.h>
-
-// the maximum number of vertex in the loaded .dat file
-#define MAXVERTS     10000
+//#include <GL/freeglut.h>
 
 #ifdef __BORLANDC__
 #pragma hdrstop
@@ -38,16 +34,9 @@
 #include "../sample.xpm"
 #endif
 
-// global options which can be set through command-line options
-GLboolean g_use_vertex_arrays = GL_FALSE;
-GLboolean g_doubleBuffer = GL_TRUE;
-GLboolean g_smooth = GL_TRUE;
-GLboolean g_lighting = GL_TRUE;
-
 bool first = true;
 
-class DTRMainWindow : public mainWindow
-{
+class DTRMainWindow : public mainWindow{
 protected:
 	// Handlers for mainWindow events.
 	void onNew(wxCommandEvent& event);
@@ -63,8 +52,7 @@ public:
 	~DTRMainWindow();
 };
 
-class DTRConfigDialog : public configDialog
-{
+class DTRConfigDialog : public configDialog{
 protected:
 	// Handlers for configDialog events.
 	void onLoad(wxCommandEvent& event);
@@ -79,36 +67,21 @@ public:
 };
 
 // The OpenGL-enabled canvas
-class TestGLCanvas : public wxGLCanvas
-{
+class CudaGLCanvas : public wxGLCanvas{
 public:
-	TestGLCanvas(wxWindow *parent,
-		wxWindowID id = wxID_ANY,
-		int *gl_attrib = NULL,
-		wxSize size = wxDefaultSize);
+	CudaGLCanvas(wxWindow *parent, wxWindowID id = wxID_ANY, int *gl_attrib = NULL, wxSize size = wxDefaultSize);
 
-	virtual ~TestGLCanvas();
+	virtual ~CudaGLCanvas();
 
 	void OnPaint(wxPaintEvent& event);
 	void OnChar(wxKeyEvent& event);
 	void OnMouseEvent(wxMouseEvent& event);
 
-	void LoadSurface(const wxString& filename);
-	void InitMaterials();
-	void InitGL();
-
 private:
 	wxGLContext* m_glRC;
 	interop* m_inter;
 
-	GLfloat m_verts[MAXVERTS][3];
-	GLfloat m_norms[MAXVERTS][3];
-	GLint m_numverts;
-
-	GLfloat m_xrot;
-	GLfloat m_yrot;
-
-	wxDECLARE_NO_COPY_CLASS(TestGLCanvas);
+	wxDECLARE_NO_COPY_CLASS(CudaGLCanvas);
 	wxDECLARE_EVENT_TABLE();
 };
 
@@ -121,5 +94,5 @@ public:
 
 	virtual ~GLFrame();
 
-	TestGLCanvas *m_canvas;
+	CudaGLCanvas *m_canvas;
 };

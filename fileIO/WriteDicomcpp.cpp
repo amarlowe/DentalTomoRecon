@@ -16,9 +16,8 @@
 /*********************************************************************************************
 * Code to control the wrting of DICOM data
 ********************************************************************************************/
-void WriteDICOMHeader(struct SystemControl * Sys, struct SystemSettings * Set,
-	struct PatientInfo * Patient, struct ExamInstitution * Inst, std::string Path, int Nz, int slice)
-{
+TomoError WriteDICOMHeader(struct SystemControl * Sys, struct SystemSettings * Set,
+	struct PatientInfo * Patient, struct ExamInstitution * Inst, std::string Path, int Nz, int slice){
 	//Open a fstream to the file location to write the header
 	std::ofstream FILE;
 	FILE.open(Path.c_str(), std::ios::binary);
@@ -26,7 +25,7 @@ void WriteDICOMHeader(struct SystemControl * Sys, struct SystemSettings * Set,
 	{
 		std::cout << "Error opening the file: " << Path.c_str() << std::endl;
 		std::cout << "Please check the path and re-run the program." << std::endl;
-		exit(1);
+		return Tomo_DICOM_err;
 	}
 
 	//Get the current time and date
@@ -132,11 +131,12 @@ void WriteDICOMHeader(struct SystemControl * Sys, struct SystemSettings * Set,
 	FILE << SetStartOfPixelInfo(Sys, Nz).str();
 
 	FILE.close();
+
+	return Tomo_OK;
 }
 
-void WriteDICOMDentalHeader(struct SystemControl * Sys, struct SystemSettings * Set,
-	struct PatientInfo * Patient, struct ExamInstitution * Inst, std::string Path)
-{
+TomoError WriteDICOMDentalHeader(struct SystemControl * Sys, struct SystemSettings * Set,
+	struct PatientInfo * Patient, struct ExamInstitution * Inst, std::string Path){
 	//Open a fstream to the file location to write the header
 	std::ofstream FILE;
 	FILE.open(Path.c_str(), std::ios::binary);
@@ -144,7 +144,7 @@ void WriteDICOMDentalHeader(struct SystemControl * Sys, struct SystemSettings * 
 	{
 		std::cout << "Error opening the file: " << Path.c_str() << std::endl;
 		std::cout << "Please check the path and re-run the program." << std::endl;
-		exit(1);
+		return Tomo_DICOM_err;
 	}
 
 	//Get the current time and date
@@ -229,10 +229,11 @@ void WriteDICOMDentalHeader(struct SystemControl * Sys, struct SystemSettings * 
 	FILE << SetStartOfPixelInfo(Sys, 1).str();
 
 	FILE.close();
+
+	return Tomo_OK;
 }
 
-void WriteDICOMFullData(struct SystemControl * Sys, std::string Path)
-{
+TomoError WriteDICOMFullData(struct SystemControl * Sys, std::string Path){
 	//Set up the basic path to the raw projection data
 	FILE * ReconData = NULL;
 
@@ -242,16 +243,17 @@ void WriteDICOMFullData(struct SystemControl * Sys, std::string Path)
 	{
 		std::cout << "Error opening the file: " << Path.c_str() << std::endl;
 		std::cout << "Please check the path and re-run the program." << std::endl;
-		exit(1);
+		return Tomo_DICOM_err;
 	}
 
 	//Write the reconstructed data into the predefine memory location
 	fwrite(Sys->Recon->ReconIm, sizeof(unsigned short), Sys->Recon->Nx * Sys->Recon->Ny * Sys->Recon->Nz, ReconData);
 	fclose(ReconData);
+
+	return Tomo_OK;
 }
 
-void WriteDICOMFullDataDental(struct SystemControl * Sys, std::string Path)
-{
+TomoError WriteDICOMFullDataDental(struct SystemControl * Sys, std::string Path){
 	//Set up the basic path to the raw projection data
 	FILE * ProjData = NULL;
 
@@ -261,16 +263,17 @@ void WriteDICOMFullDataDental(struct SystemControl * Sys, std::string Path)
 	{
 		std::cout << "Error opening the file: " << Path.c_str() << std::endl;
 		std::cout << "Please check the path and re-run the program." << std::endl;
-		exit(1);
+		return Tomo_DICOM_err;
 	}
 
 	//Write the reconstructed data into the predefine memory location
 	fwrite(Sys->Proj->SyntData, sizeof(unsigned short), Sys->Proj->Nx * Sys->Proj->Ny, ProjData);
 	fclose(ProjData);
+
+	return Tomo_OK;
 }
 
-void WriteDICOMSingleData(struct SystemControl * Sys, std::string Path, int slice)
-{
+TomoError WriteDICOMSingleData(struct SystemControl * Sys, std::string Path, int slice){
 	//Set up the basic path to the raw projection data
 	FILE * ReconData = NULL;
 
@@ -280,17 +283,18 @@ void WriteDICOMSingleData(struct SystemControl * Sys, std::string Path, int slic
 	{
 		std::cout << "Error opening the file: " << Path.c_str() << std::endl;
 		std::cout << "Please check the path and re-run the program." << std::endl;
-		exit(1);
+		return Tomo_DICOM_err;
 	}
 	int sizeIm = Sys->Recon->Nx * Sys->Recon->Ny;
 
 	//Write the reconstructed data into the predefine memory location
 	fwrite(Sys->Recon->ReconIm + slice * sizeIm, sizeof(unsigned short), sizeIm, ReconData);
 	fclose(ReconData);
+
+	return Tomo_OK;
 }
 
-void WriteRawData(struct SystemControl * Sys, std::string Path, int slice)
-{
+TomoError WriteRawData(struct SystemControl * Sys, std::string Path, int slice){
 	//Set up the basic path to the raw projection data
 	FILE * ReconData = NULL;
 
@@ -300,18 +304,19 @@ void WriteRawData(struct SystemControl * Sys, std::string Path, int slice)
 	{
 		std::cout << "Error opening the file: " << Path.c_str() << std::endl;
 		std::cout << "Please check the path and re-run the program." << std::endl;
-		exit(1);
+		return Tomo_DICOM_err;
 	}
 	int sizeIm = Sys->Recon->Nx * Sys->Recon->Ny;
 
 	//Write the reconstructed data into the predefine memory location
 	fwrite(Sys->Recon->ReconIm + slice * sizeIm, sizeof(unsigned short), sizeIm, ReconData);
 	fclose(ReconData);
+
+	return Tomo_OK;
 }
 
 
-void WriteRawProj(struct SystemControl * Sys, std::string Path)
-{
+TomoError WriteRawProj(struct SystemControl * Sys, std::string Path){
 	//Set up the basic path to the raw projection data
 	FILE * ProjData = NULL;
 
@@ -321,22 +326,22 @@ void WriteRawProj(struct SystemControl * Sys, std::string Path)
 	{
 		std::cout << "Error opening the file: " << Path.c_str() << std::endl;
 		std::cout << "Please check the path and re-run the program." << std::endl;
-		exit(1);
+		return Tomo_DICOM_err;
 	}
 	int sizeProj = Sys->Proj->Nx * Sys->Proj->Ny;
 
 	//Write the reconstructed data into the predefine memory location
 	fwrite(Sys->Proj->SyntData, sizeof(unsigned short), sizeProj, ProjData);
 	fclose(ProjData);
+
+	return Tomo_OK;
 }
 
 
 /*********************************************************************************************
 * Define Fictional Patient, system, and institution
 ********************************************************************************************/
-void CreatePatientandSetSystem(struct PatientInfo * Patient,
-	struct SystemSettings * Set, struct SystemControl * Sys)
-{
+void CreatePatientandSetSystem(struct PatientInfo * Patient, struct SystemSettings * Set, struct SystemControl * Sys){
 	//Simple example using progam author
 	std::stringstream PhanNumStream;
 	PhanNumStream << std::setw(4) << 1.0;
@@ -360,8 +365,7 @@ void CreatePatientandSetSystem(struct PatientInfo * Patient,
 	Set->Tilt = 0.0;
 }
 
-void CreateScanInsitution(struct ExamInstitution * Institute)
-{
+void CreateScanInsitution(struct ExamInstitution * Institute){
 	//Set the physicans based on people working on the dental project
 	Institute->Name = "UNC School of Dentistry";
 	Institute->Ref_Physican = "Platin, Rick";
@@ -371,8 +375,7 @@ void CreateScanInsitution(struct ExamInstitution * Institute)
 	Institute->Station = "XinVivo Dental Tomo";
 }
 
-void FreeStrings(struct PatientInfo * Patient, struct ExamInstitution * Institute)
-{
+void FreeStrings(struct PatientInfo * Patient, struct ExamInstitution * Institute){
 	Patient->Name.clear();
 	Patient->IDNum.clear();
 	Patient->Birthday.clear();
@@ -391,8 +394,7 @@ void FreeStrings(struct PatientInfo * Patient, struct ExamInstitution * Institut
 /*********************************************************************************************
 * Simple Function to conver the data to DICOM scale
 ********************************************************************************************/
-void ConvertImage(struct SystemControl * Sys)
-{
+void ConvertImage(struct SystemControl * Sys){
 	//Create a temp image to store the data in
 	int size_IM = Sys->Recon->Nx * Sys->Recon->Ny * Sys->Recon->Nz;
 	unsigned short * TempIm = new unsigned short[size_IM];
@@ -421,8 +423,7 @@ void ConvertImage(struct SystemControl * Sys)
 	delete[] TempIm;
 }
 
-void ConvertImageSynthetic(struct SystemControl * Sys)
-{
+void ConvertImageSynthetic(struct SystemControl * Sys){
 	//Create a temp image to store the data in
 	int size_IM = Sys->Proj->Nx * Sys->Proj->Ny;
 	unsigned short * TempIm = new unsigned short[size_IM];
@@ -467,8 +468,7 @@ void ConvertImageSynthetic(struct SystemControl * Sys)
 /*********************************************************************************************
 * Function to control the saving of the dicom images
 ********************************************************************************************/
-void SaveDataAsDICOM(struct SystemControl * Sys, std::string BaseFileIn)
-{
+TomoError SaveDataAsDICOM(struct SystemControl * Sys, std::string BaseFileIn){
 	//Set the patient and System settings
 	struct SystemSettings * Set = new SystemSettings;
 	struct PatientInfo * Patient = new PatientInfo;
@@ -505,10 +505,10 @@ void SaveDataAsDICOM(struct SystemControl * Sys, std::string BaseFileIn)
 	//FullImagePath.erase(FullImagePath.length() - clip, clip);
 
 	//Write the DICOM Header based on the System Info
- 	WriteDICOMHeader(Sys, Set, Patient, Institute, FullImagePath, Sys->Recon->Nz, 0);
+	tomo_err_throw(WriteDICOMHeader(Sys, Set, Patient, Institute, FullImagePath, Sys->Recon->Nz, 0));
 
 	//Write dicom data
-	WriteDICOMFullData(Sys, FullImagePath);
+	tomo_err_throw(WriteDICOMFullData(Sys, FullImagePath));
 	/*
 	//Save the full data as individual dicom images as well
 	Path += "\\Slices";
@@ -540,10 +540,10 @@ void SaveDataAsDICOM(struct SystemControl * Sys, std::string BaseFileIn)
 
 	delete[] Set;
 	
+	return Tomo_OK;
 }
 
-void SaveCorrectedProjections(struct SystemControl * Sys, std::string BaseFileIn)
-{
+TomoError SaveCorrectedProjections(struct SystemControl * Sys, std::string BaseFileIn){
 	//Set up the basic path to the raw projection dark and gain data
 	FILE * ProjData = NULL;
 	int size_single_image = Sys->Proj->Nx * Sys->Proj->Ny;
@@ -589,7 +589,7 @@ void SaveCorrectedProjections(struct SystemControl * Sys, std::string BaseFileIn
 		{
 			std::cout << "Error opening the file: " << ViewPath.c_str() << std::endl;
 			std::cout << "Please check the path and re-run the program." << std::endl;
-			exit(1);
+			return Tomo_DICOM_err;
 		}
 
 		//Write the reconstructed data into the predefine memory location
@@ -597,11 +597,12 @@ void SaveCorrectedProjections(struct SystemControl * Sys, std::string BaseFileIn
 			sizeof(unsigned short), size_single_image, ProjData);
 		fclose(ProjData);
 	}
+
+	return Tomo_OK;
 }
 
-void SaveSyntheticProjections(struct SystemControl * Sys,
-	int PhantomNum, std::string BaseFileIn)
-{
+TomoError SaveSyntheticProjections(struct SystemControl * Sys,
+	int PhantomNum, std::string BaseFileIn){
 	//Set the patient and System settings
 	struct SystemSettings * Set = new SystemSettings;
 	struct PatientInfo * Patient = new PatientInfo;
@@ -632,9 +633,9 @@ void SaveSyntheticProjections(struct SystemControl * Sys,
 
 	//	Path += ".raw";
 	//Write the DICOM Header based on the System Info
-	WriteDICOMDentalHeader(Sys, Set, Patient, Institute, Path);
+	tomo_err_throw(WriteDICOMDentalHeader(Sys, Set, Patient, Institute, Path));
 
-	WriteDICOMFullDataDental(Sys, Path);
+	tomo_err_throw(WriteDICOMFullDataDental(Sys, Path));
 	//	WriteRawProj(Sys, Path);
 
 	//Delete structure pointers, can't just delete the structures with strings
@@ -643,4 +644,6 @@ void SaveSyntheticProjections(struct SystemControl * Sys,
 	free(Institute);
 
 	delete[] Set;
+
+	return Tomo_OK;
 }

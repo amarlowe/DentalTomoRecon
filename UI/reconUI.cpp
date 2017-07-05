@@ -51,6 +51,16 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	m_mgr.AddPane( m_auinotebook6, wxAuiPaneInfo() .Left() .CaptionVisible( false ).CloseButton( false ).PaneBorder( false ).Dock().Resizable().FloatingSize( wxDefaultSize ).CentrePane() );
 	
 	m_panel10 = new wxPanel( m_auinotebook6, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL );
+	wxBoxSizer* bSizer1;
+	bSizer1 = new wxBoxSizer( wxVERTICAL );
+	
+	m_textCtrl8 = new wxTextCtrl( m_panel10, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE|wxTE_READONLY );
+	bSizer1->Add( m_textCtrl8, 1, wxALL|wxEXPAND, 5 );
+	
+	
+	m_panel10->SetSizer( bSizer1 );
+	m_panel10->Layout();
+	bSizer1->Fit( m_panel10 );
 	m_auinotebook6->AddPage( m_panel10, wxT("Start Here"), false, wxNullBitmap );
 	
 	m_statusBar1 = this->CreateStatusBar( 1, wxST_SIZEGRIP, wxID_ANY );

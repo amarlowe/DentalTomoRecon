@@ -18,8 +18,7 @@
 /********************************************************************************************/
 /* use main right now to operate from command line											*/
 /********************************************************************************************/
-int main(int argc, char ** argv)
-{
+TomoError TomoRecon(){
 	//Step 1: Get and example file for get the path
 #ifdef PROFILER
 	char filename[] = "C:\\Users\\jdean\\Desktop\\Patient471\\Series1 20161118\\AcquiredImage1_0.raw";
@@ -67,25 +66,25 @@ int main(int argc, char ** argv)
 	//Step 2. Initialize structure and read emitter geometry
 	const int NumViews = NUMVIEWS;
 	struct SystemControl * Sys = new SystemControl;
-	SetUpSystemAndReadGeometry(Sys, NumViews,BasePath);
+	tomo_err_throw(SetUpSystemAndReadGeometry(Sys, NumViews,BasePath));
 
 	//Step 3. Read the normalizaton data (dark and gain)
 	PathRemoveFileSpec(GetFilePath);
 	std::string GainPath = GetFilePath;
 //	ReadDarkandGainImages(Sys, NumViews, GainPath);
-	ReadDarkImages(Sys, NumViews);
-	ReadGainImages(Sys, NumViews);
+	tomo_err_throw(ReadDarkImages(Sys, NumViews));
+	tomo_err_throw(ReadGainImages(Sys, NumViews));
 
 	//Step 4. Set up the GPU for Reconstruction
-	SetUpGPUForRecon(Sys);
+	tomo_err_throw(SetUpGPUForRecon(Sys));
 	std::cout << "GPU Ready" << std::endl;
 
 	//Step 5. Read Raw Data
-	ReadRawProjectionData(Sys, NumViews,FilePath,savefilename);
+	tomo_err_throw(ReadRawProjectionData(Sys, NumViews,FilePath,savefilename));
 	std::cout << "Add Data has been read" << std::endl;
 	
 	//Step 6: Reconstruct Images
-	Reconstruct(Sys);
+	tomo_err_throw(Reconstruct(Sys));
 
 	std::string whichsubstr = "AcquiredImage";
 
@@ -95,12 +94,12 @@ int main(int argc, char ** argv)
 	str2 += "_Recon.dcm";
 
 	//Step 7: SaVE Images
-	SaveDataAsDICOM(Sys, str2);
+	tomo_err_throw(SaveDataAsDICOM(Sys, str2));
 //	SaveDataAsDICOM(Sys, BasePath);
 //	SaveCorrectedProjections(Sys, BasePath);
 
 	//Step 9. Clear memory and end program
-	FreeGPUMemory();
+	tomo_err_throw(FreeGPUMemory());
 	if (Sys->Proj->RawDataThresh != NULL)
 		delete[] Sys->Proj->RawDataThresh;
 	delete[] Sys->Proj->RawData;
@@ -116,5 +115,5 @@ int main(int argc, char ** argv)
 	//delete Sys->Proj;
 	delete Sys;
 	
-	return (0);
+	return Tomo_OK;
 }

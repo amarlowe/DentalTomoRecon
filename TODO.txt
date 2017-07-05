@@ -16,6 +16,11 @@ TomoRecon
 - Implement start page in main window with instructions
 - New prompts for opening of raw files, processes and displays
 - Open opens a render, not the raw files (used for self comparisons)
+- Init openGl on program launch for minor speedups in first tab open
+- Make MAC compiltible (hopefully not)
+- Save configuration settings on project file/directory instead of registry to make them project specific
+- "Set default" options for configuration and any other setting we can come up with
+- Replace each failure state with it's own error type and dialoag (or pass a string)
 
 --------------Bugs---------------------
 - selecting an image runs normally with no errors
@@ -28,3 +33,6 @@ TomoRecon
 - additional lines included on increasing z size
 - debug mode causes a crash and failure (problem likely persists in release, it just gets ignored)
 - wxwidget drag draws artifacts on the wrong screen
+- when reading in files, it will attempt to read .dicom files along with the raw files and cause errors
+- Throw all tomo errors instead of crashing the program
+- Program crashes after returning error in reconstruction

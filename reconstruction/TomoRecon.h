@@ -41,12 +41,22 @@
 
 //#define PROFILER
 
+/********************************************************************************************/
+/* Error type, used to pass errors to the caller											*/
+/********************************************************************************************/
+typedef enum {
+	Tomo_OK,
+	Tomo_file_err,
+	Tomo_DICOM_err,
+	Tomo_CUDA_err
+} TomoError;
+
+#define tomo_err_throw(x) {TomoError err = x; if(err != Tomo_OK) return err;}
 
 /********************************************************************************************/
 /* System Structures (All units are in millimeters)											*/
 /********************************************************************************************/
-struct Proj_Data
-{
+struct Proj_Data {
 	unsigned short * RawData;				//Pointer to a buffer containing the raw data
 	unsigned short * RawDataThresh = NULL;	//Pointed to a buffer containing the raw data thresholded to eliminate metal for finding center of tooth more accurately
 	unsigned short * SyntData;				//Pointer to buffer containing synthetic projection
@@ -62,8 +72,7 @@ struct Proj_Data
 	int Flip;								//Flip the orientation of the detector
 };
 
-struct SysGeometry
-{
+struct SysGeometry {
 	float * EmitX;							//Location of the x-ray focal spot in x direction
 	float * EmitY;							//Location of the x-ray focal spot in y direction
 	float * EmitZ;							//Location of the x-ray focal spot in z direction
@@ -76,22 +85,19 @@ struct SysGeometry
 };
 
 
-struct NormData
-{
+struct NormData {
 	unsigned short * GainData;				//A buffer to contain the gain images
 	unsigned short * DarkData;				//A buffer to contain the dark images
 	unsigned short * ProjBuf;				//A tempory buffer to read projections into
 	float * CorrBuf;						//A buffer to correct the and sum projections
 };
 
-struct FileNames
-{
+struct FileNames {
 	std::string StudyName;					//The name of the entire study folder
 	std::string ScanName;					//The name of the scans in the folder 
 };
 
-struct ReconGeometry
-{
+struct ReconGeometry {
 	unsigned short * ReconIm;				//Pointer to a buffer containing the recon images
 //	float* testval;
 	float Slice_0_z;						//Location of the first slice in the z direction
@@ -106,8 +112,7 @@ struct ReconGeometry
 	float MaxVal;							//The max reconstruction floating point val
 };
 
-struct CommandLine
-{
+struct CommandLine {
 	int PhantomNum;							//The phantom number choosen by user (defualt 1)
 	int Dose;								//choose the dose (defualt 1 (Pspeed))
 	int Sharpen;							//Apply a post processing sharpening filter
@@ -125,8 +130,7 @@ struct CommandLine
 	}
 };
 
-struct UserInput
-{
+struct UserInput {
 	int CalOffset;				//variable to control automated offset calculation
 	int SmoothEdge;				//variable to control smoothing of edges
 	int UseTV;					//variable to control using TV
@@ -142,8 +146,7 @@ struct UserInput
 };
 
 //Declare a structure containing other system description structures to pass info
-struct SystemControl
-{
+struct SystemControl {
 	struct Proj_Data * Proj;
 	struct NormData * Norm;
 	struct ReconGeometry * Recon;
@@ -153,6 +156,11 @@ struct SystemControl
 	struct UserInput * UsrIn;
 
 };
+
+/********************************************************************************************/
+/* Call from external function																*/
+/********************************************************************************************/
+TomoError TomoRecon();
 
 /********************************************************************************************/
 /* Input Functions to read data into the program											*/
@@ -165,32 +173,31 @@ int GetNumOfProjectionsPerView(std::string BasePathIn);
 
 int GetNumProjectionViews(std::string BasePathIn);
 
-void SetUpSystemAndReadGeometry(struct SystemControl * Sys, int NumViews,
+TomoError SetUpSystemAndReadGeometry(struct SystemControl * Sys, int NumViews,
 	 std::string BasePathIn);
 
-void ReadDarkandGainImages(struct SystemControl * Sys, int NumViews, std::string BasePathIn);
+TomoError ReadDarkandGainImages(struct SystemControl * Sys, int NumViews, std::string BasePathIn);
 
-void ReadDarkImages(struct SystemControl * Sys, int NumViews);
-void ReadGainImages(struct SystemControl * Sys, int NumViews);
+TomoError ReadDarkImages(struct SystemControl * Sys, int NumViews);
+TomoError ReadGainImages(struct SystemControl * Sys, int NumViews);
 
-void ReadRawProjectionData(struct SystemControl * Sys,
+TomoError ReadRawProjectionData(struct SystemControl * Sys,
 			int NumViews, std::string BaseFileIn, std::string FileName);
 
 /********************************************************************************************/
 /* Function to interact with GPU portion of the program to reconstruct the image			*/
 /********************************************************************************************/
-void SetUpGPUForRecon(struct SystemControl * Sys);
+TomoError SetUpGPUForRecon(struct SystemControl * Sys);
 
-void Reconstruct(struct SystemControl * Sys);
+TomoError Reconstruct(struct SystemControl * Sys);
 
-void FreeGPUMemory(void);
+TomoError FreeGPUMemory(void);
 
 /********************************************************************************************/
 /* DICOM functions																			*/
 /********************************************************************************************/
-void SaveDataAsDICOM(struct SystemControl * Sys, std::string BaseFileIn);
+TomoError SaveDataAsDICOM(struct SystemControl * Sys, std::string BaseFileIn);
 
-void SaveCorrectedProjections(struct SystemControl * Sys, std::string BaseFileIn);
+TomoError SaveCorrectedProjections(struct SystemControl * Sys, std::string BaseFileIn);
 
-void SaveSyntheticProjections(struct SystemControl * Sys,
-	int PhantomNum, std::string BaseFileIn);
+TomoError SaveSyntheticProjections(struct SystemControl * Sys, int PhantomNum, std::string BaseFileIn);

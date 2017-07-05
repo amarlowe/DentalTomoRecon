@@ -80,8 +80,7 @@ BOOL CheckFilePathForRepeatScans(std::string BasePathIn)
 
 
 //Simple Function to count the number example images
-int GetNumberOfScans(std::string BasePathIn)
-{
+int GetNumberOfScans(std::string BasePathIn){
 	int NumScans = 0;
 	bool MoreViews = true;
 
@@ -112,8 +111,7 @@ int GetNumberOfScans(std::string BasePathIn)
 }
 
 //Function to determine how many files exist to be averaged together
-int GetNumOfProjectionsPerView(std::string BasePathIn)
-{
+int GetNumOfProjectionsPerView(std::string BasePathIn){
 	int NumProjections = 0;
 	bool MoreFolders = true;
 	bool MoreProjections = true;
@@ -158,8 +156,7 @@ int GetNumOfProjectionsPerView(std::string BasePathIn)
 }
 
 //Get the number of views to use for the reconstruction
-int GetNumProjectionViews(std::string BasePathIn)
-{
+int GetNumProjectionViews(std::string BasePathIn){
 	int NumViews = 0;
 	bool MoreFolders = true;
 	bool MoreProjections = true;
@@ -218,8 +215,7 @@ int GetNumProjectionViews(std::string BasePathIn)
 }
 
 //Read a subset of the total views
-void ReadSubSetViews(struct SystemControl * Sys, int NumViews, std::string BasePathIn)
-{
+TomoError ReadSubSetViews(struct SystemControl * Sys, int NumViews, std::string BasePathIn){
 	std::string FilePath = BasePathIn + "/Source_Sequence.txt";
 
 	//Open fstream to text file
@@ -228,7 +224,7 @@ void ReadSubSetViews(struct SystemControl * Sys, int NumViews, std::string BaseP
 	if (!file.is_open()) {
 		std::cout << "Error opening file: " << FilePath.c_str() << std::endl;
 		std::cout << "Please check and re-run program." << std::endl;
-		exit(1);
+		return Tomo_file_err;
 	}
 
 	//Define two character arrays to read values
@@ -272,11 +268,12 @@ void ReadSubSetViews(struct SystemControl * Sys, int NumViews, std::string BaseP
 
 	delete[] ViewNum;
 	delete[] ProjNum;
+
+	return Tomo_OK;
 }
 
 //Function to read the system geoemtry file
-void SetUpSystemAndReadGeometry(struct SystemControl * Sys, int NumViews, std::string BasePathIn)
-{
+TomoError SetUpSystemAndReadGeometry(struct SystemControl * Sys, int NumViews, std::string BasePathIn){
 	//Define a new projection data pointer and define the projection geometry constants
 	Sys->Proj = new Proj_Data;
 	Sys->UsrIn = new UserInput;
@@ -305,7 +302,7 @@ void SetUpSystemAndReadGeometry(struct SystemControl * Sys, int NumViews, std::s
 	if (!file.is_open()) {
 		std::cout << "Error opening file: " << FilePath.c_str() << std::endl;
 		std::cout << "Please check and re-run program." << std::endl;
-		exit(1);
+		return Tomo_file_err;
 	}
 
 	//Define two character arrays to read values
@@ -468,12 +465,12 @@ void SetUpSystemAndReadGeometry(struct SystemControl * Sys, int NumViews, std::s
 
 	if (Sys->UsrIn->CalOffset)
 		Sys->Proj->RawDataThresh = new unsigned short[Sys->Proj->Nx*Sys->Proj->Ny * Sys->Proj->NumViews];
+
+	return Tomo_OK;
 }
 
 //Functions to read the dark and gain images
-void ReadDarkandGainImages(struct SystemControl * Sys, 
-	int NumViews, std::string BasePathIn)
-{
+TomoError ReadDarkandGainImages(struct SystemControl * Sys, int NumViews, std::string BasePathIn){
 	//Define two paths to gain and dark data
 	std::string GainPath;
 	std::string DarkPath;
@@ -542,7 +539,7 @@ void ReadDarkandGainImages(struct SystemControl * Sys,
 					{
 						std::cout << "Error opening the file: " << Path.c_str() << std::endl;
 						std::cout << "Please check the path and re-run the program." << std::endl;
-						exit(1);
+						return Tomo_file_err;
 					}
 
 					//Write the reconstructed data into the predefine memory location
@@ -554,7 +551,7 @@ void ReadDarkandGainImages(struct SystemControl * Sys,
 					std::cout << "Error: Dark data path is invalid." << std::endl;
 					std::cout << "Make sure dark data is located at: " << DarkIMPath.c_str();
 					std::cout << std::endl;
-					exit(1);
+					return Tomo_file_err;
 				}
 
 				for (int view = 1; view < 5; view++)
@@ -570,7 +567,7 @@ void ReadDarkandGainImages(struct SystemControl * Sys,
 							std::cout << "Vew: " << view << std::endl;
 							std::cout << "Error opening the file: " << Path.c_str() << std::endl;
 							std::cout << "Please check the path and re-run the program." << std::endl;
-							exit(1);
+							return Tomo_file_err;
 						}
 
 						//Write the reconstructed data into the predefine memory location
@@ -581,7 +578,7 @@ void ReadDarkandGainImages(struct SystemControl * Sys,
 					}
 					else {
 						std::cout << "Error: Not enough dark images."<< std::endl;
-						exit(1);
+						return Tomo_file_err;
 					}
 				}
 				NumDarkIM++;
@@ -620,7 +617,7 @@ void ReadDarkandGainImages(struct SystemControl * Sys,
 					{
 						std::cout << "Error opening the file: " << Path.c_str() << std::endl;
 						std::cout << "Please check the path and re-run the program." << std::endl;
-						exit(1);
+						return Tomo_file_err;
 					}
 
 					//Write the reconstructed data into the predefine memory location
@@ -632,7 +629,7 @@ void ReadDarkandGainImages(struct SystemControl * Sys,
 					std::cout << "Error: Gain data path is invalid." << std::endl;
 					std::cout << "Make sure dark data is located at: " << ProjPath.c_str();
 					std::cout << std::endl;
-					exit(1);
+					return Tomo_file_err;
 				}
 				for (int view = 1; view < NumViews; view++)
 				{
@@ -646,7 +643,7 @@ void ReadDarkandGainImages(struct SystemControl * Sys,
 						{
 							std::cout << "Error opening the file: " << ProjPath.c_str() << std::endl;
 							std::cout << "Please check the path and re-run the program." << std::endl;
-							exit(1);
+							return Tomo_file_err;
 						}
 
 						//Write the reconstructed data into the predefine memory location
@@ -659,7 +656,7 @@ void ReadDarkandGainImages(struct SystemControl * Sys,
 					else {
 						std::cout << "Error: Not enough gain images. Need one gain image";
 						std::cout << " for each projection view." << std::endl;
-						exit(1);
+						return Tomo_file_err;
 					}
 				}
 				NumProjections++;
@@ -699,9 +696,11 @@ void ReadDarkandGainImages(struct SystemControl * Sys,
 
 	delete GainBuf;
 	delete DarkBuf;
+
+	return Tomo_OK;
 }
 
-void ReadDarkImages(struct  SystemControl * Sys, int NumViews)
+TomoError ReadDarkImages(struct  SystemControl * Sys, int NumViews)
 {
 	int size_single_proj = Sys->Proj->Nx * Sys->Proj->Ny;
 	int size_single_proj_bytes = size_single_proj * 2;
@@ -728,15 +727,17 @@ void ReadDarkImages(struct  SystemControl * Sys, int NumViews)
 		std::cout << "Error opening the file: " << avgFilePath.c_str() << std::endl;
 		std::cout << "Please check the path and re-run the program." << std::endl;
 		status = 1;
-		exit(1);
+		return Tomo_file_err;
 	}
 
 	fread(Sys->Norm->DarkData, sizeof(USHORT), size_single_proj, fileptr);
 
 	fclose(fileptr);
+
+	return Tomo_OK;
 }
 
-void ReadGainImages(struct  SystemControl * Sys, int NumViews)
+TomoError ReadGainImages(struct  SystemControl * Sys, int NumViews)
 {
 	int size_single_proj = Sys->Proj->Nx * Sys->Proj->Ny;
 	int size_single_proj_bytes = size_single_proj * 2;
@@ -833,7 +834,7 @@ void ReadGainImages(struct  SystemControl * Sys, int NumViews)
 							//							return status;
 							std::cout << "Error opening the file: " << avgFilePath.c_str() << std::endl;
 							std::cout << "Please check the path and re-run the program." << std::endl;
-							exit(1);
+							return Tomo_file_err;
 						}
 
 						fread(GainBuf + NumProjections*size_single_proj*NumViews,
@@ -844,7 +845,7 @@ void ReadGainImages(struct  SystemControl * Sys, int NumViews)
 					{
 						//						status = 1;
 						//						return status;
-						exit(1);
+						return Tomo_file_err;
 					}
 					for (int view = 1; view < NumViews; view++)
 					{
@@ -860,7 +861,7 @@ void ReadGainImages(struct  SystemControl * Sys, int NumViews)
 								//								return status;
 								std::cout << "Error opening the file: " << avgFilePath.c_str() << std::endl;
 								std::cout << "Please check the path and re-run the program." << std::endl;
-								exit(1);
+								return Tomo_file_err;
 							}
 
 							fread(GainBuf + NumProjections*size_single_proj*NumViews
@@ -875,7 +876,7 @@ void ReadGainImages(struct  SystemControl * Sys, int NumViews)
 							//							return status;
 							std::cout << "Error opening the file: " << avgFilePath.c_str() << std::endl;
 							std::cout << "Please check the path and re-run the program." << std::endl;
-							exit(1);
+							return Tomo_file_err;
 						}
 					}
 					NumProjections++;
@@ -927,7 +928,7 @@ void ReadGainImages(struct  SystemControl * Sys, int NumViews)
 				//				return status;
 				std::cout << "Error opening the file: " << avgFilePath.c_str() << std::endl;
 				std::cout << "Please check the path and re-run the program." << std::endl;
-				exit(1);
+				return Tomo_file_err;
 			}
 			//			fwrite(&(GainData[view*size_single_proj]), sizeof(USHORT), numPerProj, fileptr);
 			fwrite(Sys->Norm->GainData + view * size_single_proj, sizeof(USHORT), size_single_proj, fileptr);
@@ -936,13 +937,11 @@ void ReadGainImages(struct  SystemControl * Sys, int NumViews)
 
 		delete GainBuf;
 	}
-
+	return Tomo_OK;
 	//	return status;
 }
 
-void ReadRawProjectionData(struct SystemControl * Sys,
-	int NumViews, std::string BaseFileIn, std::string FileName)
-{
+TomoError ReadRawProjectionData(struct SystemControl * Sys, int NumViews, std::string BaseFileIn, std::string FileName){
 	//Set up the basic path to the raw projection dark and gain data
 	FILE * ProjData = NULL;
 
@@ -1000,7 +999,7 @@ void ReadRawProjectionData(struct SystemControl * Sys,
 			{
 				std::cout << "Error opening the file: " << Path.c_str() << std::endl;
 				std::cout << "Please check the path and re-run the program." << std::endl;
-				exit(1);
+				return Tomo_file_err;
 			}
 
 			//Write the reconstructed data into the predefine memory location
@@ -1027,7 +1026,7 @@ void ReadRawProjectionData(struct SystemControl * Sys,
 					std::cout << "Error opening the file: " << Path.c_str() << std::endl;
 					std::cout << "Please check the path and re-run the program.";
 					std::cout << std::endl;
-					exit(1);
+					return Tomo_file_err;
 				}
 
 				//Write the reconstructed data into the predefine memory location
@@ -1148,6 +1147,8 @@ void ReadRawProjectionData(struct SystemControl * Sys,
 
 		delete[] tempstore;
 	}
+
+	return Tomo_OK;
 
 /*	ProjData = NULL;
 	fopen_s(&ProjData, "D:\\Patients\\testcenter.raw", "wb");

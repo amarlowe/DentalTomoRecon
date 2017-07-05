@@ -19,6 +19,8 @@
 #include <wx/font.h>
 #include <wx/colour.h>
 #include <wx/settings.h>
+#include <wx/textctrl.h>
+#include <wx/sizer.h>
 #include <wx/panel.h>
 #include <wx/aui/auibook.h>
 #include <wx/statusbr.h>
@@ -26,8 +28,6 @@
 #include <wx/aui/aui.h>
 #include <wx/stattext.h>
 #include <wx/radiobox.h>
-#include <wx/textctrl.h>
-#include <wx/sizer.h>
 #include <wx/grid.h>
 #include <wx/button.h>
 
@@ -59,6 +59,7 @@ class mainWindow : public wxFrame
 	
 	public:
 		wxAuiNotebook* m_auinotebook6;
+		wxTextCtrl* m_textCtrl8;
 		
 		mainWindow( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Tomogrophy Reconstruction"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 1074,681 ), long style = wxDEFAULT_FRAME_STYLE|wxTAB_TRAVERSAL );
 		wxAuiManager m_mgr;

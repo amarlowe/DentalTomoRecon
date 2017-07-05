@@ -24,6 +24,14 @@ bool MyApp::OnInit()
 	DTRMainWindow *frame = new DTRMainWindow(NULL);
 	frame->Show(true);
 
+	wxStreamToTextRedirector redirect(frame->m_textCtrl8);
+	//std::cout << "Test\n";
+	TomoError retErr = TomoRecon();
+	if (retErr != Tomo_OK)
+		wxMessageBox(wxT("Reconstruction error!"),
+			wxString::Format(wxT("Reconstruction failed with error code : %d"), (int)retErr),
+			wxICON_ERROR | wxOK);
+
 	return true;
 }
 
@@ -107,10 +115,10 @@ DTRMainWindow::~DTRMainWindow() {
 	pConfig->Write(wxT("/dialog/y"), (long)y);
 	pConfig->Write(wxT("/dialog/w"), (long)w);
 	pConfig->Write(wxT("/dialog/h"), (long)h);
-	/*if (wxTopLevelWindow::IsMaximized())
+	if (wxTopLevelWindow::IsMaximized())
 		pConfig->Write(wxT("/dialog/max"), 1);
 	else
-		pConfig->Write(wxT("/dialog/max"), 0);*/
+		pConfig->Write(wxT("/dialog/max"), 0);
 }
 
 // ----------------------------------------------------------------------------
@@ -240,18 +248,14 @@ DTRConfigDialog::~DTRConfigDialog() {
 // GLFrame
 //---------------------------------------------------------------------------
 
-GLFrame::GLFrame(wxAuiNotebook *frame, const wxPoint& pos,
-	const wxSize& size, long style)
-	: wxPanel(frame, wxID_ANY, pos, size),
-	m_canvas(NULL){
-	// Make a TestGLCanvas
-
+GLFrame::GLFrame(wxAuiNotebook *frame, const wxPoint& pos, const wxSize& size, long style)
+	: wxPanel(frame, wxID_ANY, pos, size), m_canvas(NULL){
 	//Set up sizer to make the canvas take up the entire panel (wxWidgets handles garbage collection)
 	wxBoxSizer* bSizer2;
 	bSizer2 = new wxBoxSizer(wxVERTICAL);
 
 	//initialize the canvas to this object
-	m_canvas = new TestGLCanvas(this, wxID_ANY, NULL, GetClientSize());
+	m_canvas = new CudaGLCanvas(this, wxID_ANY, NULL, GetClientSize());
 
 	bSizer2->Add(m_canvas, 1, wxEXPAND | wxALL, 5);
 	this->SetSizer(bSizer2);
@@ -261,8 +265,6 @@ GLFrame::GLFrame(wxAuiNotebook *frame, const wxPoint& pos,
 	// Show the frame
 	Show(true);
 	Raise();//grab attention when the frame has finished rendering
-
-	m_canvas->InitGL();
 }
 
 GLFrame::~GLFrame()
@@ -271,62 +273,57 @@ GLFrame::~GLFrame()
 }
 
 //---------------------------------------------------------------------------
-// TestGLCanvas
+// CudaGLCanvas
 //---------------------------------------------------------------------------
 
-wxBEGIN_EVENT_TABLE(TestGLCanvas, wxGLCanvas)
-EVT_PAINT(TestGLCanvas::OnPaint)
-EVT_CHAR(TestGLCanvas::OnChar)
-EVT_MOUSE_EVENTS(TestGLCanvas::OnMouseEvent)
+wxBEGIN_EVENT_TABLE(CudaGLCanvas, wxGLCanvas)
+EVT_PAINT(CudaGLCanvas::OnPaint)
+EVT_CHAR(CudaGLCanvas::OnChar)
+EVT_MOUSE_EVENTS(CudaGLCanvas::OnMouseEvent)
 wxEND_EVENT_TABLE()
 
-TestGLCanvas::TestGLCanvas(wxWindow *parent, wxWindowID id, int* gl_attrib, wxSize size)
+CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxWindowID id, int* gl_attrib, wxSize size)
 	: wxGLCanvas(parent, id, gl_attrib, wxDefaultPosition, size, wxFULL_REPAINT_ON_RESIZE){
-	m_xrot = 0;
-	m_yrot = 0;
-	m_numverts = 0;
 
-	const wxSize ClientSize = GetClientSize();
 	// Explicitly create a new rendering context instance for this canvas.
-	m_glRC = new wxGLContext(this);
+	/*m_glRC = new wxGLContext(this);
 	wxGLContextAttrs cxtArrs;
 	cxtArrs.CoreProfile().OGLVersion(4, 5).Robust().ResetIsolation().EndList();
 
 	SetCurrent(*m_glRC);
 
 	int argc = 1;
-	wxString test = wxString((wxTheApp->argv)[0]);
-	char* argv[1] = { (char*)test.ToUTF8().data() };
+	char* argv[1] = { (char*)wxString((wxTheApp->argv)[0]).ToUTF8().data() };
 
 	m_inter = new interop(&argc, argv, GetSize().x, GetSize().y, first);
-	first = false;
+	first = false;*/
+
+	TomoError retErr = TomoRecon();
+	if(retErr != Tomo_OK)
+		wxMessageBox(wxT("Reconstruction error!"),
+			wxString::Format(wxT("Reconstruction failed with error code : %d"),(int)retErr),
+			wxICON_ERROR | wxOK);
 }
 
-TestGLCanvas::~TestGLCanvas()
-{
+CudaGLCanvas::~CudaGLCanvas(){
 	delete m_inter;
 	delete m_glRC;
 }
 
-void TestGLCanvas::OnPaint(wxPaintEvent& WXUNUSED(event))
-{
+void CudaGLCanvas::OnPaint(wxPaintEvent& WXUNUSED(event)){
 	// This is a dummy, to avoid an endless succession of paint messages.
 	// OnPaint handlers must always create a wxPaintDC.
-	wxPaintDC(this);
-
-	//const wxSize ClientSize = GetClientSize();
+	/*wxPaintDC(this);
 
 	SetCurrent(*m_glRC);//tells opengl which buffers to use, mutliple windows fail without this
 	m_inter->display(GetSize().x, GetSize().y);
-	SwapBuffers();
+	SwapBuffers();*/
 }
 
-void TestGLCanvas::OnChar(wxKeyEvent& event)
-{
+void CudaGLCanvas::OnChar(wxKeyEvent& event){
 }
 
-void TestGLCanvas::OnMouseEvent(wxMouseEvent& event)
-{
+void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event){
 	static int dragging = 0;
 	static float last_x, last_y;
 
@@ -342,8 +339,8 @@ void TestGLCanvas::OnMouseEvent(wxMouseEvent& event)
 		}
 		else
 		{
-			m_yrot += (event.GetX() - last_x)*1.0;
-			m_xrot += (event.GetY() - last_y)*1.0;
+			//m_yrot += (event.GetX() - last_x)*1.0;
+			//m_xrot += (event.GetY() - last_y)*1.0;
 			Refresh(false);
 		}
 		last_x = event.GetX();
@@ -353,12 +350,4 @@ void TestGLCanvas::OnMouseEvent(wxMouseEvent& event)
 	{
 		dragging = 0;
 	}
-}
-
-void TestGLCanvas::InitGL()
-{
-	const wxSize ClientSize = GetClientSize();
-
-	// Make the new context current (activate it for use) with this canvas.
-	//SetCurrent(*m_glRC);
 }

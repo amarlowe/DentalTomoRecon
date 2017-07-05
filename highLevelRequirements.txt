@@ -1,0 +1,14 @@
+Software system
+- geometry gui
+- image processing
+	Requirements
+	- process all 7 input images
+	- 10 seconds combined with image display
+	- cuda enabled
+SOUPs 
+- CUDA framework (GLUT as well, may be able to wrap into one)
+- wxWidgets
+- cJSON
+
+Tools
+- visual studio community 2015

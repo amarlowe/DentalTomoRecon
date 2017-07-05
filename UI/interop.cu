@@ -39,7 +39,6 @@ __global__ void simple_vbo_kernel(float4 *pos, unsigned int width, unsigned int 
 }
 
 interop::interop(int *argc, char **argv, int x, int y, bool first) {
-
 	width = x;
 	height = y;
 	
@@ -78,17 +77,13 @@ interop::interop(int *argc, char **argv, int x, int y, bool first) {
 
 	// unmap buffer object
 	checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_vbo_resource, 0));
-
-	// start rendering mainloop
-	//glutMainLoop();
 }
 
 interop::~interop() {
-	if (vbo)
-		deleteVBO(&vbo, cuda_vbo_resource);
+	if (vbo) deleteVBO(&vbo, cuda_vbo_resource);
 }
 
-void interop::createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res, unsigned int vbo_res_flags) {
+void interop::createVBO(unsigned int *vbo, struct cudaGraphicsResource **vbo_res, unsigned int vbo_res_flags) {
 	assert(vbo);
 
 	// create buffer object
@@ -107,7 +102,7 @@ void interop::createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res, unsi
 	SDK_CHECK_ERROR_GL();
 }
 
-void interop::deleteVBO(GLuint *vbo, struct cudaGraphicsResource *vbo_res){
+void interop::deleteVBO(unsigned int *vbo, struct cudaGraphicsResource *vbo_res){
 	// unregister this buffer object with CUDA
 	checkCudaErrors(cudaGraphicsUnregisterResource(vbo_res));
 
@@ -117,8 +112,7 @@ void interop::deleteVBO(GLuint *vbo, struct cudaGraphicsResource *vbo_res){
 	*vbo = 0;
 }
 
-void interop::display(int x, int y)
-{
+void interop::display(int x, int y){
 	width = x;
 	height = y;
 	glViewport(0, 0, (GLint)x, (GLint)y);
@@ -144,11 +138,7 @@ void interop::display(int x, int y)
 	glDrawArrays(GL_POINTS, 0, width * height / 4);
 	glDisableClientState(GL_VERTEX_ARRAY);
 
-	//glutSwapBuffers();
-
 	g_fAnim += 0.01f;
-
-	//computeFPS();
 }
 
 void interop::launch_kernel(float4 *pos, unsigned int mesh_width, unsigned int mesh_height, float time){
@@ -158,8 +148,7 @@ void interop::launch_kernel(float4 *pos, unsigned int mesh_width, unsigned int m
 	simple_vbo_kernel <<< grid, block >>>(pos, mesh_width, mesh_height, time);
 }
 
-void interop::runCuda(struct cudaGraphicsResource **vbo_resource)
-{
+void interop::runCuda(struct cudaGraphicsResource **vbo_resource){
 	createVBO(&vbo, &cuda_vbo_resource, cudaGraphicsMapFlagsWriteDiscard);
 
 	// map OpenGL buffer object for writing from CUDA
@@ -170,15 +159,8 @@ void interop::runCuda(struct cudaGraphicsResource **vbo_resource)
 		*vbo_resource));
 	//printf("CUDA mapped VBO: May access %ld bytes\n", num_bytes);
 
-	// execute the kernel
-	//    dim3 block(8, 8, 1);
-	//    dim3 grid(mesh_width / block.x, mesh_height / block.y, 1);
-	//    kernel<<< grid, block>>>(dptr, mesh_width, mesh_height, g_fAnim);
-
 	launch_kernel(dptr, width/2, height/2, g_fAnim);
 
 	// unmap buffer object
 	checkCudaErrors(cudaGraphicsUnmapResources(1, vbo_resource, 0));
 }
-
-
