@@ -26,11 +26,11 @@ bool MyApp::OnInit()
 
 	wxStreamToTextRedirector redirect(frame->m_textCtrl8);
 	//std::cout << "Test\n";
-	TomoError retErr = TomoRecon();
+	/*TomoError retErr = TomoRecon();
 	if (retErr != Tomo_OK)
 		wxMessageBox(wxT("Reconstruction error!"),
 			wxString::Format(wxT("Reconstruction failed with error code : %d"), (int)retErr),
-			wxICON_ERROR | wxOK);
+			wxICON_ERROR | wxOK);*/
 
 	return true;
 }
@@ -286,7 +286,7 @@ CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxWindowID id, int* gl_attrib, wxSi
 	: wxGLCanvas(parent, id, gl_attrib, wxDefaultPosition, size, wxFULL_REPAINT_ON_RESIZE){
 
 	// Explicitly create a new rendering context instance for this canvas.
-	/*m_glRC = new wxGLContext(this);
+	m_glRC = new wxGLContext(this);
 	wxGLContextAttrs cxtArrs;
 	cxtArrs.CoreProfile().OGLVersion(4, 5).Robust().ResetIsolation().EndList();
 
@@ -296,13 +296,13 @@ CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxWindowID id, int* gl_attrib, wxSi
 	char* argv[1] = { (char*)wxString((wxTheApp->argv)[0]).ToUTF8().data() };
 
 	m_inter = new interop(&argc, argv, GetSize().x, GetSize().y, first);
-	first = false;*/
+	first = false;
 
-	TomoError retErr = TomoRecon();
+	/*TomoError retErr = TomoRecon();
 	if(retErr != Tomo_OK)
 		wxMessageBox(wxT("Reconstruction error!"),
 			wxString::Format(wxT("Reconstruction failed with error code : %d"),(int)retErr),
-			wxICON_ERROR | wxOK);
+			wxICON_ERROR | wxOK);*/
 }
 
 CudaGLCanvas::~CudaGLCanvas(){
@@ -313,9 +313,9 @@ CudaGLCanvas::~CudaGLCanvas(){
 void CudaGLCanvas::OnPaint(wxPaintEvent& WXUNUSED(event)){
 	// This is a dummy, to avoid an endless succession of paint messages.
 	// OnPaint handlers must always create a wxPaintDC.
-	/*wxPaintDC(this);
+	wxPaintDC(this);
 
-	SetCurrent(*m_glRC);//tells opengl which buffers to use, mutliple windows fail without this
+	/*SetCurrent(*m_glRC);//tells opengl which buffers to use, mutliple windows fail without this
 	m_inter->display(GetSize().x, GetSize().y);
 	SwapBuffers();*/
 }

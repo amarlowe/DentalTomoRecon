@@ -36,6 +36,23 @@ private:
 	int g_Index = 0;
 	unsigned int g_TotalErrors = 0;
 	bool g_bQAReadback = false;
-	int width;
-	int height;
+
+	// split GPUs?
+	bool                    multi_gpu;
+
+	// number of fbo's
+	int                     count;
+	int                     index;
+
+	// w x h
+	int                     width;
+	int                     height;
+
+	// GL buffers
+	unsigned int*                 fb;
+	unsigned int*                 rb;
+
+	// CUDA resources
+	cudaGraphicsResource_t* cgr;
+	cudaArray_t*            ca;
 };
