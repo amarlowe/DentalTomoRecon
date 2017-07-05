@@ -212,7 +212,7 @@ __global__ void ApplyGaussianBlurX(float * Sino, float * BlurrX, int view, param
 		//Use a neighborhood of 6 sigma
 		for (int n = -N; n <= N; n++)
 		{
-			if (((n + i) >= 0) && (n + i < Nx))
+			if (((n + i) >= 0) && (n + i < Px))
 			{
 				float weight = __expf((float)(n*n)*sigma);
 				norm += weight;
@@ -240,7 +240,7 @@ __global__ void ApplyGaussianBlurY(float * BlurrX, float * BlurrY, params* const
 	int Py = d_Py;
 	int Ny = d_Ny;
 	int MPx = d_MPx;
-	int MPy = d_MPy;
+	//int MPy = d_MPy;
 
 	//Image is not a power of 2
 	if ((i < Px) && (j < Py))
@@ -284,14 +284,16 @@ __global__ void ScatterCorrect(float * Sino, unsigned short * Proj, float * Blur
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 //START part of the reconstuction code
-__global__ void ProjectImage(float * Sino, float * Norm, float *Error, int view, float ex, float ey, float ez, params* constants){
+__global__ void ProjectImage(float * Sino, float * Norm, float *Image, float *Error, int view, float ex, float ey, float ez, params* constants){
 	//Define pixel location in x and y
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
 
 	//shared memory local cache
-	int sizex = d_Px;
-	int sizey = d_Py;
+	int Px = d_Px;
+	int Py = d_Py;
+	int Nx = d_Nx;
+	int Ny = d_Ny;
 	int Memx = d_MPx;
 	int Memy = d_MPy;
 	//int rMemx = d_MNx;//not used
@@ -300,7 +302,7 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Error, int view,
 	float zOff = (float)d_Z_Offset;
 
 	//within image boudary
-	if ((i < sizex) && (j < sizey)){
+	if ((i < Px) && (j < Py)){
 		//Check to make sure the ray passes through the image
 		float NP = Norm[(j + view*Memy)*Memx + i];
 		float err = 0;
@@ -365,10 +367,11 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Error, int view,
 						//Calculate the weight as the overlap in x and y
 						float weight = scale*((xend - xs)*(yend - ys)*dist);
 
-						int nx = min(max(x, 0), d_Nx - 1);
-						int ny = min(max(y, 0), d_Ny - 1);
+						int nx = min(max(x, 0), Nx - 1);
+						int ny = min(max(y, 0), Ny - 1);
 						float test = tex2D(textImage, nx + 0.5f, ny + 0.5f + z*rMemy);
 						Pro += test * weight;
+						//Pro += Image[nx + (ny + z*Memy)*Memx] * weight;
 						count += weight;
 
 						ys = yend;
@@ -1062,6 +1065,11 @@ TomoError SetUpGPUMemory(struct SystemControl * Sys){
 
 	ChkErr(cudaDeviceReset());
 
+	size_t heap_size;
+	cudaDeviceGetLimit(&heap_size, cudaLimitMallocHeapSize);
+	cudaDeviceSetLimit(cudaLimitMallocHeapSize, heap_size*2);//increase default heap size, we're running out while debugging
+	cudaDeviceGetLimit(&heap_size, cudaLimitMallocHeapSize);
+
 	int Cx = 1;
 	int Cy = 1;
 	if (Sys->Proj->Nx % 16 == 0) Cx = 0;
@@ -1369,7 +1377,7 @@ TomoError FindSliceOffset(struct SystemControl * Sys){
 
 			ChkErr(cudaBindTexture2D(NULL, textImage, d_Image, textImage.channelDesc, MemR_Nx, MemR_Ny*Sys->Recon->Nz, MemR_Nx * sizeof(float)));
 
-			voidChkErr(KERNELCALL2(ProjectImage, dimGridSino, dimBlockSino, d_Sino, d_Norm, d_Error, view, ex, ey, ez, d_constants));
+			voidChkErr(KERNELCALL2(ProjectImage, dimGridSino, dimBlockSino, d_Image, d_Sino, d_Norm, d_Error, view, ex, ey, ez, d_constants));
 
 			ChkErr(cudaBindTexture2D(NULL, textError, d_Error, textImage.channelDesc,MemP_Nx, MemP_Ny, MemP_Nx * sizeof(float)));
 
@@ -1500,7 +1508,7 @@ TomoError ReconUsingSARTandTV(struct SystemControl * Sys){
 
 			ChkErr(cudaBindTexture2D(NULL, textImage, d_Image, textImage.channelDesc, MemR_Nx, MemR_Ny*Sys->Recon->Nz, MemR_Nx * sizeof(float)));
 
-			voidChkErr(KERNELCALL2(ProjectImage, dimGridSino, dimBlockSino, d_Sino, d_Norm, d_Error, view, ex, ey, ez, d_constants));
+			voidChkErr(KERNELCALL2(ProjectImage, dimGridSino, dimBlockSino, d_Image, d_Sino, d_Norm, d_Error, view, ex, ey, ez, d_constants));
 
 			ChkErr(cudaBindTexture2D(NULL, textError, d_Error, textImage.channelDesc, MemP_Nx, MemP_Ny, MemP_Nx * sizeof(float)));
 
@@ -1514,7 +1522,7 @@ TomoError ReconUsingSARTandTV(struct SystemControl * Sys){
 		Beta = Beta*0.95f;
 	}//iterations
 
-	cudaDeviceSynchronize();
+	//cudaDeviceSynchronize();
 	
 	std::cout << "Recon finised" << std::endl;
 
