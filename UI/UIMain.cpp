@@ -287,16 +287,21 @@ CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxWindowID id, int* gl_attrib, wxSi
 
 	// Explicitly create a new rendering context instance for this canvas.
 	m_glRC = new wxGLContext(this);
-	wxGLContextAttrs cxtArrs;
-	cxtArrs.CoreProfile().OGLVersion(4, 5).Robust().ResetIsolation().EndList();
+	//wxGLContextAttrs cxtArrs;
+	//cxtArrs.CoreProfile().OGLVersion(4, 5).Robust().ResetIsolation().EndList();
 
 	SetCurrent(*m_glRC);
 
 	int argc = 1;
 	char* argv[1] = { (char*)wxString((wxTheApp->argv)[0]).ToUTF8().data() };
 
+	//wxStreamToTextRedirector redirect(((mainWindow*)this->GetParent()->GetParent())->m_textCtrl8);
+
 	m_inter = new interop(&argc, argv, GetSize().x, GetSize().y, first);
 	first = false;
+
+	cudaStreamCreateWithFlags(&stream, cudaStreamDefault);
+	cudaEventCreateWithFlags(&event, cudaEventBlockingSync);
 
 	/*TomoError retErr = TomoRecon();
 	if(retErr != Tomo_OK)
@@ -315,9 +320,22 @@ void CudaGLCanvas::OnPaint(wxPaintEvent& WXUNUSED(event)){
 	// OnPaint handlers must always create a wxPaintDC.
 	wxPaintDC(this);
 
-	/*SetCurrent(*m_glRC);//tells opengl which buffers to use, mutliple windows fail without this
+	SetCurrent(*m_glRC);//tells opengl which buffers to use, mutliple windows fail without this
 	m_inter->display(GetSize().x, GetSize().y);
-	SwapBuffers();*/
+	m_inter->map(stream);
+
+	pxl_kernel_launcher(*(m_inter->ca),
+		GetSize().x,
+		GetSize().y,
+		event,
+		stream);
+
+	m_inter->unmap(stream);
+
+	m_inter->blit();
+	m_inter->swap();
+
+	SwapBuffers();
 }
 
 void CudaGLCanvas::OnChar(wxKeyEvent& event){

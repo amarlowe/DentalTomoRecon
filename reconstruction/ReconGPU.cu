@@ -47,6 +47,23 @@ float alpha = 0.95f;
 	}															\
 }
 
+TomoError cuda_assert(const cudaError_t code, const char* const file, const int line) {
+	if (code != cudaSuccess) {
+		std::cout << "Cuda failure " << __FILE__ << ":" << __LINE__ << ": " << cudaGetErrorString(code) << "\n";
+		return Tomo_CUDA_err;
+	}
+	else return Tomo_OK;
+}
+
+TomoError cuda_assert_void(const char* const file, const int line) {
+	cudaError_t code = cudaGetLastError();
+	if (code != cudaSuccess) {
+		std::cout << "Cuda failure " << __FILE__ << ":" << __LINE__ << ": " << cudaGetErrorString(code) << "\n";
+		return Tomo_CUDA_err;
+	}
+	else return Tomo_OK;
+}
+
 /********************************************************************************************/
 /* GPU Function specific functions															*/
 /********************************************************************************************/
@@ -1090,34 +1107,34 @@ TomoError SetUpGPUMemory(struct SystemControl * Sys){
 	size_t sizeSlice = Sys->Recon->Nz * sizeof(float);
 
 	//Allocate memory on GPU
-	ChkErr(cudaMalloc((void**)&d_Image, sizeIM));
-	ChkErr(cudaMalloc((void**)&d_Image2, sizeIM));
-	ChkErr(cudaMalloc((void**)&d_GradIm, sizeIM));
-	ChkErr(cudaMalloc((void**)&d_Proj, sizeProj));
-	ChkErr(cudaMalloc((void**)&d_Error, sizeError));
-	ChkErr(cudaMalloc((void**)&d_Sino, sizeSino));
-	ChkErr(cudaMalloc((void**)&d_Norm, sizeSino));
-	ChkErr(cudaMalloc((void**)&d_Pro, sizeSino));
-	ChkErr(cudaMalloc((void**)&d_PriorIm, sizeIM));
-	ChkErr(cudaMalloc((void**)&d_DerivGradIm, sizeIM));
-	ChkErr(cudaMalloc((void**)&d_GradNorm, sizeSlice));
-	ChkErr(cudaMalloc((void**)&d_dp, sizeSlice));
-	ChkErr(cudaMalloc((void**)&d_dpp, sizeSlice));
-	ChkErr(cudaMalloc((void**)&d_alpha, sizeSlice));
+	cuda(Malloc((void**)&d_Image, sizeIM));
+	cuda(Malloc((void**)&d_Image2, sizeIM));
+	cuda(Malloc((void**)&d_GradIm, sizeIM));
+	cuda(Malloc((void**)&d_Proj, sizeProj));
+	cuda(Malloc((void**)&d_Error, sizeError));
+	cuda(Malloc((void**)&d_Sino, sizeSino));
+	cuda(Malloc((void**)&d_Norm, sizeSino));
+	cuda(Malloc((void**)&d_Pro, sizeSino));
+	cuda(Malloc((void**)&d_PriorIm, sizeIM));
+	cuda(Malloc((void**)&d_DerivGradIm, sizeIM));
+	cuda(Malloc((void**)&d_GradNorm, sizeSlice));
+	cuda(Malloc((void**)&d_dp, sizeSlice));
+	cuda(Malloc((void**)&d_dpp, sizeSlice));
+	cuda(Malloc((void**)&d_alpha, sizeSlice));
 
 	//Set the values of the image and sinogram to all 0
-	ChkErr(cudaMemset(d_Image, 0, sizeIM));
-	ChkErr(cudaMemset(d_Image2, 0, sizeIM));
-	ChkErr(cudaMemset(d_GradIm, 0, sizeIM));
-	ChkErr(cudaMemset(d_Sino, 0, sizeSino));
-	ChkErr(cudaMemset(d_Norm, 0, sizeSino));
-	ChkErr(cudaMemset(d_Pro, 0, sizeProj));
-	ChkErr(cudaMemset(d_PriorIm, 0, sizeIM));
-	ChkErr(cudaMemset(d_DerivGradIm, 0, sizeIM));
-	ChkErr(cudaMemset(d_GradNorm, 0, sizeSlice));
-	ChkErr(cudaMemset(d_dp, 0, sizeSlice));
-	ChkErr(cudaMemset(d_dpp, 0, sizeSlice));
-	ChkErr(cudaMemset(d_alpha, 0, sizeSlice));
+	cuda(Memset(d_Image, 0, sizeIM));
+	cuda(Memset(d_Image2, 0, sizeIM));
+	cuda(Memset(d_GradIm, 0, sizeIM));
+	cuda(Memset(d_Sino, 0, sizeSino));
+	cuda(Memset(d_Norm, 0, sizeSino));
+	cuda(Memset(d_Pro, 0, sizeProj));
+	cuda(Memset(d_PriorIm, 0, sizeIM));
+	cuda(Memset(d_DerivGradIm, 0, sizeIM));
+	cuda(Memset(d_GradNorm, 0, sizeSlice));
+	cuda(Memset(d_dp, 0, sizeSlice));
+	cuda(Memset(d_dpp, 0, sizeSlice));
+	cuda(Memset(d_alpha, 0, sizeSlice));
 
 	//Define the textures
 	textImage.filterMode = cudaFilterModePoint;
@@ -1132,15 +1149,15 @@ TomoError SetUpGPUMemory(struct SystemControl * Sys){
 	textSino.addressMode[0] = cudaAddressModeClamp;
 	textSino.addressMode[1] = cudaAddressModeClamp;
 
-	ChkErr(cudaMallocArray(&d_Sinogram, &textSino.channelDesc, MemP_Nx, MemP_Ny * Sys->Proj->NumViews));
-	ChkErr(cudaBindTextureToArray(textSino, d_Sinogram));
+	cuda(MallocArray(&d_Sinogram, &textSino.channelDesc, MemP_Nx, MemP_Ny * Sys->Proj->NumViews));
+	cuda(BindTextureToArray(textSino, d_Sinogram));
 
 	//Set the TV weighting value to start at a constant value less than 1
 	float * AlphaSlice = new float[Sys->Recon->Nz];
 	for (int slice = 0; slice < Sys->Recon->Nz; slice++) {
 		AlphaSlice[slice] = 0.2f;
 	}
-	ChkErr(cudaMemcpy(d_alpha, AlphaSlice, sizeSlice, cudaMemcpyHostToDevice));
+	cuda(Memcpy(d_alpha, AlphaSlice, sizeSlice, cudaMemcpyHostToDevice));
 	delete[] AlphaSlice;
 
 	float HalfPx = (float)Sys->Proj->Nx / 2.0f;
@@ -1166,14 +1183,14 @@ TomoError SetUpGPUMemory(struct SystemControl * Sys){
 	constants.MNx = MemR_Nx;
 	constants.MNy = MemR_Ny;
 
-	ChkErr(cudaMemcpyToSymbol(d_Px, &Sys->Proj->Nx, sizeof(int)));
-	ChkErr(cudaMemcpyToSymbol(d_Py, &Sys->Proj->Ny, sizeof(int)));
-	ChkErr(cudaMemcpyToSymbol(d_Nx, &Sys->Recon->Nx, sizeof(int)));
-	ChkErr(cudaMemcpyToSymbol(d_Ny, &Sys->Recon->Ny, sizeof(int)));
-	ChkErr(cudaMemcpyToSymbol(d_MPx, &MemP_Nx, sizeof(int)));
-	ChkErr(cudaMemcpyToSymbol(d_MPy, &MemP_Ny, sizeof(int)));
-	ChkErr(cudaMemcpyToSymbol(d_MNx, &MemR_Nx, sizeof(int)));
-	ChkErr(cudaMemcpyToSymbol(d_MNy, &MemR_Ny, sizeof(int)));
+	cuda(MemcpyToSymbol(d_Px, &Sys->Proj->Nx, sizeof(int)));
+	cuda(MemcpyToSymbol(d_Py, &Sys->Proj->Ny, sizeof(int)));
+	cuda(MemcpyToSymbol(d_Nx, &Sys->Recon->Nx, sizeof(int)));
+	cuda(MemcpyToSymbol(d_Ny, &Sys->Recon->Ny, sizeof(int)));
+	cuda(MemcpyToSymbol(d_MPx, &MemP_Nx, sizeof(int)));
+	cuda(MemcpyToSymbol(d_MPy, &MemP_Ny, sizeof(int)));
+	cuda(MemcpyToSymbol(d_MNx, &MemR_Nx, sizeof(int)));
+	cuda(MemcpyToSymbol(d_MNy, &MemR_Ny, sizeof(int)));
 
 	constants.HalfPx = HalfPx;
 	constants.HalfPy = HalfPy;
@@ -1207,8 +1224,8 @@ TomoError SetUpGPUMemory(struct SystemControl * Sys){
 	ChkErr(cudaMemcpyToSymbol(d_alpharelax, &alpha, sizeof(float)));
 	ChkErr(cudaMemcpyToSymbol(d_Z_Offset, &Sice_Offset, sizeof(int)));
 
-	ChkErr(cudaMalloc(&d_constants, sizeof(params)));
-	ChkErr(cudaMemcpy(d_constants, &constants, sizeof(params), cudaMemcpyHostToDevice));
+	cuda(Malloc(&d_constants, sizeof(params)));
+	cuda(Memcpy(d_constants, &constants, sizeof(params), cudaMemcpyHostToDevice));
 
 	return Tomo_OK;
 }

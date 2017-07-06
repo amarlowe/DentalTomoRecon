@@ -203,3 +203,12 @@ TomoError SaveDataAsDICOM(struct SystemControl * Sys, std::string BaseFileIn);
 TomoError SaveCorrectedProjections(struct SystemControl * Sys, std::string BaseFileIn);
 
 TomoError SaveSyntheticProjections(struct SystemControl * Sys, int PhantomNum, std::string BaseFileIn);
+
+/********************************************************************************************/
+/* Library assertions																		*/
+/********************************************************************************************/
+TomoError cuda_assert(const cudaError_t code, const char* const file, const int line);
+TomoError cuda_assert_void(const char* const file, const int line);
+
+#define cudav(...)  cuda##__VA_ARGS__; cuda_assert_void(__FILE__, __LINE__);
+#define cuda(...)  cuda_assert((cuda##__VA_ARGS__), __FILE__, __LINE__);

@@ -78,6 +78,9 @@ public:
 	void OnMouseEvent(wxMouseEvent& event);
 
 private:
+	cudaStream_t stream;
+	cudaEvent_t  event;
+
 	wxGLContext* m_glRC;
 	interop* m_inter;
 
