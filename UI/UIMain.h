@@ -10,7 +10,6 @@
 #include "wx/glcanvas.h"
 
 #include "reconUI.h"
-#include "interop.h"
 #include "../reconstruction/TomoRecon.h"
 
 #include <stdlib.h>
@@ -44,6 +43,7 @@ protected:
 	void onQuit(wxCommandEvent& event);
 	void onAbout(wxCommandEvent& event);
 	void onConfig(wxCommandEvent& event);
+	void onContinue(wxCommandEvent& event);
 
 	wxPanel *DTRMainWindow::CreateNewPage() const;
 public:
@@ -78,11 +78,8 @@ public:
 	void OnMouseEvent(wxMouseEvent& event);
 
 private:
-	cudaStream_t stream;
-	cudaEvent_t  event;
-
 	wxGLContext* m_glRC;
-	interop* m_inter;
+	TomoRecon* recon;
 
 	wxDECLARE_NO_COPY_CLASS(CudaGLCanvas);
 	wxDECLARE_EVENT_TABLE();

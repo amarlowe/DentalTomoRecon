@@ -43,8 +43,7 @@ bool CheckDirName(std::string Name)
 	return (ValidName);
 }
 
-BOOL CheckFilePathForRepeatScans(std::string BasePathIn)
-{
+BOOL TomoRecon::CheckFilePathForRepeatScans(std::string BasePathIn){
 	std::string BasePath;
 	BasePath = BasePathIn + "/*";
 	WIN32_FIND_DATA FindFile;
@@ -80,7 +79,7 @@ BOOL CheckFilePathForRepeatScans(std::string BasePathIn)
 
 
 //Simple Function to count the number example images
-int GetNumberOfScans(std::string BasePathIn){
+int TomoRecon::GetNumberOfScans(std::string BasePathIn){
 	int NumScans = 0;
 	bool MoreViews = true;
 
@@ -111,7 +110,7 @@ int GetNumberOfScans(std::string BasePathIn){
 }
 
 //Function to determine how many files exist to be averaged together
-int GetNumOfProjectionsPerView(std::string BasePathIn){
+int TomoRecon::GetNumOfProjectionsPerView(std::string BasePathIn){
 	int NumProjections = 0;
 	bool MoreFolders = true;
 	bool MoreProjections = true;
@@ -156,7 +155,7 @@ int GetNumOfProjectionsPerView(std::string BasePathIn){
 }
 
 //Get the number of views to use for the reconstruction
-int GetNumProjectionViews(std::string BasePathIn){
+int TomoRecon::GetNumProjectionViews(std::string BasePathIn){
 	int NumViews = 0;
 	bool MoreFolders = true;
 	bool MoreProjections = true;
@@ -273,7 +272,7 @@ TomoError ReadSubSetViews(struct SystemControl * Sys, int NumViews, std::string 
 }
 
 //Function to read the system geoemtry file
-TomoError SetUpSystemAndReadGeometry(struct SystemControl * Sys, int NumViews, std::string BasePathIn){
+TomoError TomoRecon::SetUpSystemAndReadGeometry(struct SystemControl * Sys, int NumViews, std::string BasePathIn){
 	//Define a new projection data pointer and define the projection geometry constants
 	Sys->Proj = new Proj_Data;
 	Sys->UsrIn = new UserInput;
@@ -470,7 +469,7 @@ TomoError SetUpSystemAndReadGeometry(struct SystemControl * Sys, int NumViews, s
 }
 
 //Functions to read the dark and gain images
-TomoError ReadDarkandGainImages(struct SystemControl * Sys, int NumViews, std::string BasePathIn){
+TomoError TomoRecon::ReadDarkandGainImages(struct SystemControl * Sys, int NumViews, std::string BasePathIn){
 	//Define two paths to gain and dark data
 	std::string GainPath;
 	std::string DarkPath;
@@ -700,8 +699,7 @@ TomoError ReadDarkandGainImages(struct SystemControl * Sys, int NumViews, std::s
 	return Tomo_OK;
 }
 
-TomoError ReadDarkImages(struct  SystemControl * Sys, int NumViews)
-{
+TomoError TomoRecon::ReadDarkImages(struct  SystemControl * Sys, int NumViews){
 	int size_single_proj = Sys->Proj->Nx * Sys->Proj->Ny;
 	int size_single_proj_bytes = size_single_proj * 2;
 
@@ -737,8 +735,7 @@ TomoError ReadDarkImages(struct  SystemControl * Sys, int NumViews)
 	return Tomo_OK;
 }
 
-TomoError ReadGainImages(struct  SystemControl * Sys, int NumViews)
-{
+TomoError TomoRecon::ReadGainImages(struct  SystemControl * Sys, int NumViews){
 	int size_single_proj = Sys->Proj->Nx * Sys->Proj->Ny;
 	int size_single_proj_bytes = size_single_proj * 2;
 
@@ -941,7 +938,7 @@ TomoError ReadGainImages(struct  SystemControl * Sys, int NumViews)
 	//	return status;
 }
 
-TomoError ReadRawProjectionData(struct SystemControl * Sys, int NumViews, std::string BaseFileIn, std::string FileName){
+TomoError TomoRecon::ReadRawProjectionData(struct SystemControl * Sys, int NumViews, std::string BaseFileIn, std::string FileName){
 	//Set up the basic path to the raw projection dark and gain data
 	FILE * ProjData = NULL;
 

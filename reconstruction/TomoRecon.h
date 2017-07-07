@@ -1,11 +1,10 @@
 /********************************************************************************************/
-/* Recon.h																					*/
-/* Copyright 2016, XinRay Inc., All Rights Reserved											*/
+/* ReconGPUHeader.cuh																		*/
+/* Copyright 2015, Xintek Inc., All rights reserved											*/
 /********************************************************************************************/
+#ifndef _RECONGPUHEADER_CUH_
+#define _RECONGPUHEADER_CUH_
 
-/********************************************************************************************/
-/* General C and C++ libraries included in the program										*/
-/********************************************************************************************/
 // CUDA runtime
 #include <cuda_runtime.h>
 #include "device_launch_parameters.h"
@@ -25,6 +24,8 @@
 #include <Windows.h>
 #include <WinBase.h>
 
+#include "../UI/interop.h"
+
 #pragma comment(lib, "Shlwapi.lib")
 
 /********************************************************************************************/
@@ -41,6 +42,16 @@
 
 //#define PROFILER
 
+//Macro for checking cuda errors following a cuda launch or api call
+#define voidChkErr(...) {											\
+	(__VA_ARGS__);														\
+	cudaError_t e=cudaGetLastError();							\
+	if(e!=cudaSuccess) {										\
+		std::cout << "Cuda failure " << __FILE__ << ":" << __LINE__ << ": " << cudaGetErrorString(e) << "\n";	\
+		return Tomo_CUDA_err;									\
+	}															\
+}
+
 /********************************************************************************************/
 /* Error type, used to pass errors to the caller											*/
 /********************************************************************************************/
@@ -52,6 +63,17 @@ typedef enum {
 } TomoError;
 
 #define tomo_err_throw(x) {TomoError err = x; if(err != Tomo_OK) return err;}
+
+#ifdef __INTELLISENSE__
+#include "intellisense.h"
+#define KERNELCALL2(function, threads, blocks, ...) function(__VA_ARGS__)
+#define KERNELCALL3(function, threads, blocks, sharedMem, ...) function(__VA_ARGS__)
+#define KERNELCALL4(function, threads, blocks, sharedMem, stream, ...) function(__VA_ARGS__)
+#else
+#define KERNELCALL2(function, threads, blocks, ...) voidChkErr(function <<< threads, blocks >>> (__VA_ARGS__))
+#define KERNELCALL3(function, threads, blocks, sharedMem, ...) voidChkErr(function <<< threads, blocks, sharedMem >>> (__VA_ARGS__))
+#define KERNELCALL4(function, threads, blocks, sharedMem, stream, ...) voidChkErr(function <<< threads, blocks, sharedMem, stream >>> (__VA_ARGS__))
+#endif
 
 /********************************************************************************************/
 /* System Structures (All units are in millimeters)											*/
@@ -99,7 +121,7 @@ struct FileNames {
 
 struct ReconGeometry {
 	unsigned short * ReconIm;				//Pointer to a buffer containing the recon images
-//	float* testval;
+											//	float* testval;
 	float Slice_0_z;						//Location of the first slice in the z direction
 	float Pitch_x;							//Recon Image pixel pitch in the x direction
 	float Pitch_y;							//Recon Image pixel pitch in the y direction
@@ -157,52 +179,157 @@ struct SystemControl {
 
 };
 
-/********************************************************************************************/
-/* Call from external function																*/
-/********************************************************************************************/
-TomoError TomoRecon();
+//Define a number of constants
+struct params {
+	int Px;
+	int Py;
+	int Nx;
+	int Ny;
+	int Nz;
+	int MPx;
+	int MPy;
+	int MNx;
+	int MNy;
+	float HalfPx;
+	float HalfPy;
+	float HalfNx;
+	float HalfNy;
+	int Views;
+	float PitchPx;
+	float PitchPy;
+	float PitchNx;
+	float PitchNy;
+	float PitchNz;
+	float alpharelax;
+	float rmax;
+	int Z_Offset;
+};
 
-TomoError OpenFile();
+/*TomoError pxl_kernel_launcher(cudaArray_t array,
+	const int         width,
+	const int         height,
+	cudaStream_t      stream);*/
 
-/********************************************************************************************/
-/* Input Functions to read data into the program											*/
-/********************************************************************************************/
-BOOL CheckFilePathForRepeatScans(std::string BasePathIn);
+class TomoRecon : public interop {
+public:
+	//Functions
+	//////////////////////////////////////////////////////////////////////////////////////////////
+	//constructor/destructor
+	TomoRecon(int *argc, char **argv, int x, int y, bool first);
+	~TomoRecon();
 
-int GetNumberOfScans(std::string BasePathIn);
+	TomoError init();
 
-int GetNumOfProjectionsPerView(std::string BasePathIn);
+	//////////////////////////////////////////////////////////////////////////////////////////////
+	//High level functions for command line call
+	TomoError TomoMain();
+	TomoError SetUpGPUForRecon(struct SystemControl * Sys);
+	TomoError Reconstruct(struct SystemControl * Sys);
+	TomoError FreeGPUMemory(void);
 
-int GetNumProjectionViews(std::string BasePathIn);
+	//////////////////////////////////////////////////////////////////////////////////////////////
+	//Lower level functions for user interactive debugging
+	TomoError LoadProjections(struct SystemControl * Sys);
 
-TomoError SetUpSystemAndReadGeometry(struct SystemControl * Sys, int NumViews,
-	 std::string BasePathIn);
+	//////////////////////////////////////////////////////////////////////////////////////////////
+	//interop extensions
+	void map() { interop::map(stream); }
+	void unmap() { interop::unmap(stream); }
+	/*void test(){
+		pxl_kernel_launcher(*ca,
+			width,
+			height,
+			stream);
+	}*/
+	void test() { resizeImage(Sys->Proj->RawData, Sys->Proj->Nx, Sys->Proj->Ny, *ca, width, height); }
+	
 
-TomoError ReadDarkandGainImages(struct SystemControl * Sys, int NumViews, std::string BasePathIn);
+	/********************************************************************************************/
+	/* Variables																				*/
+	/********************************************************************************************/
+	bool initialized = false;
 
-TomoError ReadDarkImages(struct SystemControl * Sys, int NumViews);
-TomoError ReadGainImages(struct SystemControl * Sys, int NumViews);
+private:
+	/********************************************************************************************/
+	/* Function to interface the CPU with the GPU:												*/
+	/********************************************************************************************/
 
-TomoError ReadRawProjectionData(struct SystemControl * Sys,
-			int NumViews, std::string BaseFileIn, std::string FileName);
+	//////////////////////////////////////////////////////////////////////////////////////////////
+	//Functions to Initialize the GPU and set up the reconstruction normalization
+	void DefineReconstructSpace(struct SystemControl * Sys);
+	TomoError SetUpGPUMemory(struct SystemControl * Sys);
+	TomoError GetReconNorm(struct SystemControl * Sys);
 
-/********************************************************************************************/
-/* Function to interact with GPU portion of the program to reconstruct the image			*/
-/********************************************************************************************/
-TomoError SetUpGPUForRecon(struct SystemControl * Sys);
+	//////////////////////////////////////////////////////////////////////////////////////////////
+	//Functions called to control the stages of reconstruction
+	TomoError LoadAndCorrectProjections(struct SystemControl * Sys);
 
-TomoError Reconstruct(struct SystemControl * Sys);
+	//////////////////////////////////////////////////////////////////////////////////////////////
+	//Functions to control the SART and TV reconstruction
+	TomoError FindSliceOffset(struct SystemControl * Sys);
+	TomoError AddTVandTVSquared(struct SystemControl * Sys);
+	TomoError ReconUsingSARTandTV(struct SystemControl * Sys);
 
-TomoError FreeGPUMemory(void);
+	//////////////////////////////////////////////////////////////////////////////////////////////
+	//Functions to save the images
+	TomoError CopyAndSaveImages(struct SystemControl * Sys);
+	TomoError resizeImage(unsigned short* in, int wIn, int hIn, cudaArray_t out, int wOut, int hOut);
 
-/********************************************************************************************/
-/* DICOM functions																			*/
-/********************************************************************************************/
-TomoError SaveDataAsDICOM(struct SystemControl * Sys, std::string BaseFileIn);
+	/********************************************************************************************/
+	/* Input Functions to read data into the program											*/
+	/********************************************************************************************/
+	BOOL CheckFilePathForRepeatScans(std::string BasePathIn);
 
-TomoError SaveCorrectedProjections(struct SystemControl * Sys, std::string BaseFileIn);
+	int GetNumberOfScans(std::string BasePathIn);
 
-TomoError SaveSyntheticProjections(struct SystemControl * Sys, int PhantomNum, std::string BaseFileIn);
+	int GetNumOfProjectionsPerView(std::string BasePathIn);
+
+	int GetNumProjectionViews(std::string BasePathIn);
+
+	TomoError SetUpSystemAndReadGeometry(struct SystemControl * Sys, int NumViews,
+		std::string BasePathIn);
+
+	TomoError ReadDarkandGainImages(struct SystemControl * Sys, int NumViews, std::string BasePathIn);
+
+	TomoError ReadDarkImages(struct SystemControl * Sys, int NumViews);
+	TomoError ReadGainImages(struct SystemControl * Sys, int NumViews);
+
+	TomoError ReadRawProjectionData(struct SystemControl * Sys,
+		int NumViews, std::string BaseFileIn, std::string FileName);
+
+	/********************************************************************************************/
+	/* DICOM functions																			*/
+	/********************************************************************************************/
+	TomoError SaveDataAsDICOM(struct SystemControl * Sys, std::string BaseFileIn);
+
+	TomoError SaveCorrectedProjections(struct SystemControl * Sys, std::string BaseFileIn);
+
+	TomoError SaveSyntheticProjections(struct SystemControl * Sys, int PhantomNum, std::string BaseFileIn);
+
+	//Define data buffer
+	unsigned short * d_Proj;
+	float * d_Norm;
+	float * d_Image;
+	float * d_Image2;
+	float * d_GradIm;
+	float * d_Error;
+	float * d_Sino;
+	float * d_Pro;
+	float * d_PriorIm;
+	float * d_dp;
+	float * d_dpp;
+	float * d_alpha;
+	float * d_DerivGradIm;
+	float * d_GradNorm;
+
+	//Define Cuda arrays
+	cudaArray * d_Sinogram;
+
+	params* d_constants;
+	cudaStream_t stream;
+
+	struct SystemControl * Sys;
+};
 
 /********************************************************************************************/
 /* Library assertions																		*/
@@ -212,3 +339,5 @@ TomoError cuda_assert_void(const char* const file, const int line);
 
 #define cudav(...)  cuda##__VA_ARGS__; cuda_assert_void(__FILE__, __LINE__);
 #define cuda(...)  cuda_assert((cuda##__VA_ARGS__), __FILE__, __LINE__);
+
+#endif

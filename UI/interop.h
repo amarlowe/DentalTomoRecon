@@ -48,9 +48,3 @@ private:
 	// CUDA resources
 	cudaGraphicsResource_t*	cgr;
 };
-
-cudaError_t pxl_kernel_launcher(cudaArray_t array,
-	const int         width,
-	const int         height,
-	cudaEvent_t       event,
-	cudaStream_t      stream);

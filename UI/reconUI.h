@@ -45,6 +45,7 @@ class mainWindow : public wxFrame
 		wxMenuBar* m_menubar1;
 		wxMenu* file;
 		wxMenu* config;
+		wxMenu* run;
 		wxMenu* help;
 		wxPanel* m_panel10;
 		wxStatusBar* m_statusBar1;
@@ -54,6 +55,7 @@ class mainWindow : public wxFrame
 		virtual void onOpen( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onQuit( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onConfig( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onContinue( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onAbout( wxCommandEvent& event ) { event.Skip(); }
 		
 	
@@ -117,7 +119,7 @@ class configDialog : public wxFrame
 	
 	public:
 		
-		configDialog( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Reconstruction Configuration"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 1343,664 ), long style = wxDEFAULT_FRAME_STYLE|wxTAB_TRAVERSAL );
+		configDialog( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Reconstruction Configuration"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 1343,511 ), long style = wxDEFAULT_FRAME_STYLE|wxTAB_TRAVERSAL );
 		
 		~configDialog();
 	

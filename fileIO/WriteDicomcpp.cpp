@@ -468,7 +468,7 @@ void ConvertImageSynthetic(struct SystemControl * Sys){
 /*********************************************************************************************
 * Function to control the saving of the dicom images
 ********************************************************************************************/
-TomoError SaveDataAsDICOM(struct SystemControl * Sys, std::string BaseFileIn){
+TomoError TomoRecon::SaveDataAsDICOM(struct SystemControl * Sys, std::string BaseFileIn){
 	//Set the patient and System settings
 	struct SystemSettings * Set = new SystemSettings;
 	struct PatientInfo * Patient = new PatientInfo;
@@ -543,7 +543,7 @@ TomoError SaveDataAsDICOM(struct SystemControl * Sys, std::string BaseFileIn){
 	return Tomo_OK;
 }
 
-TomoError SaveCorrectedProjections(struct SystemControl * Sys, std::string BaseFileIn){
+TomoError TomoRecon::SaveCorrectedProjections(struct SystemControl * Sys, std::string BaseFileIn){
 	//Set up the basic path to the raw projection dark and gain data
 	FILE * ProjData = NULL;
 	int size_single_image = Sys->Proj->Nx * Sys->Proj->Ny;
@@ -601,7 +601,7 @@ TomoError SaveCorrectedProjections(struct SystemControl * Sys, std::string BaseF
 	return Tomo_OK;
 }
 
-TomoError SaveSyntheticProjections(struct SystemControl * Sys,
+TomoError TomoRecon::SaveSyntheticProjections(struct SystemControl * Sys,
 	int PhantomNum, std::string BaseFileIn){
 	//Set the patient and System settings
 	struct SystemSettings * Set = new SystemSettings;

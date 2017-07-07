@@ -11,8 +11,7 @@ public:
 wxIMPLEMENT_APP(MyApp);
 
 //Main equivalent: the program execution starts here
-bool MyApp::OnInit()
-{
+bool MyApp::OnInit(){
 	//set name for config files in registry
 	SetVendorName(wxT("Xinvivo"));
 
@@ -25,7 +24,7 @@ bool MyApp::OnInit()
 	frame->Show(true);
 
 	wxStreamToTextRedirector redirect(frame->m_textCtrl8);
-	//std::cout << "Test\n";
+	
 	/*TomoError retErr = TomoRecon();
 	if (retErr != Tomo_OK)
 		wxMessageBox(wxT("Reconstruction error!"),
@@ -82,6 +81,12 @@ void DTRMainWindow::onOpen(wxCommandEvent& WXUNUSED(event)) {
 void DTRMainWindow::onQuit(wxCommandEvent& WXUNUSED(event)){
 	// true is to force the frame to close
 	Close(true);
+}
+
+void DTRMainWindow::onContinue(wxCommandEvent& WXUNUSED(event)) {
+	wxMessageBox(wxT("TODO"),
+		wxT("TODO"),
+		wxICON_INFORMATION | wxOK);
 }
 
 void DTRMainWindow::onConfig(wxCommandEvent& WXUNUSED(event)) {
@@ -297,11 +302,9 @@ CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxWindowID id, int* gl_attrib, wxSi
 
 	//wxStreamToTextRedirector redirect(((mainWindow*)this->GetParent()->GetParent())->m_textCtrl8);
 
-	m_inter = new interop(&argc, argv, GetSize().x, GetSize().y, first);
+	recon = new TomoRecon(&argc, argv, GetSize().x, GetSize().y, first);
+	recon->init();
 	first = false;
-
-	cudaStreamCreateWithFlags(&stream, cudaStreamDefault);
-	cudaEventCreateWithFlags(&event, cudaEventBlockingSync);
 
 	/*TomoError retErr = TomoRecon();
 	if(retErr != Tomo_OK)
@@ -311,7 +314,7 @@ CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxWindowID id, int* gl_attrib, wxSi
 }
 
 CudaGLCanvas::~CudaGLCanvas(){
-	delete m_inter;
+	delete recon;
 	delete m_glRC;
 }
 
@@ -320,22 +323,22 @@ void CudaGLCanvas::OnPaint(wxPaintEvent& WXUNUSED(event)){
 	// OnPaint handlers must always create a wxPaintDC.
 	wxPaintDC(this);
 
-	SetCurrent(*m_glRC);//tells opengl which buffers to use, mutliple windows fail without this
-	m_inter->display(GetSize().x, GetSize().y);
-	m_inter->map(stream);
+	if (recon->initialized) {
+		SetCurrent(*m_glRC);//tells opengl which buffers to use, mutliple windows fail without this
+		int width = GetSize().x;
+		int height = GetSize().y;
+		recon->display(width, height);
+		recon->map();
 
-	pxl_kernel_launcher(*(m_inter->ca),
-		GetSize().x,
-		GetSize().y,
-		event,
-		stream);
+		recon->test();
 
-	m_inter->unmap(stream);
+		recon->unmap();
 
-	m_inter->blit();
-	m_inter->swap();
+		recon->blit();
+		recon->swap();
 
-	SwapBuffers();
+		SwapBuffers();
+	}
 }
 
 void CudaGLCanvas::OnChar(wxKeyEvent& event){

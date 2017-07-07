@@ -18,7 +18,6 @@
 /* Include the general header and a gpu specific header										*/
 /********************************************************************************************/
 #include "TomoRecon.h"
-#include "ReconGPUHeader.cuh"
 
 //TV constants
 float eplison = 1e-12f;
@@ -35,16 +34,6 @@ float alpha = 0.95f;
 		std::cout << "Cuda failure " << __FILE__ << ":" << __LINE__ << ": " << cudaGetErrorString(Error) << "\n";	\
 		return Tomo_CUDA_err;\
 	}\
-}
-
-//Macro for checking cuda errors following a cuda launch or api call
-#define voidChkErr(x) {											\
-	(x);														\
-	cudaError_t e=cudaGetLastError();							\
-	if(e!=cudaSuccess) {										\
-		std::cout << "Cuda failure " << __FILE__ << ":" << __LINE__ << ": " << cudaGetErrorString(e) << "\n";	\
-		return Tomo_CUDA_err;									\
-	}															\
 }
 
 TomoError cuda_assert(const cudaError_t code, const char* const file, const int line) {
@@ -64,9 +53,119 @@ TomoError cuda_assert_void(const char* const file, const int line) {
 	else return Tomo_OK;
 }
 
+#define PXL_KERNEL_THREADS_PER_BLOCK  256 // enough for 4Kx2 monitor
+
+surface<void, cudaSurfaceType2D> displaySurface;
+surface<void, cudaSurfaceType2D> imageSurface;
+
+union pxl_rgbx_24
+{
+	uint1       b32;
+
+	struct {
+		unsigned  r : 8;
+		unsigned  g : 8;
+		unsigned  b : 8;
+		unsigned  na : 8;
+	};
+};
+
+//Define the textures used by the reconstruction algorithms
+texture<float, cudaTextureType2D, cudaReadModeElementType> textImage;
+texture<float, cudaTextureType2D, cudaReadModeElementType> textError;
+texture<float, cudaTextureType2D, cudaReadModeElementType> textSino;
+
+__device__ __constant__ int d_Px;
+__device__ __constant__ int d_Py;
+__device__ __constant__ int d_Nx;
+__device__ __constant__ int d_Ny;
+__device__ __constant__ int d_MPx;
+__device__ __constant__ int d_MPy;
+__device__ __constant__ int d_MNx;
+__device__ __constant__ int d_MNy;
+__device__ __constant__ float d_HalfPx2;
+__device__ __constant__ float d_HalfPy2;
+__device__ __constant__ float d_HalfNx2;
+__device__ __constant__ float d_HalfNy2;
+__device__ __constant__ int d_Nz;
+__device__ __constant__ int d_Views;
+__device__ __constant__ float d_PitchPx;
+__device__ __constant__ float d_PitchPy;
+__device__ __constant__ float d_PitchPxInv;
+__device__ __constant__ float d_PitchPyInv;
+__device__ __constant__ float d_PitchNx;
+__device__ __constant__ float d_PitchNy;
+__device__ __constant__ float d_PitchNxInv;
+__device__ __constant__ float d_PitchNyInv;
+__device__ __constant__ float d_PitchNz;
+__device__ __constant__ float d_alpharelax;
+__device__ __constant__ float d_rmax;
+__device__ __constant__ int d_Z_Offset;
+
 /********************************************************************************************/
 /* GPU Function specific functions															*/
 /********************************************************************************************/
+
+__global__ void pxl_kernel(const int width, const int height) {
+	// pixel coordinates
+	const int idx = (blockDim.x * blockIdx.x) + threadIdx.x;
+	const int x = idx % width;
+	const int y = idx / width;
+
+	const bool        border = (x < 5) || (x > width - 5) || (y < 5) || (y > height - 5);
+	//const bool        border = true;
+	union pxl_rgbx_24 rgbx = { border ? 0xFF0000FF : 0xFF000000 };
+
+	surf2Dwrite(rgbx.b32,
+		displaySurface,
+		x * sizeof(rgbx),
+		y,
+		cudaBoundaryModeZero); // squelches out-of-bound writes
+}
+
+__global__ void resizeKernel(unsigned short* input, int wIn, int hIn, int wOut, int hOut) {
+	// pixel coordinates
+	const int idx = (blockDim.x * blockIdx.x) + threadIdx.x;
+	const int x = idx % wOut;
+	const int y = idx / wOut;
+
+	float scaleWidth = (float)wIn / (float)wOut;
+	float scaleHeight = (float)hIn / (float)hOut;
+	
+	float sum = 0;
+	/*for (int i = round(x*scaleWidth - scaleWidth); i < round(x*scaleWidth + scaleWidth); i++) {
+		for (int j = round(y*scaleHeight - scaleHeight); j < round(y*scaleHeight + scaleHeight); j++) {
+			//sum += surf2Dread(imageSurface, i * sizeof(unsigned short), j, cudaBoundaryModeZero);
+			//unsigned int temp;
+			//surf2Dread(&temp, imageSurface, i * sizeof(unsigned short), j, cudaBoundaryModeZero);
+			//sum += temp;
+			if(i > 0 && j > 0 && i < wIn && j < hIn)
+				sum += input[j*wIn + i];
+		}
+	}
+	sum /= (2 * scaleHeight + 1) / (2 * scaleWidth + 1);
+	sum = sum / MAXSHORT * 255;*/
+	int i = x*scaleWidth;
+	int j = y*scaleHeight;
+	if (i > 0 && j > 0 && i < wIn && j < hIn)
+		sum = input[j*wIn + i];
+	//if (x > 0 && y > 0 && x < wIn && y < hIn)
+	//	sum = input[y*wIn + x];
+
+	sum = sum / MAXSHORT * 255;
+
+	union pxl_rgbx_24 rgbx;
+	rgbx.na = 0xFF;
+	rgbx.r = sum;
+	rgbx.g = sum;
+	rgbx.b = sum;
+
+	surf2Dwrite(rgbx.b32,
+		displaySurface,
+		x * sizeof(rgbx),
+		y,
+		cudaBoundaryModeZero); // squelches out-of-bound writes
+}
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 //Functions to normalize the reconstruction
@@ -1009,8 +1108,7 @@ __global__ void GetMaxImageVal(float * Image, int sizeIM, float * MaxVal, params
 	}
 }
 
-__global__ void CopyImages(unsigned short * ImOut, float * ImIn, float maxVal, params* constants)
-{
+__global__ void CopyImages(unsigned short * ImOut, float * ImIn, float maxVal, params* constants){
 	//Define pixel location in x, y, and z
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
@@ -1030,11 +1128,41 @@ __global__ void CopyImages(unsigned short * ImOut, float * ImIn, float maxVal, p
 /* Function to interface the CPU with the GPU:												*/
 /********************************************************************************************/
 
+
+/*TomoError pxl_kernel_launcher(cudaArray_t array,
+	const int         width,
+	const int         height,
+	cudaStream_t      stream) {
+
+	cuda(BindSurfaceToArray(surf, array));
+
+	const int blocks = (width * height + PXL_KERNEL_THREADS_PER_BLOCK - 1) / PXL_KERNEL_THREADS_PER_BLOCK;
+
+	if (blocks > 0)
+		KERNELCALL4(pxl_kernel, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, width, height);
+
+	return Tomo_OK;
+}*/
+
+TomoError TomoRecon::resizeImage(unsigned short* in, int wIn, int hIn, cudaArray_t out, int wOut, int hOut) {
+	int size_proj = Sys->Proj->Nx * Sys->Proj->Ny;
+	size_t sizeProj = size_proj * sizeof(unsigned short);
+	cuda(BindSurfaceToArray(displaySurface, out));
+	//cuda(BindSurfaceToArray(imageSurface, (cudaArray_t)d_Proj));
+
+	const int blocks = (wOut * hOut + PXL_KERNEL_THREADS_PER_BLOCK - 1) / PXL_KERNEL_THREADS_PER_BLOCK;
+
+	if (blocks > 0)
+		KERNELCALL2(resizeKernel, blocks, PXL_KERNEL_THREADS_PER_BLOCK, d_Proj, wIn, hIn, wOut, hOut);
+
+	return Tomo_OK;
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////////
 //Functions to Initialize the GPU and set up the reconstruction normalization
 
 //Function to define the reconstruction structure
-void DefineReconstructSpace(struct SystemControl * Sys){
+void TomoRecon::DefineReconstructSpace(struct SystemControl * Sys){
 	//Define a new recon data pointer and define size
 	Sys->Recon = new ReconGeometry;
 
@@ -1064,7 +1192,7 @@ void DefineReconstructSpace(struct SystemControl * Sys){
 }
 
 //Function to set up the memory on the GPU
-TomoError SetUpGPUMemory(struct SystemControl * Sys){
+TomoError TomoRecon::SetUpGPUMemory(struct SystemControl * Sys){
 	//Get Device Number
 
 	//Reset the GPU as a first step
@@ -1080,7 +1208,9 @@ TomoError SetUpGPUMemory(struct SystemControl * Sys){
 		}
 	}
 
-	ChkErr(cudaDeviceReset());
+	//ChkErr(cudaDeviceReset());
+
+	cuda(StreamCreateWithFlags(&stream, cudaStreamDefault));
 
 	size_t heap_size;
 	cudaDeviceGetLimit(&heap_size, cudaLimitMallocHeapSize);
@@ -1230,7 +1360,7 @@ TomoError SetUpGPUMemory(struct SystemControl * Sys){
 	return Tomo_OK;
 }
 
-TomoError GetReconNorm(struct SystemControl * Sys){
+TomoError TomoRecon::GetReconNorm(struct SystemControl * Sys){
 	int Cx = 1;
 	int Cy = 1;
 	if (Sys->Proj->Nx % 16 == 0) Cx = 0;
@@ -1251,7 +1381,7 @@ TomoError GetReconNorm(struct SystemControl * Sys){
 		ez = Sys->SysGeo.EmitZ[view];
 
 		//this is a GPU function call that causes the threads to perform the projection norm calculation
-		voidChkErr(KERNELCALL2(ProjectionNorm, dimGridProj, dimBlockProj, d_Norm, view, ex, ey, ez, d_constants));
+		KERNELCALL2(ProjectionNorm, dimGridProj, dimBlockProj, d_Norm, view, ex, ey, ez, d_constants);
 	}
 
 	//Define the size of the sinogram space
@@ -1263,7 +1393,7 @@ TomoError GetReconNorm(struct SystemControl * Sys){
 	ChkErr(cudaMalloc((void**)&d_NormCpy, sizeSino));
 
 	//Calculate the contribution of each view to the total number of views
-	voidChkErr(KERNELCALL2(AverageProjectionNorm, dimGridProj, dimBlockProj, d_Norm, d_NormCpy, d_constants));
+	KERNELCALL2(AverageProjectionNorm, dimGridProj, dimBlockProj, d_Norm, d_NormCpy, d_constants);
 
 	ChkErr(cudaMemcpy(d_Norm, d_NormCpy, sizeSino, cudaMemcpyDeviceToDevice));
 
@@ -1278,7 +1408,7 @@ TomoError GetReconNorm(struct SystemControl * Sys){
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 //Functions called to control the stages of reconstruction
-TomoError LoadAndCorrectProjections(struct SystemControl * Sys){
+TomoError TomoRecon::LoadAndCorrectProjections(struct SystemControl * Sys){
 	int Cx = 1;
 	int Cy = 1;
 	if (Sys->Proj->Nx % 16 == 0) Cx = 0;
@@ -1305,36 +1435,36 @@ TomoError LoadAndCorrectProjections(struct SystemControl * Sys){
 
 	float * d_SinoBlurX;
 	float * d_SinoBlurXY;
-	ChkErr(cudaMalloc((void**)&d_SinoBlurX, size_sino * sizeof(float)));
-	ChkErr(cudaMalloc((void**)&d_SinoBlurXY, size_sino * sizeof(float)));
+	cuda(Malloc((void**)&d_SinoBlurX, size_sino * sizeof(float)));
+	cuda(Malloc((void**)&d_SinoBlurXY, size_sino * sizeof(float)));
 
-	ChkErr(cudaMalloc((void**)&d_Proj, sizeProj));
-	ChkErr(cudaMalloc((void**)&d_Sino, sizeSino));
+	cuda(Malloc((void**)&d_Proj, sizeProj));
+	cuda(Malloc((void**)&d_Sino, sizeSino));
 
 	//Cycle through each stream and do simple log correction
 	for (int view = 0; view < Sys->Proj->NumViews; view++){
-		ChkErr(cudaMemcpyAsync(d_Proj, Sys->Proj->RawData + view*size_proj, sizeProj, cudaMemcpyHostToDevice));
+		cuda(MemcpyAsync(d_Proj, Sys->Proj->RawData + view*size_proj, sizeProj, cudaMemcpyHostToDevice));
 
-		voidChkErr(KERNELCALL4(LogCorrectProj, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, view, d_Proj, 40000.0, d_constants));
+		KERNELCALL4(LogCorrectProj, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, view, d_Proj, 40000.0, d_constants);
 
-		ChkErr(cudaMemset(d_SinoBlurX, 0, size_sino * sizeof(float)));
-		ChkErr(cudaMalloc((void**)&d_SinoBlurX, size_sino * sizeof(float)));
+		cuda(Memset(d_SinoBlurX, 0, size_sino * sizeof(float)));
+		cuda(Malloc((void**)&d_SinoBlurX, size_sino * sizeof(float)));//TODO: test deletion
 
-		voidChkErr(KERNELCALL4(ApplyGaussianBlurX, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, d_SinoBlurX, view, d_constants));
-		voidChkErr(KERNELCALL4(ApplyGaussianBlurY, dimGridProj, dimBlockProj, 0, streams[view], d_SinoBlurX, d_SinoBlurXY, d_constants));
+		KERNELCALL4(ApplyGaussianBlurX, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, d_SinoBlurX, view, d_constants);
+		KERNELCALL4(ApplyGaussianBlurY, dimGridProj, dimBlockProj, 0, streams[view], d_SinoBlurX, d_SinoBlurXY, d_constants);
 
-		voidChkErr(KERNELCALL4(ScatterCorrect, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, d_Proj, d_SinoBlurXY, view, log(40000.0f), d_constants));
+		KERNELCALL4(ScatterCorrect, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, d_Proj, d_SinoBlurXY, view, log(40000.0f), d_constants);
 
-		ChkErr(cudaMemcpyAsync(Sys->Proj->RawData + view*size_proj, d_Proj, sizeProj, cudaMemcpyDeviceToHost));
+		cuda(MemcpyAsync(Sys->Proj->RawData + view*size_proj, d_Proj, sizeProj, cudaMemcpyDeviceToHost));
 	}
 
 	//Destroy the cuda streams used for log correction
-	for (int view = 0; view < Sys->Proj->NumViews; view++) cudaStreamDestroy(streams[view]);
+	for (int view = 0; view < Sys->Proj->NumViews; view++) cuda(StreamDestroy(streams[view]));
 
-	ChkErr(cudaFree(d_SinoBlurX));
-	ChkErr(cudaFree(d_SinoBlurXY));
+	cuda(Free(d_SinoBlurX));
+	cuda(Free(d_SinoBlurXY));
 
-	ChkErr(cudaMemcpyToArray(d_Sinogram, 0, 0, d_Sino, size_sino*Sys->Proj->NumViews * sizeof(float), cudaMemcpyDeviceToDevice));
+	cuda(MemcpyToArray(d_Sinogram, 0, 0, d_Sino, size_sino*Sys->Proj->NumViews * sizeof(float), cudaMemcpyDeviceToDevice));
 
 	//Check the last error to make sure that log correction worked properly
 	cudaError_t error = cudaGetLastError();
@@ -1345,7 +1475,7 @@ TomoError LoadAndCorrectProjections(struct SystemControl * Sys){
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 //Functions to control the SART and TV reconstruction
-TomoError FindSliceOffset(struct SystemControl * Sys){
+TomoError TomoRecon::FindSliceOffset(struct SystemControl * Sys){
 	int Cx = 1;
 	int Cy = 1;
 	if (Sys->Proj->Nx % 16 == 0) Cx = 0;
@@ -1394,11 +1524,11 @@ TomoError FindSliceOffset(struct SystemControl * Sys){
 
 			ChkErr(cudaBindTexture2D(NULL, textImage, d_Image, textImage.channelDesc, MemR_Nx, MemR_Ny*Sys->Recon->Nz, MemR_Nx * sizeof(float)));
 
-			voidChkErr(KERNELCALL2(ProjectImage, dimGridSino, dimBlockSino, d_Image, d_Sino, d_Norm, d_Error, view, ex, ey, ez, d_constants));
+			KERNELCALL2(ProjectImage, dimGridSino, dimBlockSino, d_Image, d_Sino, d_Norm, d_Error, view, ex, ey, ez, d_constants);
 
 			ChkErr(cudaBindTexture2D(NULL, textError, d_Error, textImage.channelDesc,MemP_Nx, MemP_Ny, MemP_Nx * sizeof(float)));
 
-			voidChkErr(KERNELCALL2(BackProjectError, dimGridIm, dimBlockIm, d_Image, d_Image2, Beta, view, ex, ey, ez, d_constants));
+			KERNELCALL2(BackProjectError, dimGridIm, dimBlockIm, d_Image, d_Image2, Beta, view, ex, ey, ez, d_constants);
 		}//views
 	}//iterations
 	
@@ -1406,12 +1536,12 @@ TomoError FindSliceOffset(struct SystemControl * Sys){
 
 	ChkErr(cudaBindTexture2D(NULL, textImage, d_Image, textImage.channelDesc, MemR_Nx, MemR_Ny*Sys->Recon->Nz, MemR_Nx * sizeof(float)));
 
-	voidChkErr(KERNELCALL2(SobelEdgeDetection, dimGridIm2, dimBlockIm2, d_Image2, d_constants));
+	KERNELCALL2(SobelEdgeDetection, dimGridIm2, dimBlockIm2, d_Image2, d_constants);
 
 	float * d_MaxVal;
 	float * h_MaxVal = new float[Sys->Recon->Nz];
 	ChkErr(cudaMalloc((void**)&d_MaxVal, Sys->Recon->Nz * sizeof(float)));
-	voidChkErr(KERNELCALL3(SumSobelEdges, dimGridSum, dimBlockSum, sumSize, d_Image2, size_Im, d_MaxVal, d_constants));
+	KERNELCALL3(SumSobelEdges, dimGridSum, dimBlockSum, sumSize, d_Image2, size_Im, d_MaxVal, d_constants);
 	ChkErr(cudaMemcpy(h_MaxVal, d_MaxVal, Sys->Recon->Nz * sizeof(float), cudaMemcpyDeviceToHost));
 
 	int centerSlice = 0;
@@ -1443,7 +1573,7 @@ TomoError FindSliceOffset(struct SystemControl * Sys){
 	return Tomo_OK;
 }
 
-TomoError AddTVandTVSquared(struct SystemControl * Sys){
+TomoError TomoRecon::AddTVandTVSquared(struct SystemControl * Sys){
 	int Cx = 1;
 	int Cy = 1;
 	if (Sys->Proj->Nx % 16 == 0) Cx = 0;
@@ -1462,20 +1592,20 @@ TomoError AddTVandTVSquared(struct SystemControl * Sys){
 
 	ChkErr(cudaBindTexture2D(NULL, textImage, d_Image, textImage.channelDesc, MemR_Nx, MemR_Ny*Sys->Recon->Nz, MemR_Nx * sizeof(float)));
 
-	voidChkErr(KERNELCALL2(DerivOfGradIm, dimGridIm, dimBlockIm, d_DerivGradIm, eplison, d_constants));
+	KERNELCALL2(DerivOfGradIm, dimGridIm, dimBlockIm, d_DerivGradIm, eplison, d_constants);
 
-	voidChkErr(KERNELCALL2(GetGradIm, dimGridIm, dimBlockIm, d_GradIm, d_constants));
+	KERNELCALL2(GetGradIm, dimGridIm, dimBlockIm, d_GradIm, d_constants);
 
 	ChkErr(cudaBindTexture2D(NULL, textImage, d_GradIm, textImage.channelDesc, MemR_Nx, MemR_Ny*Sys->Recon->Nz, MemR_Nx * sizeof(float)));
 
-	voidChkErr(KERNELCALL2(DerivOfGradIm, dimGridIm, dimBlockIm, d_Image2, eplison, d_constants));
+	KERNELCALL2(DerivOfGradIm, dimGridIm, dimBlockIm, d_Image2, eplison, d_constants);
 
-	voidChkErr(KERNELCALL2(UpdateImageEstimate, dimGridIm, dimBlockIm, d_Image, d_DerivGradIm, d_Image2, d_constants));
+	KERNELCALL2(UpdateImageEstimate, dimGridIm, dimBlockIm, d_Image, d_DerivGradIm, d_Image2, d_constants);
 
 	return Tomo_OK;
 }
 
-TomoError ReconUsingSARTandTV(struct SystemControl * Sys){
+TomoError TomoRecon::ReconUsingSARTandTV(struct SystemControl * Sys){
 	int Cx = 1;
 	int Cy = 1;
 	if (Sys->Proj->Nx % 16 == 0) Cx = 0;
@@ -1525,11 +1655,11 @@ TomoError ReconUsingSARTandTV(struct SystemControl * Sys){
 
 			ChkErr(cudaBindTexture2D(NULL, textImage, d_Image, textImage.channelDesc, MemR_Nx, MemR_Ny*Sys->Recon->Nz, MemR_Nx * sizeof(float)));
 
-			voidChkErr(KERNELCALL2(ProjectImage, dimGridSino, dimBlockSino, d_Image, d_Sino, d_Norm, d_Error, view, ex, ey, ez, d_constants));
+			KERNELCALL2(ProjectImage, dimGridSino, dimBlockSino, d_Image, d_Sino, d_Norm, d_Error, view, ex, ey, ez, d_constants);
 
 			ChkErr(cudaBindTexture2D(NULL, textError, d_Error, textImage.channelDesc, MemP_Nx, MemP_Ny, MemP_Nx * sizeof(float)));
 
-			voidChkErr(KERNELCALL2(BackProjectError, dimGridIm, dimBlockIm, d_Image, d_Image2, Beta, view, ex, ey, ez, d_constants));
+			KERNELCALL2(BackProjectError, dimGridIm, dimBlockIm, d_Image, d_Image2, Beta, view, ex, ey, ez, d_constants);
 
 			if(Sys->UsrIn->SmoothEdge == 1)
 				KERNELCALL2(CorrectEdgesX, dimGridCorr, dimBlockCorr, d_Image, d_Image2, d_constants);
@@ -1562,7 +1692,7 @@ TomoError ReconUsingSARTandTV(struct SystemControl * Sys){
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 //Functions to save the images
-TomoError CopyAndSaveImages(struct SystemControl * Sys){
+TomoError TomoRecon::CopyAndSaveImages(struct SystemControl * Sys){
 	int Cx = 1;
 	int Cy = 1;
 	if (Sys->Proj->Nx % 16 == 0) Cx = 0;
@@ -1591,7 +1721,7 @@ TomoError CopyAndSaveImages(struct SystemControl * Sys){
 	float * d_MaxVal;
 	float * h_MaxVal = new float[Sys->Recon->Nz];
 	ChkErr(cudaMalloc((void**)&d_MaxVal, Sys->Recon->Nz * sizeof(float)));
-	voidChkErr(KERNELCALL3(GetMaxImageVal, dimGridSum, dimBlockSum, sumSize, d_Image, size_Im, d_MaxVal, d_constants));
+	KERNELCALL3(GetMaxImageVal, dimGridSum, dimBlockSum, sumSize, d_Image, size_Im, d_MaxVal, d_constants);
 	ChkErr(cudaMemcpy(h_MaxVal, d_MaxVal, Sys->Recon->Nz * sizeof(float), cudaMemcpyDeviceToHost));
 
 	float MaxVal = 0;
@@ -1602,7 +1732,7 @@ TomoError CopyAndSaveImages(struct SystemControl * Sys){
 	Sys->Recon->MaxVal = MaxVal;
 
 	//Copy the image to smaller space
-	voidChkErr(KERNELCALL2(CopyImages, dimGridIm, dimBlockIm, d_ImCpy, d_Image, MaxVal, d_constants));
+	KERNELCALL2(CopyImages, dimGridIm, dimBlockIm, d_ImCpy, d_Image, MaxVal, d_constants);
 	ChkErr(cudaMemcpy(Sys->Recon->ReconIm, d_ImCpy, sizeIM, cudaMemcpyDeviceToHost));
 
 	//Remove temporary buffer
@@ -1614,7 +1744,7 @@ TomoError CopyAndSaveImages(struct SystemControl * Sys){
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 //Functions referenced from main
-TomoError SetUpGPUForRecon(struct SystemControl * Sys){
+TomoError TomoRecon::SetUpGPUForRecon(struct SystemControl * Sys){
 	//Set up GPU Memory space
 	DefineReconstructSpace(Sys);
 
@@ -1627,7 +1757,7 @@ TomoError SetUpGPUForRecon(struct SystemControl * Sys){
 	return Tomo_OK;
 }
 
-TomoError Reconstruct(struct SystemControl * Sys){
+TomoError TomoRecon::Reconstruct(struct SystemControl * Sys){
 	//Get the time and start before projections are corrected
 	FILETIME filetime, filetime2;
 	GetSystemTimeAsFileTime(&filetime);
@@ -1675,7 +1805,7 @@ TomoError Reconstruct(struct SystemControl * Sys){
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 //Fucntion to free the gpu memory after program finishes
-TomoError FreeGPUMemory(void){
+TomoError TomoRecon::FreeGPUMemory(void){
 	//Free memory allocated on the GPU
 	ChkErr(cudaFree(d_Proj));
 	ChkErr(cudaFree(d_Norm));
@@ -1711,6 +1841,21 @@ TomoError FreeGPUMemory(void){
 	ChkErr(cudaUnbindTexture(textSino));
 
 	ChkErr(cudaDeviceReset());
+
+	return Tomo_OK;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+//Lower level functions for user interactive debugging
+TomoError TomoRecon::LoadProjections(struct SystemControl * Sys) {
+	//Define memory size of the raw data as unsigned short
+	int size_proj = Sys->Proj->Nx * Sys->Proj->Ny;
+	size_t sizeProj = size_proj * sizeof(unsigned short);
+
+	//Cycle through each stream and do simple log correction
+	//for (int view = 0; view < Sys->Proj->NumViews; view++)
+	//	cuda(Memcpy(d_Proj, Sys->Proj->RawData + view*size_proj, sizeProj, cudaMemcpyHostToDevice));
+	cuda(MemcpyAsync(d_Proj, Sys->Proj->RawData + 2*size_proj, sizeProj, cudaMemcpyHostToDevice));
 
 	return Tomo_OK;
 }
