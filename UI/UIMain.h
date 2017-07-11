@@ -44,12 +44,12 @@ protected:
 	void onAbout(wxCommandEvent& event);
 	void onConfig(wxCommandEvent& event);
 	void onContinue(wxCommandEvent& event);
-
-	wxPanel *DTRMainWindow::CreateNewPage() const;
 public:
 	// Constructor
 	DTRMainWindow(wxWindow* parent);
 	~DTRMainWindow();
+
+	wxPanel *DTRMainWindow::CreateNewPage() const;
 };
 
 class DTRConfigDialog : public configDialog{
@@ -76,8 +76,15 @@ public:
 	void OnPaint(wxPaintEvent& event);
 	void OnChar(wxKeyEvent& event);
 	void OnMouseEvent(wxMouseEvent& event);
+	void OnScroll(int index);
+
+	void paint();
 
 private:
+	int imageIndex = 0;
+	int reconIndex = 0;
+	int state = 0;
+
 	wxGLContext* m_glRC;
 	TomoRecon* recon;
 
@@ -94,5 +101,12 @@ public:
 
 	virtual ~GLFrame();
 
+	void OnScroll(wxScrollEvent& event);
+	void OnMousewheel(wxMouseEvent& event);
+
 	CudaGLCanvas *m_canvas;
+	wxScrollBar* m_scrollBar;
+
+	wxDECLARE_NO_COPY_CLASS(GLFrame);
+	wxDECLARE_EVENT_TABLE();
 };

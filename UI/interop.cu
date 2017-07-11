@@ -146,7 +146,7 @@ void interop::clear() {
 void interop::blit() {
 	gl(BlitNamedFramebuffer(fb[index], 0,
 		0, 0, width, height,
-		0, height, width, 0,
+		0, 0, width, height,
 		GL_COLOR_BUFFER_BIT,
 		GL_NEAREST));
 }

@@ -21,6 +21,8 @@ TomoRecon
 - Save configuration settings on project file/directory instead of registry to make them project specific
 - "Set default" options for configuration and any other setting we can come up with
 - Replace each failure state with it's own error type and dialoag (or pass a string)
+- Inefficienicies in initial load and correction, can remove the final blur step and blurxy array
+- Recon norm has essentially uniform values across the entire image, consider killing to save memory (incorrect value was being read from it in the past)
 
 --------------Bugs---------------------
 - selecting an image runs normally with no errors
@@ -36,3 +38,9 @@ TomoRecon
 - when reading in files, it will attempt to read .dicom files along with the raw files and cause errors
 - Throw all tomo errors instead of crashing the program
 - Program crashes after returning error in reconstruction
+- interop only supports a single buffer, code exits for any number, but swapping buffers fails (may not be necessary, already need to swap the main buffer)
+- creating two instances works, fails after closing one. More cleanup is required
+- Making the viewport too small crashes opengl-line 110 (cudagraphicsresource has minimum size?)
+- Loading more than 2 projections causes odd bugs
+- replaced "40,000.0" with USHRT_MAX in correct projections. I think that's what he was going for, unsure
+- TONS of magic numbers left scrambled around the CUDA code

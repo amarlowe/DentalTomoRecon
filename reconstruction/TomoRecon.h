@@ -32,7 +32,7 @@
 /* Filepaths																				*/
 /********************************************************************************************/
 #define GEOMETRYFILE	"C:\\Users\\jdean\\Desktop\\recon_files_test\\geometry_files\\FocalSpotGeometry.txt"
-#define GAINFILE	"C:\\Users\\jdean\\Desktop\\recon_files_test\\calibration_files\\Blank"
+#define GAINFILE	"C:\\Users\\jdean\\Google Drive\\software\\Xinvivo_software\\Recon\\recon_files\\calibration_files\\Blank"
 #define DARKFILE	"C:\\Users\\jdean\\Desktop\\recon_files_test\\calibration_files\\Dark"
 //#define GEOMETRYFILE	"C:\\Users\\jdean\\Google Drive\\software\\Xinvivo_software\\Recon\\recon_files\\geometry_files\\FocalSpotGeometry.txt"
 //#define GAINFILE	"C:\\Users\\jdean\\Google Drive\\software\\Xinvivo_software\\Recon\recon_files\\calibration_files\\Blank"
@@ -62,13 +62,20 @@ typedef enum {
 	Tomo_CUDA_err
 } TomoError;
 
+typedef enum {
+	raw_images,
+	sino_images,
+	norm_images,
+	recon_images
+} display_t;
+
 #define tomo_err_throw(x) {TomoError err = x; if(err != Tomo_OK) return err;}
 
 #ifdef __INTELLISENSE__
 #include "intellisense.h"
-#define KERNELCALL2(function, threads, blocks, ...) function(__VA_ARGS__)
-#define KERNELCALL3(function, threads, blocks, sharedMem, ...) function(__VA_ARGS__)
-#define KERNELCALL4(function, threads, blocks, sharedMem, stream, ...) function(__VA_ARGS__)
+#define KERNELCALL2(function, threads, blocks, ...) voidChkErr(function(__VA_ARGS__))
+#define KERNELCALL3(function, threads, blocks, sharedMem, ...) voidChkErr(function(__VA_ARGS__))
+#define KERNELCALL4(function, threads, blocks, sharedMem, stream, ...) voidChkErr(function(__VA_ARGS__))
 #else
 #define KERNELCALL2(function, threads, blocks, ...) voidChkErr(function <<< threads, blocks >>> (__VA_ARGS__))
 #define KERNELCALL3(function, threads, blocks, sharedMem, ...) voidChkErr(function <<< threads, blocks, sharedMem >>> (__VA_ARGS__))
@@ -229,25 +236,26 @@ public:
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Lower level functions for user interactive debugging
-	TomoError LoadProjections(struct SystemControl * Sys);
+	TomoError LoadProjections(int index);
+	TomoError correctProjections();
+	TomoError reconInit();
+	TomoError reconStep();
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//interop extensions
 	void map() { interop::map(stream); }
 	void unmap() { interop::unmap(stream); }
-	/*void test(){
-		pxl_kernel_launcher(*ca,
-			width,
-			height,
-			stream);
-	}*/
-	void test() { resizeImage(Sys->Proj->RawData, Sys->Proj->Nx, Sys->Proj->Ny, *ca, width, height); }
+	TomoError test(int index);
 	
 
 	/********************************************************************************************/
 	/* Variables																				*/
 	/********************************************************************************************/
 	bool initialized = false;
+
+	display_t currentDisplay = raw_images;
+
+	struct SystemControl * Sys;
 
 private:
 	/********************************************************************************************/
@@ -273,7 +281,8 @@ private:
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Functions to save the images
 	TomoError CopyAndSaveImages(struct SystemControl * Sys);
-	TomoError resizeImage(unsigned short* in, int wIn, int hIn, cudaArray_t out, int wOut, int hOut);
+	template<typename T>
+	TomoError resizeImage(T* in, int wIn, int hIn, cudaArray_t out, int wOut, int hOut, double maxVar);
 
 	/********************************************************************************************/
 	/* Input Functions to read data into the program											*/
@@ -322,13 +331,19 @@ private:
 	float * d_DerivGradIm;
 	float * d_GradNorm;
 
+	//Decay constant for recon
+	float Beta = 1.0f;
+
 	//Define Cuda arrays
 	cudaArray * d_Sinogram;
 
 	params* d_constants;
 	cudaStream_t stream;
 
-	struct SystemControl * Sys;
+	//cuda pitch variables generated from 2d mallocs
+	size_t imagePitch;
+	size_t image2Pitch;
+	size_t errorPitch;
 };
 
 /********************************************************************************************/

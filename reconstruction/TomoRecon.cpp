@@ -23,7 +23,21 @@ TomoRecon::TomoRecon(int *argc, char **argv, int x, int y, bool first) : interop
 }
 
 TomoRecon::~TomoRecon() {
-
+	FreeGPUMemory();
+	if (Sys->Proj->RawDataThresh != NULL)
+		delete[] Sys->Proj->RawDataThresh;
+	delete[] Sys->Proj->RawData;
+	delete[] Sys->Proj->SyntData;
+	delete[] Sys->SysGeo.EmitX;
+	delete[] Sys->SysGeo.EmitY;
+	delete[] Sys->SysGeo.EmitZ;
+	delete[] Sys->Norm->DarkData;
+	delete[] Sys->Norm->GainData;
+	delete[] Sys->Norm->ProjBuf;
+	delete[] Sys->Norm->CorrBuf;
+	delete[] Sys->Recon->ReconIm;
+	//delete Sys->Proj;
+	delete Sys;
 }
 
 TomoError TomoRecon::init() {
@@ -83,14 +97,16 @@ TomoError TomoRecon::init() {
 	tomo_err_throw(ReadDarkImages(Sys, NumViews));
 	tomo_err_throw(ReadGainImages(Sys, NumViews));
 
+	//Step 5. Read Raw Data
+	tomo_err_throw(ReadRawProjectionData(Sys, NumViews, FilePath, savefilename));
+
 	//Step 4. Set up the GPU for Reconstruction
 	tomo_err_throw(SetUpGPUForRecon(Sys));
 	std::cout << "GPU Ready" << std::endl;
 
-	//Step 5. Read Raw Data
-	tomo_err_throw(ReadRawProjectionData(Sys, NumViews, FilePath, savefilename));
+	
 
-	LoadProjections(Sys);
+	LoadProjections(0);
 	initialized = true;
 }
 

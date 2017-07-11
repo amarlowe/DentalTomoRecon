@@ -950,7 +950,7 @@ TomoError TomoRecon::ReadRawProjectionData(struct SystemControl * Sys, int NumVi
 	//Define the temp buffer to read and correct data
 	Sys->Name = new FileNames;
 	Sys->Norm->CorrBuf = new float[size_raw_subproj];
-	memset(Sys->Norm->CorrBuf, 0, size_raw_subproj * sizeof(unsigned short));
+	memset(Sys->Norm->CorrBuf, 0, size_raw_subproj * sizeof(float));//was declared unsigned short. dammit this was hard to find
 
 	std::string BasePath, ProjPath;
 //	BasePath = BaseFileIn;

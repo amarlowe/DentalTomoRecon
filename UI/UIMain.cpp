@@ -253,28 +253,49 @@ DTRConfigDialog::~DTRConfigDialog() {
 // GLFrame
 //---------------------------------------------------------------------------
 
+wxBEGIN_EVENT_TABLE(GLFrame, wxPanel)
+EVT_SCROLL(GLFrame::OnScroll)
+EVT_MOUSEWHEEL(GLFrame::OnMousewheel)
+wxEND_EVENT_TABLE()
+
 GLFrame::GLFrame(wxAuiNotebook *frame, const wxPoint& pos, const wxSize& size, long style)
 	: wxPanel(frame, wxID_ANY, pos, size), m_canvas(NULL){
 	//Set up sizer to make the canvas take up the entire panel (wxWidgets handles garbage collection)
-	wxBoxSizer* bSizer2;
-	bSizer2 = new wxBoxSizer(wxVERTICAL);
+	wxBoxSizer* bSizer;
+	bSizer = new wxBoxSizer(wxVERTICAL);
 
 	//initialize the canvas to this object
 	m_canvas = new CudaGLCanvas(this, wxID_ANY, NULL, GetClientSize());
+	bSizer->Add(m_canvas, 1, wxEXPAND | wxALL, 5);
 
-	bSizer2->Add(m_canvas, 1, wxEXPAND | wxALL, 5);
-	this->SetSizer(bSizer2);
+	m_scrollBar = new wxScrollBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSB_HORIZONTAL);
+	m_scrollBar->SetScrollbar(0, 1, 7, 1);
+	bSizer->Add(m_scrollBar, 0, wxALL | wxEXPAND, 5);
+
+	this->SetSizer(bSizer);
 	this->Layout();
-	bSizer2->Fit(this);
+	bSizer->Fit(this);
 
 	// Show the frame
 	Show(true);
 	Raise();//grab attention when the frame has finished rendering
 }
 
-GLFrame::~GLFrame()
-{
+GLFrame::~GLFrame(){
 	delete m_canvas;
+}
+
+void GLFrame::OnScroll(wxScrollEvent& event) {
+	m_canvas->OnScroll(m_scrollBar->GetThumbPosition());
+}
+
+void GLFrame::OnMousewheel(wxMouseEvent& event) {
+	int newScrollPos =event.GetWheelRotation() / 120;
+	newScrollPos += m_scrollBar->GetThumbPosition();
+	if (newScrollPos < 0) newScrollPos = 0;
+	if (newScrollPos > m_scrollBar->GetRange() - 1) newScrollPos = m_scrollBar->GetRange() - 1;
+	m_scrollBar->SetThumbPosition(newScrollPos);
+	m_canvas->OnScroll(newScrollPos);
 }
 
 //---------------------------------------------------------------------------
@@ -289,33 +310,27 @@ wxEND_EVENT_TABLE()
 
 CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxWindowID id, int* gl_attrib, wxSize size)
 	: wxGLCanvas(parent, id, gl_attrib, wxDefaultPosition, size, wxFULL_REPAINT_ON_RESIZE){
-
 	// Explicitly create a new rendering context instance for this canvas.
 	m_glRC = new wxGLContext(this);
-	//wxGLContextAttrs cxtArrs;
-	//cxtArrs.CoreProfile().OGLVersion(4, 5).Robust().ResetIsolation().EndList();
 
 	SetCurrent(*m_glRC);
 
 	int argc = 1;
 	char* argv[1] = { (char*)wxString((wxTheApp->argv)[0]).ToUTF8().data() };
 
-	//wxStreamToTextRedirector redirect(((mainWindow*)this->GetParent()->GetParent())->m_textCtrl8);
-
 	recon = new TomoRecon(&argc, argv, GetSize().x, GetSize().y, first);
 	recon->init();
 	first = false;
-
-	/*TomoError retErr = TomoRecon();
-	if(retErr != Tomo_OK)
-		wxMessageBox(wxT("Reconstruction error!"),
-			wxString::Format(wxT("Reconstruction failed with error code : %d"),(int)retErr),
-			wxICON_ERROR | wxOK);*/
 }
 
 CudaGLCanvas::~CudaGLCanvas(){
 	delete recon;
 	delete m_glRC;
+}
+
+void CudaGLCanvas::OnScroll(int index) {
+	imageIndex = index;
+	paint();
 }
 
 void CudaGLCanvas::OnPaint(wxPaintEvent& WXUNUSED(event)){
@@ -324,24 +339,62 @@ void CudaGLCanvas::OnPaint(wxPaintEvent& WXUNUSED(event)){
 	wxPaintDC(this);
 
 	if (recon->initialized) {
-		SetCurrent(*m_glRC);//tells opengl which buffers to use, mutliple windows fail without this
-		int width = GetSize().x;
-		int height = GetSize().y;
-		recon->display(width, height);
-		recon->map();
-
-		recon->test();
-
-		recon->unmap();
-
-		recon->blit();
-		recon->swap();
-
-		SwapBuffers();
+		paint();
 	}
 }
 
+void CudaGLCanvas::paint() {
+	SetCurrent(*m_glRC);//tells opengl which buffers to use, mutliple windows fail without this
+	int width = GetSize().x;
+	int height = GetSize().y;
+	recon->display(width, height);
+	recon->map();
+
+	recon->test(imageIndex);
+
+	recon->unmap();
+
+	recon->blit();
+	recon->swap();
+
+	SwapBuffers();
+}
+
 void CudaGLCanvas::OnChar(wxKeyEvent& event){
+	GLFrame* parent = NULL;
+	switch (state) {
+	case 0:
+		recon->correctProjections();
+		recon->currentDisplay = sino_images;
+		state++;
+		break;
+	case 1:
+		recon->currentDisplay = raw_images;
+		state++;
+		break;
+	case 2:
+		/*DTRMainWindow* mainWindow = (DTRMainWindow*)((this->GetParent())->GetParent());
+		mainWindow->m_auinotebook6->AddPage(mainWindow->CreateNewPage(),
+			wxString::Format
+			(
+				wxT("Child of gui")
+			),
+			true);*/
+
+		recon->reconInit();
+		parent = (GLFrame*)GetParent();
+		parent->m_scrollBar->SetScrollbar(0, 1, recon->Sys->Recon->Nz, 1);
+		recon->currentDisplay = norm_images;
+		//recon->reconStep();
+		state++;
+		break;
+	case 3:
+		recon->reconStep();
+		recon->currentDisplay = recon_images;
+		break;
+	}
+	
+	paint();
 }
 
 void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event){
