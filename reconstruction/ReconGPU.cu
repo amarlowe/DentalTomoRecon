@@ -398,12 +398,12 @@ __global__ void ScatterCorrect(float * Sino, unsigned short * Proj, float * Blur
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 //START part of the reconstuction code
-__global__ void ProjectImage(float * Sino, float * Norm, float *Image, float *Error, int view, float ex, float ey, float ez, params* constants){
+__global__ void ProjectImage(float * Sino, float * Norm, float *Image, float *Error, int view, float ex, float ey, float ez, params* c){
 	//Define pixel location in x and y
 	//int i = blockDim.x * blockIdx.x + threadIdx.x;
 	//int j = blockDim.y * blockIdx.y + threadIdx.y;
 
-	int Memx = d_MPx;
+	int Memx = c->MPx;
 
 	const int idx = (blockDim.x * blockIdx.x) + threadIdx.x;
 	const int i = idx % Memx;
@@ -411,22 +411,24 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Image, float *Er
 	const int z = blockIdx.y;
 
 	//shared memory local cache
-	int Px = d_Px;
-	int Py = d_Py;
-	int Nx = d_Nx;
-	int Ny = d_Ny;
+	int Px = c->Px;
+	int Py = c->Py;
+	int Nx = c->Nx;
+	int Ny = c->Ny;
 	
-	int Memy = d_MPy;
-	int rMemx = d_MNx;
-	int rMemy = d_MNy;
-	float PitchNz = (float)d_PitchNz;
-	float Z_Offset = (float)d_Z_Offset;
-	float PitchNxInv = d_PitchNxInv;
-	float PitchNyInv = d_PitchNyInv;
-	float HalfPx2 = d_HalfPx2;
-	float HalfPy2 = d_HalfPy2;
-	float HalfNx2 = d_HalfNx2;
-	float HalfNy2 = d_HalfNy2;
+	int Memy = c->MPy;
+	//int rMemx = d_MNx;
+	int rMemy = c->MNy;
+	float PitchNz = c->PitchNz;
+	float Z_Offset = (float)c->Z_Offset;
+	float PitchNxInv = 1.0f / c->PitchNx;
+	float PitchNyInv = 1.0f / c->PitchNy;
+	float HalfPx = c->HalfPx;
+	float HalfPy = c->HalfPy;
+	float HalfNx = c->HalfNx;
+	float HalfNy = c->HalfNy;
+	float PitchPx = c->PitchPx;
+	float PitchPy = c->PitchPy;
 
 	//within image boudary
 	if ((i < Px) && (j < Py)){
@@ -436,26 +438,26 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Image, float *Er
 
 		if (NP != 0){
 			//Define scale
-			float dx1 = ((float)i - (HalfPx2 - 0.5f)) * d_PitchPx;
-			float dy1 = ((float)j - (HalfPy2 - 0.5f)) * d_PitchPy;
+			float dx1 = ((float)i - (HalfPx - 0.5f)) * PitchPx;
+			float dy1 = ((float)j - (HalfPy - 0.5f)) * PitchPy;
 			float dx2 = ez / sqrtf(pow(dx1 - ex, 2) + pow(ez, 2));
 			float dy2 = ez / sqrtf(pow(dy1 - ey, 2) + pow(ez, 2));
 			float scale = 1.0f / (dx2*dy2);
 
 			//Define image location
-			dx1 = (((float)i - (HalfPx2)) * d_PitchPx - ex) * PitchNxInv;
-			dy1 = (((float)j - (HalfPy2)) * d_PitchPy - ey) * PitchNyInv;
-			dx2 = (((float)i - (HalfPx2 - 1.0f)) * d_PitchPx - ex) * PitchNxInv;
-			dy2 = (((float)j - (HalfPy2 - 1.0f)) * d_PitchPy - ey) * PitchNyInv;
+			dx1 = (((float)i - HalfPx) * PitchPx - ex) * PitchNxInv;
+			dy1 = (((float)j - HalfPy) * PitchPy - ey) * PitchNyInv;
+			dx2 = (((float)i - (HalfPx - 1.0f)) * PitchPx - ex) * PitchNxInv;//!!Do not remove the parenthesis from HalfPx - 1. It's magic.
+			dy2 = (((float)j - (HalfPy - 1.0f)) * PitchPy - ey) * PitchNyInv;
 
 			float Pro = 0.0f;
 			float count = 0.0f;
 
 			//find center corrected + slice offset location
-			float x1 = dx1 + HalfNx2 - 0.5f + ex * PitchNxInv + PitchNz * dx1 / ez * (Z_Offset + z);
-			float y1 = dy1 + HalfNy2 - 0.5f + ey * PitchNyInv + PitchNz * dy1 / ez * (Z_Offset + z);
-			float x2 = dx2 + HalfNx2 - 0.5f + ex * PitchNxInv + PitchNz * dx2 / ez * (Z_Offset + z);
-			float y2 = dy2 + HalfNy2 - 0.5f + ey * PitchNyInv + PitchNz * dy2 / ez * (Z_Offset + z);
+			float x1 = dx1 + HalfNx - 0.5f + ex * PitchNxInv + PitchNz * dx1 / ez * (Z_Offset + z);
+			float y1 = dy1 + HalfNy - 0.5f + ey * PitchNyInv + PitchNz * dy1 / ez * (Z_Offset + z);
+			float x2 = dx2 + HalfNx - 0.5f + ex * PitchNxInv + PitchNz * dx2 / ez * (Z_Offset + z);
+			float y2 = dy2 + HalfNy - 0.5f + ey * PitchNyInv + PitchNz * dy2 / ez * (Z_Offset + z);
 
 			//Get the first and last pixels in x and y the ray passes through
 			int xMin = (int)floorf(min(x1, x2));
@@ -507,34 +509,34 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Image, float *Er
 	}//image boudary check
 }
 
-__global__ void BackProjectError(float * IM, float * IM2, float * error, float beta, int view, float ex, float ey, float ez, params* constants){
+__global__ void BackProjectError(float * IM, float * IM2, float * error, float beta, int view, float ex, float ey, float ez, params* c){
 	//Define pixel location in x, y, and z
 	//int i = blockDim.x * blockIdx.x + threadIdx.x;
 	//int j = blockDim.y * blockIdx.y + threadIdx.y;
 	//int k = blockDim.z * blockIdx.z + threadIdx.z;
 
 	//shared memory local cache
-	int Px = d_Px;
-	int Py = d_Py;
-	int Nx = d_Nx;
-	int Ny = d_Ny;
+	int Px = c->Px;
+	int Py = c->Py;
+	int Nx = c->Nx;
+	int Ny = c->Ny;
 
-	int Memx = d_MPx;
-	int Memy = d_MPy;
-	int MNx = d_MNx;
-	int MNy = d_MNy;
-	float PitchNx = d_PitchNx;
-	float PitchNy = d_PitchNy;
-	float PitchNz = d_PitchNz;
-	float PitchPx = d_PitchPx;
-	float PitchPy = d_PitchPy;
-	float Z_Offset = (float)d_Z_Offset;
-	float HalfNx2 = d_HalfNx2;
-	float HalfNy2 = d_HalfNy2;
-	float PitchPxInv = d_PitchPxInv;
-	float PitchPyInv = d_PitchPyInv;
-	float HalfPx2 = d_HalfPx2;
-	float HalfPy2 = d_HalfPy2;
+	int Memx = c->MPx;
+	int Memy = c->MPy;
+	int MNx = c->MNx;
+	int MNy = c->MNy;
+	float PitchNx = c->PitchNx;
+	float PitchNy = c->PitchNy;
+	float PitchNz = c->PitchNz;
+	float PitchPx = c->PitchPx;
+	float PitchPy = c->PitchPy;
+	float Z_Offset = (float)c->Z_Offset;
+	float HalfNx2 = c->HalfNx;
+	float HalfNy2 = c->HalfNy;
+	float PitchPxInv = 1.0f / c->PitchPx;
+	float PitchPyInv = 1.0f / c->PitchPy;
+	float HalfPx2 = c->HalfPx;
+	float HalfPy2 = c->HalfPy;
 
 	//Define pixel location in x and y
 	const int idx = (blockDim.x * blockIdx.x) + threadIdx.x;
@@ -556,10 +558,10 @@ __global__ void BackProjectError(float * IM, float * IM2, float * error, float b
 			float dy2 = ey + r * (((float)j - (HalfNy2 - 1.0f))*PitchNy - ey);
 
 			//Use detector x and y to get pixels
-			float x1 = dx1 * PitchPxInv + (d_HalfPx2 - 0.5f);
-			float x2 = dx2 * PitchPxInv + (d_HalfPx2 - 0.5f);
-			float y1 = dy1 * PitchPyInv + (d_HalfPy2 - 0.5f);
-			float y2 = dy2 * PitchPyInv + (d_HalfPy2 - 0.5f);
+			float x1 = dx1 * PitchPxInv + (HalfPx2 - 0.5f);
+			float x2 = dx2 * PitchPxInv + (HalfPx2 - 0.5f);
+			float y1 = dy1 * PitchPyInv + (HalfPy2 - 0.5f);
+			float y2 = dy2 * PitchPyInv + (HalfPy2 - 0.5f);
 
 			//Get the first and last pixels in x and y the ray passes through
 			int xx1 = max((int)floorf(min(x1, x2)), 0);
