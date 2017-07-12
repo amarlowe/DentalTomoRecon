@@ -253,7 +253,11 @@ public:
 	/********************************************************************************************/
 	bool initialized = false;
 
+#ifdef PROFILER
+	display_t currentDisplay = recon_images;
+#else
 	display_t currentDisplay = raw_images;
+#endif
 
 	struct SystemControl * Sys;
 

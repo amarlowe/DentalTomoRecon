@@ -43,7 +43,7 @@ TomoRecon::~TomoRecon() {
 TomoError TomoRecon::init() {
 	//Step 1: Get and example file for get the path
 #ifdef PROFILER
-	char filename[] = "C:\\Users\\jdean\\Desktop\\Patient471\\Series1 20161118\\AcquiredImage1_0.raw";
+	char filename[] = "C:\\Users\\jdean\\Desktop\\Patient18\\AcquiredImage1_0.raw";
 #else
 	char filename[MAX_PATH];
 
@@ -116,7 +116,7 @@ TomoError TomoRecon::init() {
 TomoError TomoRecon::TomoMain(){
 	//Step 1: Get and example file for get the path
 #ifdef PROFILER
-	char filename[] = "C:\\Users\\jdean\\Desktop\\Patient471\\Series1 20161118\\AcquiredImage1_0.raw";
+	char filename[] = "C:\\Users\\jdean\\Desktop\\Patient18\\AcquiredImage1_0.raw";
 #else
 	char filename[MAX_PATH];
 

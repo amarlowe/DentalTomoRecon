@@ -21,7 +21,19 @@ bool MyApp::OnInit(){
 
 	// create the main application window
 	DTRMainWindow *frame = new DTRMainWindow(NULL);
+
+#ifdef PROFILER
+	static unsigned s_pageAdded = 0;
+	frame->m_auinotebook6->AddPage(frame->CreateNewPage(),
+		wxString::Format
+		(
+			wxT("%u"),
+			++s_pageAdded
+		),
+		true);
+#else
 	frame->Show(true);
+#endif
 
 	wxStreamToTextRedirector redirect(frame->m_textCtrl8);
 	
@@ -321,6 +333,16 @@ CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxWindowID id, int* gl_attrib, wxSi
 	recon = new TomoRecon(&argc, argv, GetSize().x, GetSize().y, first);
 	recon->init();
 	first = false;
+
+#ifdef PROFILER
+	recon->correctProjections();
+	recon->reconInit();
+	recon->reconStep();
+	cudaDeviceSynchronize();
+	cudaDeviceReset();
+	exit(0);
+	//paint();
+#endif
 }
 
 CudaGLCanvas::~CudaGLCanvas(){
