@@ -389,7 +389,7 @@ __global__ void ScatterCorrect(float * Sino, unsigned short * Proj, float * Blur
 		float blur = (float)BlurXY[j*d_MPx + i];
 		float val = sample +0.1f*__expf(blur);
 		Sino[(j + view*d_MPy)*d_MPx + i] = val;
-		Proj[j*d_Px + i] = (unsigned short)(val / MaxVal * (float)USHRT_MAX );
+		Proj[j*d_Px + i] = (unsigned short)(val / MaxVal * (float)SHRT_MAX);
 	}
 }
 
@@ -490,15 +490,15 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Image, float *Er
 						//Calculate the weight as the overlap in x and y
 						float weight = scale*((xend - xs)*(yend - ys)*dist);
 
-						/*int nx = min(max(x, 0), Nx - 1);
+						int nx = min(max(x, 0), Nx - 1);
 						int ny = min(max(y, 0), Ny - 1);
-						Pro += tex2D(textImage, nx + 0.5f, ny + 0.5f + z*d_MNy) * weight;
-						count += weight;*/
+						Pro += tex2D(textImage, nx + 0.5f, ny + 0.5f + (float)(z*rMemy)) * weight;
+						count += weight;
 
-						if (x < Nx - 1 && y < Ny - 1 && x > 0 && y > 0) {
+						/*if (x < Nx - 1 && y < Ny - 1 && x > 0 && y > 0) {
 							Pro += tex2D(textImage, (float)x + 0.5f, (float)y + 0.5f + (float)(z*rMemy)) * weight;
 							count += weight;
-						}
+						}*/
 
 						ys = yend;
 					}//y loop
@@ -519,9 +519,9 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Image, float *Er
 
 __global__ void BackProjectError(float * IM, float * IM2, float * error, float beta, int view, float ex, float ey, float ez, params* c){
 	//Define pixel location in x, y, and z
-	//int i = blockDim.x * blockIdx.x + threadIdx.x;
-	//int j = blockDim.y * blockIdx.y + threadIdx.y;
-	//int k = blockDim.z * blockIdx.z + threadIdx.z;
+	int i = blockDim.x * blockIdx.x + threadIdx.x;
+	int j = blockDim.y * blockIdx.y + threadIdx.y;
+	int k = blockDim.z * blockIdx.z + threadIdx.z;
 
 	//shared memory local cache
 	int Px = c->Px;
@@ -547,10 +547,10 @@ __global__ void BackProjectError(float * IM, float * IM2, float * error, float b
 	float HalfPy2 = c->HalfPy;
 
 	//Define pixel location in x and y
-	const int idx = (blockDim.x * blockIdx.x) + threadIdx.x;
-	const int i = idx % Memx;
-	const int j = idx / Memx;
-	const int k = blockIdx.y;
+	//const int idx = (blockDim.x * blockIdx.x) + threadIdx.x;
+	//const int i = idx % Memx;
+	//const int j = idx / Memx;
+	//const int k = blockIdx.y;
 
 	//Image is not a power of 2
 	if ((i < Nx) && (j < Ny)){
@@ -592,13 +592,13 @@ __global__ void BackProjectError(float * IM, float * IM2, float * error, float b
 			float xs = x1;
 			//Cycle through pixels x and y and used to calculate projection
 			for (int x = xMin; x < xMax; x++){
-				//int x = (xx1 + xx2) / 2;
+				//int x = (xMin + xMax) / 2;
 				float ys = y1;
 				//float xend = min((float)(x + 1), x2);
 				float xend = min(x + 1, xMax);
 
 				for (int y = yMin; y < yMax; y++){
-					//int y = (yy1 + yy2) / 2;
+					//int y = (yMin + yMax) / 2;
 					//float yend = min((float)(y + 1), y2);
 					float yend = min(y + 1, yMax);
 
@@ -632,7 +632,7 @@ __global__ void BackProjectError(float * IM, float * IM2, float * error, float b
 			else IM2[(j + k*MNy)*MNx + i] = -10.0f;
 		//}//z loop
 	}
-	else for(int k = 0; k < d_Nz; k++) IM2[(j + k*d_MNy)*d_MNx + i] = -10.0f;
+	else IM2[(j + k*d_MNy)*d_MNx + i] = -10.0f;
 }
 
 __global__ void CorrectEdgesY(float * IM, float * IM2, params* constants){
@@ -1045,7 +1045,7 @@ __global__ void CreateSyntheticProjection(unsigned short * Proj, float * Win, fl
 				MaxV += Win[z];
 			}
 		}
-		Proj[j*d_Px + i] = (unsigned short)(Pro * 32768.0f / (MaxV));
+		Proj[j*d_Px + i] = (unsigned short)(Pro * SHRT_MAX / (MaxV));
 	}
 }
 
@@ -1086,7 +1086,7 @@ __global__ void CreateSyntheticProjectionNew(unsigned short * Proj, float* Win, 
 		float update_val = Pro / MaxV;
 		if (MaxV == 0) update_val = 0;
 
-		Proj[j*d_Px + i] = (unsigned short)(update_val * 32768.0f);
+		Proj[j*d_Px + i] = (unsigned short)(update_val * SHRT_MAX);
 	}
 }
 
@@ -1162,7 +1162,7 @@ __global__ void CopyImages(unsigned short * ImOut, float * ImIn, float maxVal, p
 	if ((i < d_Nx) && (j < d_Ny))
 	{
 		float val = ImIn[(j + k*d_MNy)*d_MNx + i] - 0.015f;
-		unsigned short val2 = (unsigned short)floorf(__saturatef(val / maxVal) * 32768.0f);
+		unsigned short val2 = (unsigned short)floorf(__saturatef(val / maxVal) * SHRT_MAX);
 		ImOut[(j + k*d_Ny)*d_Nx + i] = val2;
 	}
 }
@@ -1912,14 +1912,14 @@ TomoError TomoRecon::correctProjections() {
 	for (int view = 0; view < Sys->Proj->NumViews; view++) {
 		cuda(MemcpyAsync(d_Proj, Sys->Proj->RawData + view*size_proj, sizeProj, cudaMemcpyHostToDevice));
 
-		KERNELCALL4(LogCorrectProj, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, view, d_Proj, USHRT_MAX, d_constants);
+		KERNELCALL4(LogCorrectProj, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, view, d_Proj, SHRT_MAX, d_constants);
 
 		cuda(Memset(d_SinoBlurX, 0, size_sino * sizeof(float)));
 
 		KERNELCALL4(ApplyGaussianBlurX, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, d_SinoBlurX, view, d_constants);
 		KERNELCALL4(ApplyGaussianBlurY, dimGridProj, dimBlockProj, 0, streams[view], d_SinoBlurX, d_SinoBlurXY, d_constants);
 
-		KERNELCALL4(ScatterCorrect, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, d_Proj, d_SinoBlurXY, view, log(USHRT_MAX) - 1, d_constants);
+		KERNELCALL4(ScatterCorrect, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, d_Proj, d_SinoBlurXY, view, log(SHRT_MAX) - 1, d_constants);
 
 		cuda(MemcpyAsync(Sys->Proj->RawData + view*size_proj, d_Proj, sizeProj, cudaMemcpyDeviceToHost));
 	}
@@ -1943,13 +1943,13 @@ TomoError TomoRecon::test(int index) {
 		sizeProj = size_proj * sizeof(unsigned short);
 		cuda(Memcpy(d_Proj, Sys->Proj->RawData + index*size_proj, sizeProj, cudaMemcpyHostToDevice));
 		//LoadProjections(index);
-		resizeImage(d_Proj, Sys->Proj->Nx, Sys->Proj->Ny, *ca, width, height, USHRT_MAX);
+		resizeImage(d_Proj, Sys->Proj->Nx, Sys->Proj->Ny, *ca, width, height, SHRT_MAX);
 		break;
 	case sino_images:
 		size_proj = 1920 * Sys->Proj->Ny;
 		//size_t sizeProj = size_proj * sizeof(float);
 		//cuda(Memcpy(d_Sino, Sys->Proj->RawData + index*size_proj, sizeProj, cudaMemcpyHostToDevice));
-		resizeImage(d_Sino+ size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, log(USHRT_MAX) - 1);
+		resizeImage(d_Sino+ size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, log(SHRT_MAX) - 1);
 		break;
 	case norm_images:
 		resizeImage(d_Norm + size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, 1);
@@ -1973,8 +1973,8 @@ TomoError TomoRecon::test(int index) {
 
 		if (blocks > 0)
 			KERNELCALL2(resizeKernelTex, blocks, PXL_KERNEL_THREADS_PER_BLOCK, Sys->Proj->Nx, Sys->Proj->Ny, width, height, 1.0, index);
-		//resizeImage(d_Image + size_proj*index, Sys->Proj->Nx, Sys->Proj->Ny, *ca, width, height, log(USHRT_MAX) - 1);
-		//resizeImage(d_Error, 1920, Sys->Proj->Ny, *ca, width, height, log(USHRT_MAX) - 1);
+		//resizeImage(d_Image + size_proj*index, Sys->Proj->Nx, Sys->Proj->Ny, *ca, width, height, log(SHRT_MAX) - 1);
+		//resizeImage(d_Error, 1920, Sys->Proj->Ny, *ca, width, height, log(SHRT_MAX) - 1);
 		break;
 	}
 	return Tomo_OK;
@@ -2039,8 +2039,8 @@ TomoError TomoRecon::reconStep() {
 
 		cuda(BindTexture2D(NULL, textError, d_Error, cudaCreateChannelDesc<float>(), MemP_Nx, MemP_Ny, errorPitch));
 
-		//KERNELCALL2(BackProjectError, dimGridIm, dimBlockIm, d_Image, d_Image2, d_Error, Beta, view, ex, ey, ez, d_constants);
-		KERNELCALL2(BackProjectError, blocks3, PXL_KERNEL_THREADS_PER_BLOCK, d_Image, d_Image2, d_Error, Beta, view, ex, ey, ez, d_constants);
+		KERNELCALL2(BackProjectError, dimGridIm2, dimBlockIm2, d_Image, d_Image2, d_Error, Beta, view, ex, ey, ez, d_constants);
+		//KERNELCALL2(BackProjectError, blocks3, PXL_KERNEL_THREADS_PER_BLOCK, d_Image, d_Image2, d_Error, Beta, view, ex, ey, ez, d_constants);
 
 		//cuda(Memset2D(d_Error, errorPitch, 0, MemR_Nx * sizeof(float), MemR_Ny));
 
