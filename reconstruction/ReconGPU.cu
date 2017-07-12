@@ -389,7 +389,7 @@ __global__ void ScatterCorrect(float * Sino, unsigned short * Proj, float * Blur
 		float blur = (float)BlurXY[j*d_MPx + i];
 		float val = sample +0.1f*__expf(blur);
 		Sino[(j + view*d_MPy)*d_MPx + i] = val;
-		Proj[j*d_Px + i] = (unsigned short)(val / MaxVal * (float)SHRT_MAX);
+		Proj[j*d_Px + i] = (unsigned short)(val / MaxVal * (float)USHRT_MAX );
 	}
 }
 
@@ -1045,7 +1045,7 @@ __global__ void CreateSyntheticProjection(unsigned short * Proj, float * Win, fl
 				MaxV += Win[z];
 			}
 		}
-		Proj[j*d_Px + i] = (unsigned short)(Pro * SHRT_MAX / (MaxV));
+		Proj[j*d_Px + i] = (unsigned short)(Pro * USHRT_MAX / (MaxV));
 	}
 }
 
@@ -1086,7 +1086,7 @@ __global__ void CreateSyntheticProjectionNew(unsigned short * Proj, float* Win, 
 		float update_val = Pro / MaxV;
 		if (MaxV == 0) update_val = 0;
 
-		Proj[j*d_Px + i] = (unsigned short)(update_val * SHRT_MAX);
+		Proj[j*d_Px + i] = (unsigned short)(update_val * USHRT_MAX);
 	}
 }
 
@@ -1162,7 +1162,7 @@ __global__ void CopyImages(unsigned short * ImOut, float * ImIn, float maxVal, p
 	if ((i < d_Nx) && (j < d_Ny))
 	{
 		float val = ImIn[(j + k*d_MNy)*d_MNx + i] - 0.015f;
-		unsigned short val2 = (unsigned short)floorf(__saturatef(val / maxVal) * SHRT_MAX);
+		unsigned short val2 = (unsigned short)floorf(__saturatef(val / maxVal) * USHRT_MAX - 1);
 		ImOut[(j + k*d_Ny)*d_Nx + i] = val2;
 	}
 }
@@ -1912,14 +1912,14 @@ TomoError TomoRecon::correctProjections() {
 	for (int view = 0; view < Sys->Proj->NumViews; view++) {
 		cuda(MemcpyAsync(d_Proj, Sys->Proj->RawData + view*size_proj, sizeProj, cudaMemcpyHostToDevice));
 
-		KERNELCALL4(LogCorrectProj, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, view, d_Proj, SHRT_MAX, d_constants);
+		KERNELCALL4(LogCorrectProj, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, view, d_Proj, USHRT_MAX, d_constants);
 
 		cuda(Memset(d_SinoBlurX, 0, size_sino * sizeof(float)));
 
 		KERNELCALL4(ApplyGaussianBlurX, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, d_SinoBlurX, view, d_constants);
 		KERNELCALL4(ApplyGaussianBlurY, dimGridProj, dimBlockProj, 0, streams[view], d_SinoBlurX, d_SinoBlurXY, d_constants);
 
-		KERNELCALL4(ScatterCorrect, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, d_Proj, d_SinoBlurXY, view, log(SHRT_MAX) - 1, d_constants);
+		KERNELCALL4(ScatterCorrect, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, d_Proj, d_SinoBlurXY, view, log(USHRT_MAX) - 1, d_constants);
 
 		cuda(MemcpyAsync(Sys->Proj->RawData + view*size_proj, d_Proj, sizeProj, cudaMemcpyDeviceToHost));
 	}
@@ -1943,13 +1943,13 @@ TomoError TomoRecon::test(int index) {
 		sizeProj = size_proj * sizeof(unsigned short);
 		cuda(Memcpy(d_Proj, Sys->Proj->RawData + index*size_proj, sizeProj, cudaMemcpyHostToDevice));
 		//LoadProjections(index);
-		resizeImage(d_Proj, Sys->Proj->Nx, Sys->Proj->Ny, *ca, width, height, SHRT_MAX);
+		resizeImage(d_Proj, Sys->Proj->Nx, Sys->Proj->Ny, *ca, width, height, USHRT_MAX);
 		break;
 	case sino_images:
 		size_proj = 1920 * Sys->Proj->Ny;
 		//size_t sizeProj = size_proj * sizeof(float);
 		//cuda(Memcpy(d_Sino, Sys->Proj->RawData + index*size_proj, sizeProj, cudaMemcpyHostToDevice));
-		resizeImage(d_Sino+ size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, log(SHRT_MAX) - 1);
+		resizeImage(d_Sino+ size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, log(USHRT_MAX) - 1);
 		break;
 	case norm_images:
 		resizeImage(d_Norm + size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, 1);
@@ -1973,8 +1973,8 @@ TomoError TomoRecon::test(int index) {
 
 		if (blocks > 0)
 			KERNELCALL2(resizeKernelTex, blocks, PXL_KERNEL_THREADS_PER_BLOCK, Sys->Proj->Nx, Sys->Proj->Ny, width, height, 1.0, index);
-		//resizeImage(d_Image + size_proj*index, Sys->Proj->Nx, Sys->Proj->Ny, *ca, width, height, log(SHRT_MAX) - 1);
-		//resizeImage(d_Error, 1920, Sys->Proj->Ny, *ca, width, height, log(SHRT_MAX) - 1);
+		//resizeImage(d_Image + size_proj*index, Sys->Proj->Nx, Sys->Proj->Ny, *ca, width, height, log(USHRT_MAX) - 1);
+		//resizeImage(d_Error, 1920, Sys->Proj->Ny, *ca, width, height, log(USHRT_MAX) - 1);
 		break;
 	}
 	return Tomo_OK;
