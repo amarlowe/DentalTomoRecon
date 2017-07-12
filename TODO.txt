@@ -23,6 +23,8 @@ TomoRecon
 - Replace each failure state with it's own error type and dialoag (or pass a string)
 - Inefficienicies in initial load and correction, can remove the final blur step and blurxy array
 - Recon norm has essentially uniform values across the entire image, consider killing to save memory (incorrect value was being read from it in the past)
+- Evaluate need to iterate through captures instead of all at once
+- Look at the lighting change from the first to others
 
 --------------Bugs---------------------
 - selecting an image runs normally with no errors
@@ -44,3 +46,5 @@ TomoRecon
 - Loading more than 2 projections causes odd bugs
 - replaced "40,000.0" with USHRT_MAX in correct projections. I think that's what he was going for, unsure
 - TONS of magic numbers left scrambled around the CUDA code
+- Program locks up when button is pressed when the last frame is selected
+- Check normalization code, some images are completely black while others look just fine
