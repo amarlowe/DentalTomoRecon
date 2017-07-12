@@ -90,6 +90,11 @@ void DTRMainWindow::onOpen(wxCommandEvent& WXUNUSED(event)) {
 		wxICON_INFORMATION | wxOK);
 }
 
+void DTRMainWindow::onSave(wxCommandEvent& WXUNUSED(event)) {
+	//TODO: add error checking
+	((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_canvas->recon->TomoSave();
+}
+
 void DTRMainWindow::onQuit(wxCommandEvent& WXUNUSED(event)){
 	// true is to force the frame to close
 	Close(true);
@@ -332,6 +337,7 @@ CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxWindowID id, int* gl_attrib, wxSi
 
 	recon = new TomoRecon(&argc, argv, GetSize().x, GetSize().y, first);
 	recon->init();
+	//recon->TomoMain();
 	first = false;
 
 #ifdef PROFILER

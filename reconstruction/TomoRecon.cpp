@@ -66,7 +66,7 @@ TomoError TomoRecon::init() {
 	std::string BasePath;
 	std::string FilePath;
 	std::string FileName;
-	std::string savefilename = filename;
+	savefilename = filename;
 	GetFilePath = filename;
 	PathRemoveFileSpec(GetFilePath);
 	FileName = PathFindFileName(GetFilePath);
@@ -110,6 +110,21 @@ TomoError TomoRecon::init() {
 	initialized = true;
 }
 
+TomoError TomoRecon::TomoSave() {
+	std::string whichsubstr = "AcquiredImage";
+
+	std::size_t pos = savefilename.find(whichsubstr);
+
+	std::string str2 = savefilename.substr(0, pos + whichsubstr.length() + 1);
+	str2 += "_Recon.dcm";
+
+	//Copy the reconstructed images to the CPU
+	tomo_err_throw(CopyAndSaveImages(Sys));
+
+	//Save Images
+	tomo_err_throw(SaveDataAsDICOM(Sys, str2));
+}
+
 /********************************************************************************************/
 /* use main right now to operate from command line											*/
 /********************************************************************************************/
@@ -139,7 +154,7 @@ TomoError TomoRecon::TomoMain(){
 	std::string BasePath; 
 	std::string FilePath; 
 	std::string FileName;
-	std::string savefilename = filename;
+	savefilename = filename;
 	GetFilePath = filename;
 	PathRemoveFileSpec(GetFilePath);
 	FileName = PathFindFileName(GetFilePath);

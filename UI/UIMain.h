@@ -40,6 +40,7 @@ protected:
 	// Handlers for mainWindow events.
 	void onNew(wxCommandEvent& event);
 	void onOpen(wxCommandEvent& event);
+	void onSave(wxCommandEvent& event);
 	void onQuit(wxCommandEvent& event);
 	void onAbout(wxCommandEvent& event);
 	void onConfig(wxCommandEvent& event);
@@ -80,13 +81,14 @@ public:
 
 	void paint();
 
+	TomoRecon* recon;
+
 private:
 	int imageIndex = 0;
 	int reconIndex = 0;
 	int state = 0;
 
 	wxGLContext* m_glRC;
-	TomoRecon* recon;
 
 	wxDECLARE_NO_COPY_CLASS(CudaGLCanvas);
 	wxDECLARE_EVENT_TABLE();

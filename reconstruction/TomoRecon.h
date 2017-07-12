@@ -230,6 +230,7 @@ public:
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//High level functions for command line call
 	TomoError TomoMain();
+	TomoError TomoSave();
 	TomoError SetUpGPUForRecon(struct SystemControl * Sys);
 	TomoError Reconstruct(struct SystemControl * Sys);
 	TomoError FreeGPUMemory(void);
@@ -348,6 +349,8 @@ private:
 	size_t imagePitch;
 	size_t image2Pitch;
 	size_t errorPitch;
+
+	std::string savefilename;
 };
 
 /********************************************************************************************/

@@ -53,6 +53,7 @@ class mainWindow : public wxFrame
 		// Virtual event handlers, overide them in your derived class
 		virtual void onNew( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onOpen( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onSave( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onQuit( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onConfig( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onContinue( wxCommandEvent& event ) { event.Skip(); }
