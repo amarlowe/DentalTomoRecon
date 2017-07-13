@@ -19,6 +19,10 @@ bool MyApp::OnInit(){
 	if (!wxApp::OnInit())
 		return false;
 
+	int argc = 1;
+	char* argv[1] = { (char*)wxString((wxTheApp->argv)[0]).ToUTF8().data() };
+	reconGlutInit(&argc, argv);
+
 	// create the main application window
 	DTRMainWindow *frame = new DTRMainWindow(NULL);
 
@@ -92,7 +96,9 @@ void DTRMainWindow::onOpen(wxCommandEvent& WXUNUSED(event)) {
 
 void DTRMainWindow::onSave(wxCommandEvent& WXUNUSED(event)) {
 	//TODO: add error checking
-	((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_canvas->recon->TomoSave();
+	saveThread* thd = new saveThread(((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_canvas->recon, m_statusBar1);
+	thd->Create();
+	thd->Run();
 }
 
 void DTRMainWindow::onQuit(wxCommandEvent& WXUNUSED(event)){
@@ -100,14 +106,77 @@ void DTRMainWindow::onQuit(wxCommandEvent& WXUNUSED(event)){
 	Close(true);
 }
 
+void DTRMainWindow::onStep(wxCommandEvent& WXUNUSED(event)) {
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	switch (recon->currentDisplay) {
+	case raw_images:
+		recon->correctProjections();
+		recon->currentDisplay = sino_images;
+		break;
+	case sino_images:
+		recon->currentDisplay = raw_images2;
+		break;
+	case raw_images2:
+		recon->reconInit();
+		currentFrame->m_scrollBar->SetScrollbar(0, 1, recon->Sys->Recon->Nz, 1);
+		recon->currentDisplay = norm_images;
+		break;
+	case norm_images:
+		recon->currentDisplay = recon_images;//intentionally skipped break
+	case recon_images:
+		recon->reconStep();
+		break;
+	}
+
+	currentFrame->m_canvas->paint();
+}
+
 void DTRMainWindow::onContinue(wxCommandEvent& WXUNUSED(event)) {
-	wxMessageBox(wxT("TODO"),
-		wxT("TODO"),
-		wxICON_INFORMATION | wxOK);
+	//Run the entire reconstruction
+	//Swtich statement is to make it state aware, but otherwise finishes out whatever is left
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	ReconThread* thd = new ReconThread(currentFrame->m_canvas, recon, currentFrame, m_statusBar1);
+	thd->Create();
+	thd->Run();
+}
+
+void DTRMainWindow::onContRun(wxCommandEvent& WXUNUSED(event)) {
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+	RunBox* progress = new RunBox(this);
+	progress->m_gauge2->SetRange(30);
+	progress->m_gauge2->SetValue(10);
+	progress->Show(true);
+
+	switch (recon->currentDisplay) {
+	case raw_images:
+		recon->correctProjections();
+	case sino_images:
+	case raw_images2:
+		recon->reconInit();
+		currentFrame->m_scrollBar->SetScrollbar(0, 1, recon->Sys->Recon->Nz, 1);
+	case norm_images:
+		recon->currentDisplay = recon_images;
+	case recon_images:
+		while (recon->iteration < 30) {
+			recon->reconStep();
+			progress->m_gauge2->SetValue(recon->iteration + 1);
+			currentFrame->m_canvas->paint();
+		}
+	}
+	delete progress;
+
+	saveThread* thd = new saveThread(recon, m_statusBar1);
+	thd->Create();
+	thd->Run();
 }
 
 void DTRMainWindow::onConfig(wxCommandEvent& WXUNUSED(event)) {
-	DTRConfigDialog *frame2 = new DTRConfigDialog(NULL);
+	DTRConfigDialog *frame2 = new DTRConfigDialog(this);
 	frame2->Show(true);
 }
 
@@ -141,6 +210,8 @@ DTRMainWindow::~DTRMainWindow() {
 		pConfig->Write(wxT("/dialog/max"), 1);
 	else
 		pConfig->Write(wxT("/dialog/max"), 0);
+
+	cuda(DeviceReset());//only reset here where we know all windows are finished
 }
 
 // ----------------------------------------------------------------------------
@@ -323,6 +394,7 @@ wxBEGIN_EVENT_TABLE(CudaGLCanvas, wxGLCanvas)
 EVT_PAINT(CudaGLCanvas::OnPaint)
 EVT_CHAR(CudaGLCanvas::OnChar)
 EVT_MOUSE_EVENTS(CudaGLCanvas::OnMouseEvent)
+EVT_COMMAND(wxID_ANY, PAINT_IT, CudaGLCanvas::OnEvent)
 wxEND_EVENT_TABLE()
 
 CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxWindowID id, int* gl_attrib, wxSize size)
@@ -332,13 +404,8 @@ CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxWindowID id, int* gl_attrib, wxSi
 
 	SetCurrent(*m_glRC);
 
-	int argc = 1;
-	char* argv[1] = { (char*)wxString((wxTheApp->argv)[0]).ToUTF8().data() };
-
-	recon = new TomoRecon(&argc, argv, GetSize().x, GetSize().y, first);
+	recon = new TomoRecon(GetSize().x, GetSize().y);
 	recon->init();
-	//recon->TomoMain();
-	first = false;
 
 #ifdef PROFILER
 	recon->correctProjections();
@@ -359,6 +426,16 @@ CudaGLCanvas::~CudaGLCanvas(){
 void CudaGLCanvas::OnScroll(int index) {
 	imageIndex = index;
 	paint();
+}
+
+void CudaGLCanvas::OnEvent(wxCommandEvent& WXUNUSED(event)) {
+	// This is a dummy, to avoid an endless succession of paint messages.
+	// OnPaint handlers must always create a wxPaintDC.
+	//wxPaintDC(this);
+
+	if (recon->initialized) {
+		paint();
+	}
 }
 
 void CudaGLCanvas::OnPaint(wxPaintEvent& WXUNUSED(event)){
@@ -389,40 +466,7 @@ void CudaGLCanvas::paint() {
 }
 
 void CudaGLCanvas::OnChar(wxKeyEvent& event){
-	GLFrame* parent = NULL;
-	switch (state) {
-	case 0:
-		recon->correctProjections();
-		recon->currentDisplay = sino_images;
-		state++;
-		break;
-	case 1:
-		recon->currentDisplay = raw_images;
-		state++;
-		break;
-	case 2:
-		/*DTRMainWindow* mainWindow = (DTRMainWindow*)((this->GetParent())->GetParent());
-		mainWindow->m_auinotebook6->AddPage(mainWindow->CreateNewPage(),
-			wxString::Format
-			(
-				wxT("Child of gui")
-			),
-			true);*/
-
-		recon->reconInit();
-		parent = (GLFrame*)GetParent();
-		parent->m_scrollBar->SetScrollbar(0, 1, recon->Sys->Recon->Nz, 1);
-		recon->currentDisplay = norm_images;
-		//recon->reconStep();
-		state++;
-		break;
-	case 3:
-		recon->reconStep();
-		recon->currentDisplay = recon_images;
-		break;
-	}
-	
-	paint();
+	//Moved to main window, can delete
 }
 
 void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event){
@@ -452,4 +496,65 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event){
 	{
 		dragging = 0;
 	}
+}
+
+//---------------------------------------------------------------------------
+// ReconThread
+//---------------------------------------------------------------------------
+
+DEFINE_EVENT_TYPE(PAINT_IT);
+ReconThread::ReconThread(wxEvtHandler* pParent, TomoRecon* recon, GLFrame* Frame, wxStatusBar* status)
+	: wxThread(wxTHREAD_DETACHED), m_pParent(pParent), status(status), currentFrame(Frame), m_recon(recon) {
+}
+
+wxThread::ExitCode ReconThread::Entry(){
+	wxCommandEvent needsPaint(PAINT_IT, GetId());
+	//Run the entire reconstruction
+	//Swtich statement is to make it state aware, but otherwise finishes out whatever is left
+	switch (m_recon->currentDisplay) {
+	case raw_images:
+		m_recon->correctProjections();
+		//currentFrame->m_canvas->paint();
+		wxPostEvent(m_pParent, needsPaint);
+	case sino_images:
+	case raw_images2:
+		m_recon->reconInit();
+	case norm_images:
+		m_recon->currentDisplay = recon_images;
+		wxMutexGuiEnter();
+		currentFrame->m_scrollBar->SetScrollbar(0, 1, m_recon->Sys->Recon->Nz, 1);
+		wxMutexGuiLeave();
+	case recon_images:
+		wxGauge* progress = new wxGauge(status, wxID_ANY, 30, wxPoint(100, 3));
+		progress->SetValue(0);
+		while (!TestDestroy() && m_recon->iteration < 30) {
+			m_recon->reconStep();
+			wxPostEvent(m_pParent, needsPaint);
+			status->SetStatusText(wxT("Reconstructing:"));
+			progress->SetValue(m_recon->iteration+1);
+			this->Sleep(500);
+			//this->Yield();
+		}
+		delete progress;
+	}
+	status->SetStatusText(wxT("Saving image..."));
+	m_recon->TomoSave();
+	status->SetStatusText(wxT("Image saved!"));
+	
+	return static_cast<ExitCode>(NULL);
+}
+
+//---------------------------------------------------------------------------
+// saveThread
+//---------------------------------------------------------------------------
+
+saveThread::saveThread(TomoRecon* recon, wxStatusBar* status) : wxThread(wxTHREAD_DETACHED), m_recon(recon), status(status){
+}
+
+wxThread::ExitCode saveThread::Entry() {
+	status->SetStatusText(wxT("Saving image..."));
+	m_recon->TomoSave();
+	status->SetStatusText(wxT("Image saved!"));
+
+	return static_cast<ExitCode>(NULL);
 }

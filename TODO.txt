@@ -4,12 +4,10 @@ TomoRecon
 - File system that saves calbiration data system independently
 - Fix readGainAndDarkimages
 - Remove magic numbers and filepaths
-- Cuda profiler compiler switch
 - Implement cjson struct building
 - Save and load json files based on user input
 - Switch between inputs in form using tab and/or enter
 - Confirm cancel or load when values have been edited
-- Run program from new UI
 - Check values for input before allowing running, prompt a visit to config
 - Implement a visualizer on a per project basis
 - output console output to status bar, include a progress meter
@@ -27,11 +25,9 @@ TomoRecon
 - Look at the lighting change from the first to others
 
 --------------Bugs---------------------
-- selecting an image runs normally with no errors
 - Number of Slices to Reconstruct too large may crash program
 - texture memory accesses are not locally spaced, they're scattered
 - image edges given tails that are not explicitly dealt with
-- Check optimization of block and grid sizes
 - index out of bounds and other conditions set array values to an explicit -10
 - color inversion on low z layer counts
 - additional lines included on increasing z size

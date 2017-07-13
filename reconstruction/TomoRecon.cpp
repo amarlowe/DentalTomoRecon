@@ -19,10 +19,12 @@
 /* Constructor and destructor																*/
 /********************************************************************************************/
 
-TomoRecon::TomoRecon(int *argc, char **argv, int x, int y, bool first) : interop(argc, argv, x, y, first){
+TomoRecon::TomoRecon(int x, int y) : interop(x, y){
+	cuda(StreamCreate(&stream));
 }
 
 TomoRecon::~TomoRecon() {
+	cudaStreamDestroy(stream);
 	FreeGPUMemory();
 	if (Sys->Proj->RawDataThresh != NULL)
 		delete[] Sys->Proj->RawDataThresh;
@@ -86,22 +88,22 @@ TomoError TomoRecon::init() {
 	std::cout << "Reconstructing image set entitled: " << FileName << std::endl;
 
 	//Step 2. Initialize structure and read emitter geometry
-	const int NumViews = NUMVIEWS;
+	NumViews = NUMVIEWS;
 	Sys = new SystemControl;
-	tomo_err_throw(SetUpSystemAndReadGeometry(Sys, NumViews, BasePath));
+	tomo_err_throw(SetUpSystemAndReadGeometry(BasePath));
 
 	//Step 3. Read the normalizaton data (dark and gain)
 	PathRemoveFileSpec(GetFilePath);
 	std::string GainPath = GetFilePath;
 	//	ReadDarkandGainImages(Sys, NumViews, GainPath);
-	tomo_err_throw(ReadDarkImages(Sys, NumViews));
-	tomo_err_throw(ReadGainImages(Sys, NumViews));
+	tomo_err_throw(ReadDarkImages());
+	tomo_err_throw(ReadGainImages());
 
 	//Step 5. Read Raw Data
-	tomo_err_throw(ReadRawProjectionData(Sys, NumViews, FilePath, savefilename));
+	tomo_err_throw(ReadRawProjectionData(FilePath, savefilename));
 
 	//Step 4. Set up the GPU for Reconstruction
-	tomo_err_throw(SetUpGPUForRecon(Sys));
+	tomo_err_throw(SetUpGPUForRecon());
 	std::cout << "GPU Ready" << std::endl;
 
 	
@@ -119,10 +121,10 @@ TomoError TomoRecon::TomoSave() {
 	str2 += "_Recon.dcm";
 
 	//Copy the reconstructed images to the CPU
-	tomo_err_throw(CopyAndSaveImages(Sys));
+	tomo_err_throw(CopyAndSaveImages());
 
 	//Save Images
-	tomo_err_throw(SaveDataAsDICOM(Sys, str2));
+	tomo_err_throw(SaveDataAsDICOM(str2));
 }
 
 /********************************************************************************************/
@@ -176,25 +178,25 @@ TomoError TomoRecon::TomoMain(){
 	//Step 2. Initialize structure and read emitter geometry
 	const int NumViews = NUMVIEWS;
 	struct SystemControl * Sys = new SystemControl;
-	tomo_err_throw(SetUpSystemAndReadGeometry(Sys, NumViews,BasePath));
+	tomo_err_throw(SetUpSystemAndReadGeometry(BasePath));
 
 	//Step 3. Read the normalizaton data (dark and gain)
 	PathRemoveFileSpec(GetFilePath);
 	std::string GainPath = GetFilePath;
 //	ReadDarkandGainImages(Sys, NumViews, GainPath);
-	tomo_err_throw(ReadDarkImages(Sys, NumViews));
-	tomo_err_throw(ReadGainImages(Sys, NumViews));
+	tomo_err_throw(ReadDarkImages());
+	tomo_err_throw(ReadGainImages());
 
 	//Step 4. Set up the GPU for Reconstruction
-	tomo_err_throw(SetUpGPUForRecon(Sys));
+	tomo_err_throw(SetUpGPUForRecon());
 	std::cout << "GPU Ready" << std::endl;
 
 	//Step 5. Read Raw Data
-	tomo_err_throw(ReadRawProjectionData(Sys, NumViews,FilePath,savefilename));
+	tomo_err_throw(ReadRawProjectionData(FilePath,savefilename));
 	std::cout << "Add Data has been read" << std::endl;
 	
 	//Step 6: Reconstruct Images
-	tomo_err_throw(Reconstruct(Sys));
+	tomo_err_throw(Reconstruct());
 
 	std::string whichsubstr = "AcquiredImage";
 
@@ -204,7 +206,7 @@ TomoError TomoRecon::TomoMain(){
 	str2 += "_Recon.dcm";
 
 	//Step 7: SaVE Images
-	tomo_err_throw(SaveDataAsDICOM(Sys, str2));
+	tomo_err_throw(SaveDataAsDICOM(str2));
 //	SaveDataAsDICOM(Sys, BasePath);
 //	SaveCorrectedProjections(Sys, BasePath);
 

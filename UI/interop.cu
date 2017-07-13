@@ -34,8 +34,11 @@ TomoError gl_assert_void() {
 	else return Tomo_OK;
 }
 
-interop::interop(int *argc, char **argv, int x, int y, bool first) {
-	if (first) glutInit(argc, argv);
+void reconGlutInit(int *argc, char **argv) {
+	glutInit(argc, argv);
+}
+
+interop::interop(int x, int y) {
 	glewInit();
 
 	gl(ColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE));

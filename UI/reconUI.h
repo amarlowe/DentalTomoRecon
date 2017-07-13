@@ -26,6 +26,8 @@
 #include <wx/statusbr.h>
 #include <wx/frame.h>
 #include <wx/aui/aui.h>
+#include <wx/gauge.h>
+#include <wx/dialog.h>
 #include <wx/stattext.h>
 #include <wx/radiobox.h>
 #include <wx/grid.h>
@@ -45,7 +47,7 @@ class mainWindow : public wxFrame
 		wxMenuBar* m_menubar1;
 		wxMenu* file;
 		wxMenu* config;
-		wxMenu* run;
+		wxMenu* reconstruction;
 		wxMenu* help;
 		wxPanel* m_panel10;
 		wxStatusBar* m_statusBar1;
@@ -57,6 +59,8 @@ class mainWindow : public wxFrame
 		virtual void onQuit( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onConfig( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onContinue( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onContRun( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onStep( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onAbout( wxCommandEvent& event ) { event.Skip(); }
 		
 	
@@ -68,6 +72,23 @@ class mainWindow : public wxFrame
 		wxAuiManager m_mgr;
 		
 		~mainWindow();
+	
+};
+
+///////////////////////////////////////////////////////////////////////////////
+/// Class RunBox
+///////////////////////////////////////////////////////////////////////////////
+class RunBox : public wxDialog 
+{
+	private:
+	
+	protected:
+	
+	public:
+		wxGauge* m_gauge2;
+		
+		RunBox( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Reconstruction running"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 208,61 ), long style = wxDEFAULT_DIALOG_STYLE ); 
+		~RunBox();
 	
 };
 

@@ -65,9 +65,14 @@ typedef enum {
 typedef enum {
 	raw_images,
 	sino_images,
+	raw_images2,
 	norm_images,
 	recon_images
 } display_t;
+
+typedef enum {
+
+};
 
 #define tomo_err_throw(x) {TomoError err = x; if(err != Tomo_OK) return err;}
 
@@ -222,7 +227,7 @@ public:
 	//Functions
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//constructor/destructor
-	TomoRecon(int *argc, char **argv, int x, int y, bool first);
+	TomoRecon(int x, int y);
 	~TomoRecon();
 
 	TomoError init();
@@ -231,8 +236,8 @@ public:
 	//High level functions for command line call
 	TomoError TomoMain();
 	TomoError TomoSave();
-	TomoError SetUpGPUForRecon(struct SystemControl * Sys);
-	TomoError Reconstruct(struct SystemControl * Sys);
+	TomoError SetUpGPUForRecon();
+	TomoError Reconstruct();
 	TomoError FreeGPUMemory(void);
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
@@ -261,6 +266,9 @@ public:
 #endif
 
 	struct SystemControl * Sys;
+	int NumViews;
+
+	int iteration = 0;
 
 private:
 	/********************************************************************************************/
@@ -269,23 +277,23 @@ private:
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Functions to Initialize the GPU and set up the reconstruction normalization
-	void DefineReconstructSpace(struct SystemControl * Sys);
-	TomoError SetUpGPUMemory(struct SystemControl * Sys);
-	TomoError GetReconNorm(struct SystemControl * Sys);
+	void DefineReconstructSpace();
+	TomoError SetUpGPUMemory();
+	TomoError GetReconNorm();
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Functions called to control the stages of reconstruction
-	TomoError LoadAndCorrectProjections(struct SystemControl * Sys);
+	TomoError LoadAndCorrectProjections();
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Functions to control the SART and TV reconstruction
-	TomoError FindSliceOffset(struct SystemControl * Sys);
-	TomoError AddTVandTVSquared(struct SystemControl * Sys);
-	TomoError ReconUsingSARTandTV(struct SystemControl * Sys);
+	TomoError FindSliceOffset();
+	TomoError AddTVandTVSquared();
+	TomoError ReconUsingSARTandTV();
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Functions to save the images
-	TomoError CopyAndSaveImages(struct SystemControl * Sys);
+	TomoError CopyAndSaveImages();
 	template<typename T>
 	TomoError resizeImage(T* in, int wIn, int hIn, cudaArray_t out, int wOut, int hOut, double maxVar);
 
@@ -293,32 +301,21 @@ private:
 	/* Input Functions to read data into the program											*/
 	/********************************************************************************************/
 	BOOL CheckFilePathForRepeatScans(std::string BasePathIn);
-
 	int GetNumberOfScans(std::string BasePathIn);
-
 	int GetNumOfProjectionsPerView(std::string BasePathIn);
-
 	int GetNumProjectionViews(std::string BasePathIn);
-
-	TomoError SetUpSystemAndReadGeometry(struct SystemControl * Sys, int NumViews,
-		std::string BasePathIn);
-
-	TomoError ReadDarkandGainImages(struct SystemControl * Sys, int NumViews, std::string BasePathIn);
-
-	TomoError ReadDarkImages(struct SystemControl * Sys, int NumViews);
-	TomoError ReadGainImages(struct SystemControl * Sys, int NumViews);
-
-	TomoError ReadRawProjectionData(struct SystemControl * Sys,
-		int NumViews, std::string BaseFileIn, std::string FileName);
+	TomoError SetUpSystemAndReadGeometry(std::string BasePathIn);
+	TomoError ReadDarkandGainImages(std::string BasePathIn);
+	TomoError ReadDarkImages();
+	TomoError ReadGainImages();
+	TomoError ReadRawProjectionData(std::string BaseFileIn, std::string FileName);
 
 	/********************************************************************************************/
 	/* DICOM functions																			*/
 	/********************************************************************************************/
-	TomoError SaveDataAsDICOM(struct SystemControl * Sys, std::string BaseFileIn);
-
-	TomoError SaveCorrectedProjections(struct SystemControl * Sys, std::string BaseFileIn);
-
-	TomoError SaveSyntheticProjections(struct SystemControl * Sys, int PhantomNum, std::string BaseFileIn);
+	TomoError SaveDataAsDICOM(std::string BaseFileIn);
+	TomoError SaveCorrectedProjections(std::string BaseFileIn);
+	TomoError SaveSyntheticProjections(int PhantomNum, std::string BaseFileIn);
 
 	//Define data buffer
 	unsigned short * d_Proj;
@@ -342,7 +339,6 @@ private:
 	//Define Cuda arrays
 	cudaArray * d_Sinogram;
 
-	params* d_constants;
 	cudaStream_t stream;
 
 	//cuda pitch variables generated from 2d mallocs
