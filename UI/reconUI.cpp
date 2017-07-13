@@ -26,7 +26,7 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	file->Append( open );
 	
 	wxMenuItem* Save;
-	Save = new wxMenuItem( file, wxID_ANY, wxString( wxT("Save\tCtrl+S") ) + wxT('\t') + wxT("CTRL+S"), wxEmptyString, wxITEM_NORMAL );
+	Save = new wxMenuItem( file, wxID_SAVE, wxString( wxT("Save\tCtrl+S") ) , wxEmptyString, wxITEM_NORMAL );
 	file->Append( Save );
 	
 	wxMenuItem* quit;
@@ -42,12 +42,20 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	
 	m_menubar1->Append( config, wxT("Config") ); 
 	
-	run = new wxMenu();
+	reconstruction = new wxMenu();
 	wxMenuItem* cont;
-	cont = new wxMenuItem( run, wxID_ANY, wxString( wxT("Continue\tF5") ) + wxT('\t') + wxT("f5"), wxEmptyString, wxITEM_NORMAL );
-	run->Append( cont );
+	cont = new wxMenuItem( reconstruction, wxID_ANY, wxString( wxT("Run (Interactive)") ) + wxT('\t') + wxT("F5"), wxEmptyString, wxITEM_NORMAL );
+	reconstruction->Append( cont );
 	
-	m_menubar1->Append( run, wxT("Run") ); 
+	wxMenuItem* contRun;
+	contRun = new wxMenuItem( reconstruction, wxID_ANY, wxString( wxT("Run (Continuous)") ) + wxT('\t') + wxT("Enter"), wxEmptyString, wxITEM_NORMAL );
+	reconstruction->Append( contRun );
+	
+	wxMenuItem* step;
+	step = new wxMenuItem( reconstruction, wxID_ANY, wxString( wxT("Step\t") ) + wxT('\t') + wxT("Space"), wxEmptyString, wxITEM_NORMAL );
+	reconstruction->Append( step );
+	
+	m_menubar1->Append( reconstruction, wxT("Reconstruction") ); 
 	
 	help = new wxMenu();
 	wxMenuItem* about;
@@ -86,6 +94,8 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	this->Connect( quit->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onQuit ) );
 	this->Connect( configDialog->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onConfig ) );
 	this->Connect( cont->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContinue ) );
+	this->Connect( contRun->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContRun ) );
+	this->Connect( step->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onStep ) );
 	this->Connect( about->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onAbout ) );
 }
 
@@ -94,14 +104,40 @@ mainWindow::~mainWindow()
 	// Disconnect Events
 	this->Disconnect( wxID_NEW, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onNew ) );
 	this->Disconnect( wxID_OPEN, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onOpen ) );
-	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onSave ) );
+	this->Disconnect( wxID_SAVE, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onSave ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onQuit ) );
 	this->Disconnect( wxID_PREFERENCES, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onConfig ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContinue ) );
+	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContRun ) );
+	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onStep ) );
 	this->Disconnect( wxID_ABOUT, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onAbout ) );
 	
 	m_mgr.UnInit();
 	
+}
+
+RunBox::RunBox( wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style ) : wxDialog( parent, id, title, pos, size, style )
+{
+	this->SetSizeHints( wxDefaultSize, wxDefaultSize );
+	
+	wxFlexGridSizer* fgSizer2;
+	fgSizer2 = new wxFlexGridSizer( 0, 2, 0, 0 );
+	fgSizer2->SetFlexibleDirection( wxBOTH );
+	fgSizer2->SetNonFlexibleGrowMode( wxFLEX_GROWMODE_SPECIFIED );
+	
+	m_gauge2 = new wxGauge( this, wxID_ANY, 100, wxDefaultPosition, wxDefaultSize, wxGA_HORIZONTAL );
+	m_gauge2->SetValue( 0 ); 
+	fgSizer2->Add( m_gauge2, 0, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5 );
+	
+	
+	this->SetSizer( fgSizer2 );
+	this->Layout();
+	
+	this->Centre( wxBOTH );
+}
+
+RunBox::~RunBox()
+{
 }
 
 configDialog::configDialog( wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style ) : wxFrame( parent, id, title, pos, size, style )

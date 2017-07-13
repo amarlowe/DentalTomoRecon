@@ -1,11 +1,13 @@
 #pragma once
 #include <cuda_runtime.h>
 
+void reconGlutInit(int *argc, char **argv);
+
 class interop {
 public:
 	//Functions
 
-	interop(int *argc, char **argv, int x, int y, bool first);
+	interop(int x, int y);
 	void resize(int x, int y);
 	~interop();
 

@@ -8,6 +8,7 @@
 #include "wx/zstream.h"
 #include "wx/txtstrm.h"
 #include "wx/glcanvas.h"
+#include <wx/thread.h>
 
 #include "reconUI.h"
 #include "../reconstruction/TomoRecon.h"
@@ -44,7 +45,9 @@ protected:
 	void onQuit(wxCommandEvent& event);
 	void onAbout(wxCommandEvent& event);
 	void onConfig(wxCommandEvent& event);
+	void onStep(wxCommandEvent& event);
 	void onContinue(wxCommandEvent& event);
+	void onContRun(wxCommandEvent& event);
 public:
 	// Constructor
 	DTRMainWindow(wxWindow* parent);
@@ -74,6 +77,7 @@ public:
 
 	virtual ~CudaGLCanvas();
 
+	void OnEvent(wxCommandEvent& event);
 	void OnPaint(wxPaintEvent& event);
 	void OnChar(wxKeyEvent& event);
 	void OnMouseEvent(wxMouseEvent& event);
@@ -86,7 +90,6 @@ public:
 private:
 	int imageIndex = 0;
 	int reconIndex = 0;
-	int state = 0;
 
 	wxGLContext* m_glRC;
 
@@ -111,4 +114,29 @@ public:
 
 	wxDECLARE_NO_COPY_CLASS(GLFrame);
 	wxDECLARE_EVENT_TABLE();
+};
+
+BEGIN_DECLARE_EVENT_TYPES()
+DECLARE_EVENT_TYPE(PAINT_IT, -1)
+END_DECLARE_EVENT_TYPES()
+class ReconThread : public wxThread{
+public:
+	ReconThread(wxEvtHandler* pParent, TomoRecon* recon, GLFrame* Frame, wxStatusBar* status);
+private:
+	wxEvtHandler* m_pParent;
+	TomoRecon* m_recon;
+	GLFrame* currentFrame;
+	wxStatusBar* status;
+
+	ExitCode Entry();
+};
+
+class saveThread : public wxThread {
+public:
+	saveThread(TomoRecon* recon, wxStatusBar* status);
+private:
+	TomoRecon* m_recon;
+	wxStatusBar* status;
+
+	ExitCode Entry();
 };

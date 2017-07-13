@@ -272,7 +272,7 @@ TomoError ReadSubSetViews(struct SystemControl * Sys, int NumViews, std::string 
 }
 
 //Function to read the system geoemtry file
-TomoError TomoRecon::SetUpSystemAndReadGeometry(struct SystemControl * Sys, int NumViews, std::string BasePathIn){
+TomoError TomoRecon::SetUpSystemAndReadGeometry(std::string BasePathIn){
 	//Define a new projection data pointer and define the projection geometry constants
 	Sys->Proj = new Proj_Data;
 	Sys->UsrIn = new UserInput;
@@ -469,7 +469,7 @@ TomoError TomoRecon::SetUpSystemAndReadGeometry(struct SystemControl * Sys, int 
 }
 
 //Functions to read the dark and gain images
-TomoError TomoRecon::ReadDarkandGainImages(struct SystemControl * Sys, int NumViews, std::string BasePathIn){
+TomoError TomoRecon::ReadDarkandGainImages(std::string BasePathIn){
 	//Define two paths to gain and dark data
 	std::string GainPath;
 	std::string DarkPath;
@@ -699,7 +699,7 @@ TomoError TomoRecon::ReadDarkandGainImages(struct SystemControl * Sys, int NumVi
 	return Tomo_OK;
 }
 
-TomoError TomoRecon::ReadDarkImages(struct  SystemControl * Sys, int NumViews){
+TomoError TomoRecon::ReadDarkImages(){
 	int size_single_proj = Sys->Proj->Nx * Sys->Proj->Ny;
 	int size_single_proj_bytes = size_single_proj * 2;
 
@@ -735,7 +735,7 @@ TomoError TomoRecon::ReadDarkImages(struct  SystemControl * Sys, int NumViews){
 	return Tomo_OK;
 }
 
-TomoError TomoRecon::ReadGainImages(struct  SystemControl * Sys, int NumViews){
+TomoError TomoRecon::ReadGainImages(){
 	int size_single_proj = Sys->Proj->Nx * Sys->Proj->Ny;
 	int size_single_proj_bytes = size_single_proj * 2;
 
@@ -938,7 +938,7 @@ TomoError TomoRecon::ReadGainImages(struct  SystemControl * Sys, int NumViews){
 	//	return status;
 }
 
-TomoError TomoRecon::ReadRawProjectionData(struct SystemControl * Sys, int NumViews, std::string BaseFileIn, std::string FileName){
+TomoError TomoRecon::ReadRawProjectionData(std::string BaseFileIn, std::string FileName){
 	//Set up the basic path to the raw projection dark and gain data
 	FILE * ProjData = NULL;
 
