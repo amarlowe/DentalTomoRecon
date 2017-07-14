@@ -58,6 +58,8 @@ class mainWindow : public wxFrame
 		virtual void onSave( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onQuit( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onConfig( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onGainSelect( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onDarkSelect( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onContinue( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onContRun( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onStep( wxCommandEvent& event ) { event.Skip(); }

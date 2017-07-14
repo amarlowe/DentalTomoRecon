@@ -1617,7 +1617,7 @@ TomoError TomoRecon::CopyAndSaveImages(){
 	for (int slice = 0; slice < Sys->Recon->Nz; slice++)
 		if (h_MaxVal[slice] > MaxVal) MaxVal = h_MaxVal[slice];
 
-	std::cout << "The max reconstructed value is:" << MaxVal << std::endl;
+	std::cout << "The max reconstructed value is: " << MaxVal << std::endl;
 	Sys->Recon->MaxVal = MaxVal;
 
 	//Copy the image to smaller space

@@ -23,6 +23,14 @@ TomoRecon
 - Recon norm has essentially uniform values across the entire image, consider killing to save memory (incorrect value was being read from it in the past)
 - Evaluate need to iterate through captures instead of all at once
 - Look at the lighting change from the first to others
+- Only allow one config window to be open at a time
+- Add timers to reconstructions
+- Automatic phantom reader
+- Zoom with ctrl + mouse wheel
+- Color correction within current viewport
+- Look into upres using the mutltiple viewing angles
+- Clean up all non-recon memory when recon finishes
+- Siphon mem from open recons by reading from disk and just having a buffer of slices
 
 --------------Bugs---------------------
 - Number of Slices to Reconstruct too large may crash program
@@ -40,7 +48,8 @@ TomoRecon
 - creating two instances works, fails after closing one. More cleanup is required
 - Making the viewport too small crashes opengl-line 110 (cudagraphicsresource has minimum size?)
 - Loading more than 2 projections causes odd bugs
-- replaced "40,000.0" with USHRT_MAX in correct projections. I think that's what he was going for, unsure
 - TONS of magic numbers left scrambled around the CUDA code
 - Program locks up when button is pressed when the last frame is selected
 - Check normalization code, some images are completely black while others look just fine
+- Close behavior breaks when the console is the selected tab
+- Cancel on new does not cancel operation

@@ -39,14 +39,6 @@ bool MyApp::OnInit(){
 	frame->Show(true);
 #endif
 
-	wxStreamToTextRedirector redirect(frame->m_textCtrl8);
-	
-	/*TomoError retErr = TomoRecon();
-	if (retErr != Tomo_OK)
-		wxMessageBox(wxT("Reconstruction error!"),
-			wxString::Format(wxT("Reconstruction failed with error code : %d"), (int)retErr),
-			wxICON_ERROR | wxOK);*/
-
 	return true;
 }
 
@@ -70,22 +62,77 @@ DTRMainWindow::DTRMainWindow(wxWindow* parent) : mainWindow(parent){
 		Move(x, y);
 		SetClientSize(w, h);
 	}
+
+	//Get filepath for last opened/saved file
+	gainFilepath = pConfig->Read(wxT("/gainFilepath"), wxT(""));
+	darkFilepath = pConfig->Read(wxT("/darkFilepath"), wxT(""));
 }
 
 // event handlers
 void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
-	static unsigned s_pageAdded = 0;
-	m_auinotebook6->AddPage(CreateNewPage(),
-		wxString::Format
-		(
-			wxT("%u"),
-			++s_pageAdded
-		),
-		true);
+	static int s_pageAdded = 1;
+	(*m_textCtrl8) << "Opening new tab titled: \"" << (int)s_pageAdded << "\"\n";
+	m_auinotebook6->AddPage(CreateNewPage(), wxString::Format(wxT("%u"), s_pageAdded++), true);
 }
 
-wxPanel *DTRMainWindow::CreateNewPage() const{
-	return new GLFrame(m_auinotebook6);
+TomoError DTRMainWindow::genSys(struct SystemControl * Sys) {
+	//Finish filling in the structure with all required structures
+	Sys->Proj = new Proj_Data;
+	Sys->UsrIn = new UserInput;
+
+	Sys->Proj->NumViews = NumViews;
+	Sys->Proj->Views = new int[NumViews];
+	for (int n = 0; n < NumViews; n++) {
+		Sys->Proj->Views[n] = n;
+	}
+
+	//Define new buffers to store the x,y,z locations of the x-ray focal spot array
+	Sys->SysGeo.EmitX = new float[Sys->Proj->NumViews];
+	Sys->SysGeo.EmitY = new float[Sys->Proj->NumViews];
+	Sys->SysGeo.EmitZ = new float[Sys->Proj->NumViews];
+
+	//Set the isocenter to the center of the detector array
+	Sys->SysGeo.IsoX = 0;
+	Sys->SysGeo.IsoY = 0;
+	Sys->SysGeo.IsoZ = 0;
+
+	//load all values from previously saved settings
+	wxConfigBase *pConfig = wxConfigBase::Get();
+
+	Sys->UsrIn->CalOffset = pConfig->ReadLong(wxT("/generateDistance"), 0l) == 0l ? 0 : 1;
+	Sys->UsrIn->SmoothEdge = pConfig->ReadLong(wxT("/edgeBlurEnabled"), 0l) == 0l ? 0 : 1;
+	Sys->UsrIn->UseTV = pConfig->ReadLong(wxT("/denosingEnabled"), 0l) == 0l ? 0 : 1;
+	Sys->UsrIn->Orientation = pConfig->ReadLong(wxT("/orientation"), 0l) == 0l ? 0 : 1;
+	Sys->Proj->Flip = pConfig->ReadLong(wxT("/rotationEnabled"), 0l) == 0l ? 0 : 1;
+
+	Sys->SysGeo.ZDist = pConfig->ReadDouble(wxT("/estimatedDistance"), 5.0f);
+	Sys->Proj->Nz = pConfig->ReadLong(wxT("/reconstructionSlices"), 45l);
+	Sys->SysGeo.ZPitch = pConfig->ReadDouble(wxT("/sliceThickness"), 0.5f);
+	Sys->Proj->Nx = pConfig->ReadLong(wxT("/pixelWidth"), 1915l);
+	Sys->Proj->Ny = pConfig->ReadLong(wxT("/pixelHeight"), 1440l);
+	Sys->Proj->Pitch_x = pConfig->ReadDouble(wxT("/pitchHeight"), 0.0185f);
+	Sys->Proj->Pitch_y = pConfig->ReadDouble(wxT("/pitchWidth"), 0.0185f);
+	for (int j = 0; j < NUMVIEWS; j++) {
+		Sys->SysGeo.EmitX[j] = pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"), j, 0), 0.0f);
+		Sys->SysGeo.EmitY[j] = pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"), j, 1), 0.0f);
+		Sys->SysGeo.EmitZ[j] = pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"), j, 2), 0.0f);
+	}
+
+	//Define Final Image Buffers 
+	Sys->Proj->RawData = new unsigned short[Sys->Proj->Nx*Sys->Proj->Ny * Sys->Proj->NumViews];
+	Sys->Proj->SyntData = new unsigned short[Sys->Proj->Nx*Sys->Proj->Ny];
+
+	if (Sys->UsrIn->CalOffset)
+		Sys->Proj->RawDataThresh = new unsigned short[Sys->Proj->Nx*Sys->Proj->Ny * Sys->Proj->NumViews];
+
+	return Tomo_OK;
+}
+
+wxPanel *DTRMainWindow::CreateNewPage() {
+	struct SystemControl * Sys = new SystemControl;
+	genSys(Sys);
+	wxStreamToTextRedirector redirect(m_textCtrl8);
+	return new GLFrame(m_auinotebook6, Sys, gainFilepath, darkFilepath);
 }
 
 void DTRMainWindow::onOpen(wxCommandEvent& WXUNUSED(event)) {
@@ -96,14 +143,21 @@ void DTRMainWindow::onOpen(wxCommandEvent& WXUNUSED(event)) {
 
 void DTRMainWindow::onSave(wxCommandEvent& WXUNUSED(event)) {
 	//TODO: add error checking
-	saveThread* thd = new saveThread(((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_canvas->recon, m_statusBar1);
-	thd->Create();
-	thd->Run();
+	if (((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_canvas == NULL) {
+		wxMessageBox(wxT("Error!"),
+			wxT("Can only save reconstructions."),
+			wxICON_ERROR | wxOK);
+	}
+	else {
+		saveThread* thd = new saveThread(((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_canvas->recon, m_statusBar1);
+		thd->Create();
+		thd->Run();
+	}
 }
 
 void DTRMainWindow::onQuit(wxCommandEvent& WXUNUSED(event)){
 	// true is to force the frame to close
-	Close(true);
+	Close();
 }
 
 void DTRMainWindow::onStep(wxCommandEvent& WXUNUSED(event)) {
@@ -139,7 +193,7 @@ void DTRMainWindow::onContinue(wxCommandEvent& WXUNUSED(event)) {
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
-	ReconThread* thd = new ReconThread(currentFrame->m_canvas, recon, currentFrame, m_statusBar1);
+	ReconThread* thd = new ReconThread(currentFrame->m_canvas, recon, currentFrame, m_statusBar1, m_textCtrl8);
 	thd->Create();
 	thd->Run();
 }
@@ -176,18 +230,62 @@ void DTRMainWindow::onContRun(wxCommandEvent& WXUNUSED(event)) {
 }
 
 void DTRMainWindow::onConfig(wxCommandEvent& WXUNUSED(event)) {
-	DTRConfigDialog *frame2 = new DTRConfigDialog(this);
-	frame2->Show(true);
+	if (cfgDialog == NULL) {
+		cfgDialog = new DTRConfigDialog(this);
+		cfgDialog->Show(true);
+	}
+}
+
+void DTRMainWindow::onGainSelect(wxCommandEvent& WXUNUSED(event)) {
+	//Open files with raw extensions
+	char temp[MAX_PATH];
+	strncpy(temp, (const char*)gainFilepath.mb_str(), MAX_PATH - 1);
+	OPENFILENAME ofn;
+	ZeroMemory(&ofn, sizeof(ofn));
+	ofn.lStructSize = sizeof(ofn);
+	ofn.hwndOwner = GetHWND();
+	ofn.lpstrFilter = (LPCWSTR)"Raw files\0*.raw\0All Files\0*.*\0";
+	ofn.lpstrFile = (LPWSTR)temp;
+	ofn.nMaxFile = MAX_PATH;
+	ofn.lpstrTitle = (LPCWSTR)"Select a gain file";
+	ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST;
+
+	GetOpenFileNameA((LPOPENFILENAMEA)&ofn);
+
+	gainFilepath = wxString::FromUTF8(temp);
+
+	//Save filepath for next session
+	wxConfigBase::Get()->Write(wxT("/gainFilepath"), gainFilepath);
+}
+
+void DTRMainWindow::onDarkSelect(wxCommandEvent& WXUNUSED(event)) {
+	//Open files with raw extensions
+	char temp[MAX_PATH];
+	strncpy(temp, (const char*)darkFilepath.mb_str(), MAX_PATH - 1);
+	OPENFILENAME ofn;
+	ZeroMemory(&ofn, sizeof(ofn));
+	ofn.lStructSize = sizeof(ofn);
+	ofn.hwndOwner = GetHWND();
+	ofn.lpstrFilter = (LPCWSTR)"Raw files\0*.raw\0All Files\0*.*\0";
+	ofn.lpstrFile = (LPWSTR)temp;
+	ofn.nMaxFile = MAX_PATH;
+	ofn.lpstrTitle = (LPCWSTR)"Select a dark file";
+	ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST;
+
+	GetOpenFileNameA((LPOPENFILENAMEA)&ofn);
+
+	darkFilepath = wxString::FromUTF8(temp);
+
+	//Save filepath for next session
+	wxConfigBase::Get()->Write(wxT("/darkFilePath"), darkFilepath);
 }
 
 void DTRMainWindow::onAbout(wxCommandEvent& WXUNUSED(event)){
-	wxMessageBox(wxString::Format
-	(
+	wxMessageBox(wxString::Format(
 		"Welcome to Xinvivo's reconstruction app!\n"
 		"\n"
 		"This app was built for %s.",
-		wxGetOsDescription()
-	),
+		wxGetOsDescription()),
 		"About Tomography Reconstruction",
 		wxOK | wxICON_INFORMATION,
 		this);
@@ -222,6 +320,11 @@ DTRConfigDialog::DTRConfigDialog(wxWindow* parent) : configDialog(parent){
 	//load all values from previously saved settings
 	wxConfigBase *pConfig = wxConfigBase::Get();
 
+	generateDistance->SetSelection(pConfig->ReadLong(wxT("/generateDistance"), 0l) == 0l ? 0 : 1);
+	edgeBlurEnabled->SetSelection(pConfig->ReadLong(wxT("/edgeBlurEnabled"), 0l) == 0l ? 0 : 1);
+	denosingEnabled->SetSelection(pConfig->ReadLong(wxT("/denosingEnabled"), 0l) == 0l ? 0 : 1);
+	orientation->SetSelection(pConfig->ReadLong(wxT("/orientation"), 0l) == 0l ? 0 : 1);
+	rotationEnabled->SetSelection(pConfig->ReadLong(wxT("/rotationEnabled"), 0l) == 0l ? 0 : 1);
 	estimatedDistance->SetValue(wxString::Format(wxT("%.1f"), pConfig->ReadDouble(wxT("/estimatedDistance"), 5.0f)));
 	reconstructionSlices->SetValue(wxString::Format(wxT("%d"), pConfig->ReadLong(wxT("/reconstructionSlices"), 45l)));
 	sliceThickness->SetValue(wxString::Format(wxT("%.1f"), pConfig->ReadDouble(wxT("/sliceThickness"), 0.5f)));
@@ -232,12 +335,154 @@ DTRConfigDialog::DTRConfigDialog(wxWindow* parent) : configDialog(parent){
 	for (int i = 0; i < m_grid1->GetNumberCols(); i++)
 		for (int j = 0; j < m_grid1->GetNumberRows(); j++) 
 			m_grid1->SetCellValue(j, i, wxString::Format(wxT("%.4f"), pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"),j,i), 0.0f)));
+
+	//Get filepath for last opened/saved file
+	strncpy(configFilepath, pConfig->Read(wxT("/configFilePath"), ""), MAX_PATH - 1);
 }
 
 void DTRConfigDialog::onLoad(wxCommandEvent& event) {
-	wxMessageBox(wxT("TODO"),
-		wxT("TODO"),
-		wxICON_INFORMATION | wxOK);
+	//Open files with txt or json extensions
+	OPENFILENAME ofn;
+	ZeroMemory(&ofn, sizeof(ofn));
+	ofn.lStructSize = sizeof(ofn);
+	ofn.hwndOwner = GetHWND();
+	ofn.lpstrFilter = (LPCWSTR)"JSON file\0*.json\0Text File\0*.txt\0";
+	ofn.lpstrFile = (LPWSTR)configFilepath;
+	ofn.nMaxFile = MAX_PATH;
+	ofn.lpstrTitle = (LPCWSTR)"Select a geometry file";
+	ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST;
+
+	GetOpenFileNameA((LPOPENFILENAMEA)&ofn);
+
+	//TODO: check file type and parse accordingly
+	//Parse the opened file
+	ParseLegacyTxt(configFilepath);
+}
+
+TomoError DTRConfigDialog::ParseLegacyTxt(std::string FilePath) {
+	//Open fstream to text file
+	std::ifstream file(FilePath.c_str());
+
+	if (!file.is_open()) {
+		std::cout << "Error opening file: " << FilePath.c_str() << std::endl;
+		std::cout << "Please check and re-run program." << std::endl;
+		return Tomo_file_err;
+	}
+
+	//Define two character arrays to read values
+	char data[1024], data_in[12];
+
+	//skip table headers
+	file.getline(data, 1024);
+	bool useview = false;
+	int count = 0, num = 0;
+
+	//Cycle through the views and read geometry
+	for (int view = 0; view < NUMVIEWS; view++){
+		file.getline(data, 1024);//Read data line
+
+		//Skip first coloumn: Beam Number	
+		do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
+		for (int i = 0; i < 12; i++) data_in[i] = '\0';
+		count++; num = 0;
+
+		//Read second colomn: emitter x location
+		do { data_in[num] = data[count];	count++; num++; } while (data[count] != '\t' && num < 12);
+		m_grid1->SetCellValue(view, 0, wxString::Format(wxT("%.4f"), atof(data_in)));
+		for (int i = 0; i < 12; i++) data_in[i] = '\0';
+		count++; num = 0;
+
+		//Read third colomn: emitter y location
+		do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
+		m_grid1->SetCellValue(view, 1, wxString::Format(wxT("%.4f"), atof(data_in)));
+		for (int i = 0; i < 12; i++) data_in[i] = '\0';
+		count++; num = 0;
+
+		//Read fourth colomn: emitter z location
+		do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
+		m_grid1->SetCellValue(view, 2, wxString::Format(wxT("%.4f"), atof(data_in)));
+		for (int i = 0; i < 12; i++) data_in[i] = '\0';
+		count = 0; num = 0;
+	}
+
+	//Skip the next 2 lines and read the third to get estimated center of object
+	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
+	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
+	estimatedDistance->SetValue(wxString::Format(wxT("%.1f"), atof(data_in)));
+
+	//skip the next 2 lines and read third to get slice thickness
+	for (int i = 0; i < 12; i++) data_in[i] = '\0';
+	count = 0; num = 0;
+	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
+	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
+	sliceThickness->SetValue(wxString::Format(wxT("%.1f"), atof(data_in)));
+	for (int i = 0; i < 12; i++) data_in[i] = '\0';
+	count = 0; num = 0;
+
+	//Skip the next two lines and read the third
+	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
+
+	//Read four values defining the detector size
+	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
+	pixelWidth->SetValue(wxString::Format(wxT("%d"), atoi(data_in)));
+	for (int i = 0; i < 12; i++) data_in[i] = '\0';
+	count++; num = 0;
+	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
+	pixelHeight->SetValue(wxString::Format(wxT("%d"), atoi(data_in)));
+	for (int i = 0; i < 12; i++) data_in[i] = '\0';
+	count++; num = 0;
+	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
+	pitchWidth->SetValue(wxString::Format(wxT("%.4f"), atof(data_in)));
+	for (int i = 0; i < 12; i++) data_in[i] = '\0';
+	count++; num = 0;
+	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
+	pitchHeight->SetValue(wxString::Format(wxT("%.4f"), atof(data_in)));
+	for (int i = 0; i < 12; i++) data_in[i] = '\0';
+	count = 0; num = 0;
+
+	//Skip the next two lines and read the third to read number of slices to reconstruct
+	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
+	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
+	reconstructionSlices->SetValue(wxString::Format(wxT("%d"), atoi(data_in)));
+	for (int i = 0; i < 12; i++) data_in[i] = '\0';
+	count = 0; num = 0;
+
+	//Skip the next two lines and read the third to see direction of data
+	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
+	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
+	rotationEnabled->SetSelection(atoi(data_in) == 0 ? 0 : 1);
+	for (int i = 0; i < 12; i++) data_in[i] = '\0';
+	count = 0; num = 0;
+
+	//Skip the next two lines and read the third to see if automatic offset calculation
+	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
+	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
+	generateDistance->SetSelection(atoi(data_in) == 0 ? 0 : 1);
+	for (int i = 0; i < 12; i++) data_in[i] = '\0';
+	count = 0; num = 0;
+
+	// Skip the next two lines and read the third to see if automatic offset calculation
+	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
+	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
+	edgeBlurEnabled->SetSelection(atoi(data_in) == 0 ? 0 : 1);
+	for (int i = 0; i < 12; i++) data_in[i] = '\0';
+	count = 0; num = 0;
+
+	// Skip the next two lines and read the third to see if use TV reconstruction
+	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
+	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
+	denosingEnabled->SetSelection(atoi(data_in) == 0 ? 0 : 1);
+	for (int i = 0; i < 12; i++) data_in[i] = '\0';
+	count = 0; num = 0;
+
+	// Skip the next two lines and read the third to check orientation
+	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
+	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
+	orientation->SetSelection(atoi(data_in) == 0 ? 0 : 1);
+	for (int i = 0; i < 12; i++) data_in[i] = '\0';
+	count = 0; num = 0;
+
+	file.close();
 }
 
 void DTRConfigDialog::onSave(wxCommandEvent& event) {
@@ -249,12 +494,18 @@ void DTRConfigDialog::onSave(wxCommandEvent& event) {
 void DTRConfigDialog::onOK(wxCommandEvent& event) {
 	//check each value for invalid arguments
 	//save each valid value to GUI config storage
-	//TODO: also save each valid value to internal program storage
 
 	//will not save all valid values, only until a bad value is hit
 	double parsedDouble;
 	long parsedInt = 0;
 	wxConfigBase *pConfig = wxConfigBase::Get();
+
+	pConfig->Write(wxT("/generateDistance"), generateDistance->GetSelection() == 0 ? 0l : 1l);
+	pConfig->Write(wxT("/edgeBlurEnabled"), edgeBlurEnabled->GetSelection() == 0 ? 0l : 1l);
+	pConfig->Write(wxT("/denosingEnabled"), denosingEnabled->GetSelection() == 0 ? 0l : 1l);
+	pConfig->Write(wxT("/orientation"), orientation->GetSelection() == 0 ? 0l : 1l);
+	pConfig->Write(wxT("/rotationEnabled"), rotationEnabled->GetSelection() == 0 ? 0l : 1l);
+
 	if (!estimatedDistance->GetLineText(0).ToDouble(&parsedDouble)) {
 		wxMessageBox(wxT("Invalid input in text box: \"Estimated distance from detector to object\"."),
 			wxT("Invlaid input"),
@@ -323,13 +574,18 @@ void DTRConfigDialog::onOK(wxCommandEvent& event) {
 		}
 	}
 
+	//Get filepath for last opened/saved file
+	pConfig->Write(wxT("/configFilePath"), wxString::FromUTF8(configFilepath));
+
 	//All values are valid, set done flag and return
 	//TODO: set done flag
+	((DTRMainWindow*)GetParent())->cfgDialog = NULL;
 	Close(true);
 }
 
 
 void DTRConfigDialog::onCancel(wxCommandEvent& WXUNUSED(event)) {
+	((DTRMainWindow*)GetParent())->cfgDialog = NULL;
 	Close(true);
 }
 
@@ -346,14 +602,14 @@ EVT_SCROLL(GLFrame::OnScroll)
 EVT_MOUSEWHEEL(GLFrame::OnMousewheel)
 wxEND_EVENT_TABLE()
 
-GLFrame::GLFrame(wxAuiNotebook *frame, const wxPoint& pos, const wxSize& size, long style)
+GLFrame::GLFrame(wxAuiNotebook *frame, struct SystemControl * Sys, wxString gainFile, wxString darkFile, const wxPoint& pos, const wxSize& size, long style)
 	: wxPanel(frame, wxID_ANY, pos, size), m_canvas(NULL){
 	//Set up sizer to make the canvas take up the entire panel (wxWidgets handles garbage collection)
 	wxBoxSizer* bSizer;
 	bSizer = new wxBoxSizer(wxVERTICAL);
 
 	//initialize the canvas to this object
-	m_canvas = new CudaGLCanvas(this, wxID_ANY, NULL, GetClientSize());
+	m_canvas = new CudaGLCanvas(this, Sys, gainFile, darkFile, wxID_ANY, NULL, GetClientSize());
 	bSizer->Add(m_canvas, 1, wxEXPAND | wxALL, 5);
 
 	m_scrollBar = new wxScrollBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSB_HORIZONTAL);
@@ -397,15 +653,15 @@ EVT_MOUSE_EVENTS(CudaGLCanvas::OnMouseEvent)
 EVT_COMMAND(wxID_ANY, PAINT_IT, CudaGLCanvas::OnEvent)
 wxEND_EVENT_TABLE()
 
-CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxWindowID id, int* gl_attrib, wxSize size)
+CudaGLCanvas::CudaGLCanvas(wxWindow *parent, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxWindowID id, int* gl_attrib, wxSize size)
 	: wxGLCanvas(parent, id, gl_attrib, wxDefaultPosition, size, wxFULL_REPAINT_ON_RESIZE){
 	// Explicitly create a new rendering context instance for this canvas.
 	m_glRC = new wxGLContext(this);
 
 	SetCurrent(*m_glRC);
 
-	recon = new TomoRecon(GetSize().x, GetSize().y);
-	recon->init();
+	recon = new TomoRecon(GetSize().x, GetSize().y, Sys);
+	recon->init((const char*)gainFile.mb_str(), (const char*)darkFile.mb_str());
 
 #ifdef PROFILER
 	recon->correctProjections();
@@ -429,10 +685,6 @@ void CudaGLCanvas::OnScroll(int index) {
 }
 
 void CudaGLCanvas::OnEvent(wxCommandEvent& WXUNUSED(event)) {
-	// This is a dummy, to avoid an endless succession of paint messages.
-	// OnPaint handlers must always create a wxPaintDC.
-	//wxPaintDC(this);
-
 	if (recon->initialized) {
 		paint();
 	}
@@ -503,11 +755,12 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event){
 //---------------------------------------------------------------------------
 
 DEFINE_EVENT_TYPE(PAINT_IT);
-ReconThread::ReconThread(wxEvtHandler* pParent, TomoRecon* recon, GLFrame* Frame, wxStatusBar* status)
-	: wxThread(wxTHREAD_DETACHED), m_pParent(pParent), status(status), currentFrame(Frame), m_recon(recon) {
+ReconThread::ReconThread(wxEvtHandler* pParent, TomoRecon* recon, GLFrame* Frame, wxStatusBar* status, wxTextCtrl* m_textCtrl)
+	: wxThread(wxTHREAD_DETACHED), m_pParent(pParent), status(status), currentFrame(Frame), m_recon(recon), m_textCtrl(m_textCtrl) {
 }
 
 wxThread::ExitCode ReconThread::Entry(){
+	wxStreamToTextRedirector redirect(m_textCtrl);
 	wxCommandEvent needsPaint(PAINT_IT, GetId());
 	//Run the entire reconstruction
 	//Swtich statement is to make it state aware, but otherwise finishes out whatever is left
