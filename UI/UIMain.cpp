@@ -27,6 +27,7 @@ bool MyApp::OnInit(){
 	DTRMainWindow *frame = new DTRMainWindow(NULL);
 
 #ifdef PROFILER
+	frame->Show(true);
 	static unsigned s_pageAdded = 0;
 	frame->m_auinotebook6->AddPage(frame->CreateNewPage(),
 		wxString::Format
@@ -35,6 +36,7 @@ bool MyApp::OnInit(){
 			++s_pageAdded
 		),
 		true);
+	
 #else
 	frame->Show(true);
 #endif
@@ -143,16 +145,9 @@ void DTRMainWindow::onOpen(wxCommandEvent& WXUNUSED(event)) {
 
 void DTRMainWindow::onSave(wxCommandEvent& WXUNUSED(event)) {
 	//TODO: add error checking
-	if (((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_canvas == NULL) {
-		wxMessageBox(wxT("Error!"),
-			wxT("Can only save reconstructions."),
-			wxICON_ERROR | wxOK);
-	}
-	else {
-		saveThread* thd = new saveThread(((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_canvas->recon, m_statusBar1);
-		thd->Create();
-		thd->Run();
-	}
+	saveThread* thd = new saveThread(((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_canvas->recon, m_statusBar1);
+	thd->Create();
+	thd->Run();
 }
 
 void DTRMainWindow::onQuit(wxCommandEvent& WXUNUSED(event)){
@@ -337,26 +332,65 @@ DTRConfigDialog::DTRConfigDialog(wxWindow* parent) : configDialog(parent){
 			m_grid1->SetCellValue(j, i, wxString::Format(wxT("%.4f"), pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"),j,i), 0.0f)));
 
 	//Get filepath for last opened/saved file
-	strncpy(configFilepath, pConfig->Read(wxT("/configFilePath"), ""), MAX_PATH - 1);
+	configFilepath = std::string(pConfig->Read(wxT("/configFilePath"), "").mb_str());
 }
 
 void DTRConfigDialog::onLoad(wxCommandEvent& event) {
 	//Open files with txt or json extensions
+	char temp[MAX_PATH];
+	strncpy(temp, configFilepath.c_str(), MAX_PATH - 1);
 	OPENFILENAME ofn;
 	ZeroMemory(&ofn, sizeof(ofn));
 	ofn.lStructSize = sizeof(ofn);
 	ofn.hwndOwner = GetHWND();
 	ofn.lpstrFilter = (LPCWSTR)"JSON file\0*.json\0Text File\0*.txt\0";
-	ofn.lpstrFile = (LPWSTR)configFilepath;
+	ofn.lpstrFile = (LPWSTR)temp;
 	ofn.nMaxFile = MAX_PATH;
 	ofn.lpstrTitle = (LPCWSTR)"Select a geometry file";
 	ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST;
 
 	GetOpenFileNameA((LPOPENFILENAMEA)&ofn);
 
-	//TODO: check file type and parse accordingly
-	//Parse the opened file
-	ParseLegacyTxt(configFilepath);
+	//Set filepath for last opened/saved file
+	wxConfigBase::Get()->Write(wxT("/configFilePath"), wxString::FromUTF8(temp));
+	configFilepath = temp;
+
+	//check file type and parse accordingly
+	if (configFilepath.substr(configFilepath.find_last_of(".") + 1) == "json") {
+		ParseJSONFile(configFilepath);
+	}
+	else {
+		ParseLegacyTxt(configFilepath);
+	}
+}
+
+TomoError DTRConfigDialog::ParseJSONFile(std::string FilePath) {
+	//Open file and parse to cJSON object
+	std::ifstream ifs(FilePath.c_str());
+	std::string input((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+	cJSON * root = cJSON_Parse(input.c_str());
+
+	//Populate form using parsed values
+	//TODO: shittons of error checking
+	generateDistance->SetSelection(cJSON_GetObjectItem(root, "generateDistance")->type == cJSON_False ? 0 : 1);
+	edgeBlurEnabled->SetSelection(cJSON_GetObjectItem(root, "edgeBlurEnabled")->type == cJSON_False ? 0 : 1);
+	denosingEnabled->SetSelection(cJSON_GetObjectItem(root, "denosingEnabled")->type == cJSON_False ? 0 : 1);
+	orientation->SetSelection(cJSON_GetObjectItem(root, "orientation")->type == cJSON_False ? 0 : 1);
+	rotationEnabled->SetSelection(cJSON_GetObjectItem(root, "rotationEnabled")->type == cJSON_False ? 0 : 1);
+	estimatedDistance->SetValue(wxString::Format(wxT("%.1f"), cJSON_GetObjectItem(root, "estimatedDistance")->valuedouble));
+	reconstructionSlices->SetValue(wxString::Format(wxT("%d"), cJSON_GetObjectItem(root, "reconstructionSlices")->valueint));
+	sliceThickness->SetValue(wxString::Format(wxT("%.1f"), cJSON_GetObjectItem(root, "sliceThickness")->valuedouble));
+	pixelWidth->SetValue(wxString::Format(wxT("%d"), cJSON_GetObjectItem(root, "pixelWidth")->valueint));
+	pixelHeight->SetValue(wxString::Format(wxT("%d"), cJSON_GetObjectItem(root, "pixelHeight")->valueint));
+	pitchHeight->SetValue(wxString::Format(wxT("%.4f"), cJSON_GetObjectItem(root, "pitchHeight")->valuedouble));
+	pitchWidth->SetValue(wxString::Format(wxT("%.4f"), cJSON_GetObjectItem(root, "pitchWidth")->valuedouble));
+	for (int i = 0; i < m_grid1->GetNumberCols(); i++)
+		for (int j = 0; j < m_grid1->GetNumberRows(); j++)
+			m_grid1->SetCellValue(j, i, wxString::Format(wxT("%.4f"), 
+				cJSON_GetObjectItem(root, (const char*)wxString::Format(wxT("beamGeo%d-%d"), j, i).mb_str(wxConvUTF8))->valuedouble));
+
+	cJSON_Delete(root);
+	return Tomo_OK;
 }
 
 TomoError DTRConfigDialog::ParseLegacyTxt(std::string FilePath) {
@@ -486,12 +520,87 @@ TomoError DTRConfigDialog::ParseLegacyTxt(std::string FilePath) {
 }
 
 void DTRConfigDialog::onSave(wxCommandEvent& event) {
-	wxMessageBox(wxT("TODO"),
-		wxT("TODO"),
-		wxICON_INFORMATION | wxOK);
+	if (checkInputs() != Tomo_OK) return;
+
+	//Save files with json extension only
+	char temp[MAX_PATH];
+	strncpy(temp, configFilepath.c_str(), MAX_PATH - 1);
+	OPENFILENAME ofn;
+	ZeroMemory(&ofn, sizeof(ofn));
+	ofn.lStructSize = sizeof(ofn);
+	ofn.hwndOwner = GetHWND();
+	ofn.lpstrFilter = (LPCWSTR)"JSON file\0*.json\0";
+	ofn.lpstrFile = (LPWSTR)temp;
+	ofn.nMaxFile = MAX_PATH;
+	ofn.lpstrTitle = (LPCWSTR)"Select a geometry file";
+	ofn.Flags = OFN_DONTADDTORECENT;
+
+	GetSaveFileNameA((LPOPENFILENAMEA)&ofn);
+
+	//TODO: check JSON extension
+
+	//Set filepath for last opened/saved file
+	wxConfigBase::Get()->Write(wxT("/configFilePath"), wxString::FromUTF8(temp));
+	configFilepath = temp;
+
+	//Create and populate a cJSON object
+	double parsedDouble;
+	long parsedInt = 0;
+	cJSON *root = cJSON_CreateObject();
+	if (generateDistance->GetSelection() == 0) cJSON_AddFalseToObject(root, "generateDistance");
+	else cJSON_AddTrueToObject(root, "generateDistance");
+	if (edgeBlurEnabled->GetSelection() == 0) cJSON_AddFalseToObject(root, "edgeBlurEnabled");
+	else cJSON_AddTrueToObject(root, "edgeBlurEnabled");
+	if (denosingEnabled->GetSelection() == 0) cJSON_AddFalseToObject(root, "denosingEnabled");
+	else cJSON_AddTrueToObject(root, "denosingEnabled");
+	if (orientation->GetSelection() == 0) cJSON_AddFalseToObject(root, "orientation");
+	else cJSON_AddTrueToObject(root, "orientation");
+	if (rotationEnabled->GetSelection() == 0) cJSON_AddFalseToObject(root, "rotationEnabled");
+	else cJSON_AddTrueToObject(root, "rotationEnabled");
+
+	estimatedDistance->GetLineText(0).ToDouble(&parsedDouble);
+	cJSON_AddNumberToObject(root, "estimatedDistance", parsedDouble);
+	sliceThickness->GetLineText(0).ToDouble(&parsedDouble);
+	cJSON_AddNumberToObject(root, "sliceThickness", parsedDouble);
+	pitchHeight->GetLineText(0).ToDouble(&parsedDouble);
+	cJSON_AddNumberToObject(root, "pitchHeight", parsedDouble);
+	pitchWidth->GetLineText(0).ToDouble(&parsedDouble);
+	cJSON_AddNumberToObject(root, "pitchWidth", parsedDouble);
+	reconstructionSlices->GetLineText(0).ToLong(&parsedInt);
+	cJSON_AddNumberToObject(root, "reconstructionSlices", parsedInt);
+	pixelWidth->GetLineText(0).ToLong(&parsedInt);
+	cJSON_AddNumberToObject(root, "pixelWidth", parsedInt);
+	pixelHeight->GetLineText(0).ToLong(&parsedInt);
+	cJSON_AddNumberToObject(root, "pixelHeight", parsedInt);
+	for (int i = 0; i < m_grid1->GetNumberCols(); i++)
+		for (int j = 0; j < m_grid1->GetNumberRows(); j++) {
+			m_grid1->GetCellValue(j, i).ToDouble(&parsedDouble);
+			cJSON_AddNumberToObject(root, (const char*)wxString::Format(wxT("beamGeo%d-%d"), j, i).mb_str(wxConvUTF8), parsedDouble);
+		}
+
+	//convert to actual string
+	char *rendered = cJSON_Print(root);
+
+	//output to disk
+	std::ofstream FILE;
+	FILE.open(configFilepath, std::ios::binary);
+	FILE << rendered;
+	FILE.close();
+
+	//cleanup structure
+	cJSON_Delete(root);
 }
 
 void DTRConfigDialog::onOK(wxCommandEvent& event) {
+	if(checkInputs() != Tomo_OK) return;
+
+	//All values are valid, set done flag and return
+	//TODO: set done flag
+	((DTRMainWindow*)GetParent())->cfgDialog = NULL;
+	Close(true);
+}
+
+TomoError DTRConfigDialog::checkInputs() {
 	//check each value for invalid arguments
 	//save each valid value to GUI config storage
 
@@ -510,7 +619,7 @@ void DTRConfigDialog::onOK(wxCommandEvent& event) {
 		wxMessageBox(wxT("Invalid input in text box: \"Estimated distance from detector to object\"."),
 			wxT("Invlaid input"),
 			wxICON_STOP | wxOK);
-		return;
+		return Tomo_input_err;
 	}
 	else pConfig->Write(wxT("/estimatedDistance"), parsedDouble);
 
@@ -518,7 +627,7 @@ void DTRConfigDialog::onOK(wxCommandEvent& event) {
 		wxMessageBox(wxT("Invalid input in text box: \"Number of slices to reconstruct\".\nMust be a whole number greater than 0."),
 			wxT("Invlaid input"),
 			wxICON_STOP | wxOK);
-		return;
+		return Tomo_input_err;
 	}
 	else pConfig->Write(wxT("/reconstructionSlices"), parsedInt);
 
@@ -526,7 +635,7 @@ void DTRConfigDialog::onOK(wxCommandEvent& event) {
 		wxMessageBox(wxT("Invalid input in text box: \"Thickness of reconstruciton slice\"."),
 			wxT("Invlaid input"),
 			wxICON_STOP | wxOK);
-		return;
+		return Tomo_input_err;
 	}
 	else pConfig->Write(wxT("/sliceThickness"), parsedDouble);
 
@@ -534,7 +643,7 @@ void DTRConfigDialog::onOK(wxCommandEvent& event) {
 		wxMessageBox(wxT("Invalid input in text box: \"Height (pixels)\".\nMust be a whole number greater than 0."),
 			wxT("Invlaid input"),
 			wxICON_STOP | wxOK);
-		return;
+		return Tomo_input_err;
 	}
 	else pConfig->Write(wxT("/pixelWidth"), parsedInt);
 
@@ -542,7 +651,7 @@ void DTRConfigDialog::onOK(wxCommandEvent& event) {
 		wxMessageBox(wxT("Invalid input in text box: \"Width (pixels)\".\nMust be a whole number greater than 0."),
 			wxT("Invlaid input"),
 			wxICON_STOP | wxOK);
-		return;
+		return Tomo_input_err;
 	}
 	else pConfig->Write(wxT("/pixelHeight"), parsedInt);
 
@@ -550,7 +659,7 @@ void DTRConfigDialog::onOK(wxCommandEvent& event) {
 		wxMessageBox(wxT("Invalid input in text box: \"Pitch height\"."),
 			wxT("Invlaid input"),
 			wxICON_STOP | wxOK);
-		return;
+		return Tomo_input_err;
 	}
 	else pConfig->Write(wxT("/pitchHeight"), parsedDouble);
 
@@ -558,31 +667,24 @@ void DTRConfigDialog::onOK(wxCommandEvent& event) {
 		wxMessageBox(wxT("Invalid input in text box: \"Pitch width\"."),
 			wxT("Invlaid input"),
 			wxICON_STOP | wxOK);
-		return;
+		return Tomo_input_err;
 	}
 	else pConfig->Write(wxT("/pitchWidth"), parsedDouble);
 
 	for (int i = 0; i < m_grid1->GetNumberCols(); i++) {
 		for (int j = 0; j < m_grid1->GetNumberRows(); j++) {
 			if (!m_grid1->GetCellValue(j, i).ToDouble(&parsedDouble)) {
-				wxMessageBox(wxString::Format(wxT("Invalid input in text box: \"Beam emitter locations (%d,%d)\"."),j+1,i+1),//add one for average user readability
+				wxMessageBox(wxString::Format(wxT("Invalid input in text box: \"Beam emitter locations (%d,%d)\"."), j + 1, i + 1),//add one for average user readability
 					wxT("Invlaid input"),
 					wxICON_STOP | wxOK);
-				return;
+				return Tomo_input_err;
 			}
 			else pConfig->Write(wxString::Format(wxT("/beamLoc%d-%d"), j, i), parsedDouble);
 		}
 	}
 
-	//Get filepath for last opened/saved file
-	pConfig->Write(wxT("/configFilePath"), wxString::FromUTF8(configFilepath));
-
-	//All values are valid, set done flag and return
-	//TODO: set done flag
-	((DTRMainWindow*)GetParent())->cfgDialog = NULL;
-	Close(true);
+	return Tomo_OK;
 }
-
 
 void DTRConfigDialog::onCancel(wxCommandEvent& WXUNUSED(event)) {
 	((DTRMainWindow*)GetParent())->cfgDialog = NULL;
@@ -666,7 +768,11 @@ CudaGLCanvas::CudaGLCanvas(wxWindow *parent, struct SystemControl * Sys, wxStrin
 #ifdef PROFILER
 	recon->correctProjections();
 	recon->reconInit();
-	recon->reconStep();
+	recon->currentDisplay = recon_images;
+	//while (recon->iteration < 30) {
+		recon->reconStep();
+		//paint();
+	//}
 	cudaDeviceSynchronize();
 	cudaDeviceReset();
 	exit(0);

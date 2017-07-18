@@ -452,11 +452,11 @@ __global__ void BackProjectError(float * IM, float * IM2, float * error, float b
 	//Define pixel location in x, y, and z
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
-	int k = blockDim.z * blockIdx.z + threadIdx.z;
+	//int k = blockDim.z * blockIdx.z + threadIdx.z;
 
 	//Image is not a power of 2
 	if ((i < d_Nx) && (j < d_Ny)){
-		//for (int k = 0; k < d_Nz; k++) {
+		for (int k = 0; k < d_Nz; k++) {
 		//int k = 0;
 			//Define the direction in z to get r
 			float r = (ez) / (((float)(k + d_Z_Offset)*d_PitchNz) + ez);
@@ -464,8 +464,8 @@ __global__ void BackProjectError(float * IM, float * IM2, float * error, float b
 			//Use r to get detecor x and y
 			float dx1 = ex + r * (((float)i - (d_HalfNx2))*d_PitchNx - ex);
 			float dy1 = ey + r * (((float)j - (d_HalfNy2))*d_PitchNy - ey);
-			float dx2 = ex + r * (((float)i - (d_HalfNx2 - 1.0f))*d_PitchNx - ex);
-			float dy2 = ey + r * (((float)j - (d_HalfNy2 - 1.0f))*d_PitchNy - ey);
+			float dx2 = dx1 + r * d_PitchNx;
+			float dy2 = dy1 + r * d_PitchNy;
 
 			//Use detector x and y to get pixels
 			float x1 = dx1 * d_PitchPxInv + (d_HalfPx2 - 0.5f);
@@ -511,11 +511,9 @@ __global__ void BackProjectError(float * IM, float * IM2, float * error, float b
 					float scale = (cos_alpha*cos_gamma)*ezz * weight;
 
 					//Update the value based on the error scaled and save the scale
-					if (x < d_Nx - 1 && y < d_Ny - 1 && x > 0 && y > 0) {
-						val += tex2D(textError, (float)x + 0.5f, (float)y + 0.5f) *scale;
-						//val += error[x + y*MNx] * scale;
-						N += scale;
-					}
+					val += tex2D(textError, (float)x + 0.5f, (float)y + 0.5f) *scale;
+
+					N += scale;
 					ys = yend;
 				}//y loop
 				xs = xend;
@@ -524,14 +522,17 @@ __global__ void BackProjectError(float * IM, float * IM2, float * error, float b
 			float update = beta*val / N;
 
 			if (N > 0) {
-				float uval = IM[(j + k*d_MNy)*d_MNx + i];
-				IM[(j + k*d_MNy)*d_MNx + i] = uval + update;
+				//float uval = IM[(j + k*d_MNy)*d_MNx + i];
+				//IM[(j + k*d_MNy)*d_MNx + i] = uval + update;
+				atomicAdd(&IM[(j + k*d_MNy)*d_MNx + i], update);
 				IM2[(j + k*d_MNy)*d_MNx + i] = update;
 			}
 			else IM2[(j + k*d_MNy)*d_MNx + i] = -10.0f;
-		//}//z loop
+		}//z loop
 	}
-	else IM2[(j + k*d_MNy)*d_MNx + i] = -10.0f;
+	else for (int k = 0; k < d_Nz; k++) IM2[(j + k*d_MNy)*d_MNx + i] = -10.0f;
+
+	//delete errorCache;
 }
 
 __global__ void CorrectEdgesY(float * IM, float * IM2){
@@ -1417,7 +1418,8 @@ TomoError TomoRecon::FindSliceOffset(){
 
 			cuda(BindTexture2D(NULL, textError, d_Error, textImage.channelDesc,MemP_Nx, MemP_Ny, MemP_Nx * sizeof(float)));
 
-			KERNELCALL2(BackProjectError, dimGridIm, dimBlockIm, d_Image, d_Image2, d_Error, Beta, view, ex, ey, ez);
+			//TODO: bring back after testing
+			//KERNELCALL2(BackProjectError, dimGridIm, dimBlockIm, d_Image, d_Image2, d_Error, Beta, view, ex, ey, ez);
 		}//views
 	}//iterations
 	
@@ -1871,9 +1873,9 @@ TomoError TomoRecon::reconStep() {
 	dim3 dimBlockIm(16, 8);
 	dim3 dimGridIm(Sys->Recon->Nx / 16 + Cx, Sys->Recon->Ny / 8 + Cy, Sys->Recon->Nz);
 
-	dim3 dimBlockIm2(16, 16);
-	dim3 dimGridIm2(Sys->Recon->Nx / 16 + Cx, Sys->Recon->Ny / 16 + Cy, Sys->Recon->Nz);
-	dim3 dimGridIm3(Sys->Recon->Nx / 16 + Cx, Sys->Recon->Ny / 16 + Cy);
+	dim3 dimBlockIm2(32, 8);
+	dim3 dimGridIm2(Sys->Recon->Nx / 32 + Cx, Sys->Recon->Ny / 8 + Cy, Sys->Recon->Nz);
+	dim3 dimGridIm3(Sys->Recon->Nx / 32 + Cx, Sys->Recon->Ny / 8 + Cy);
 
 	dim3 dimBlockSino(16, 16);
 	dim3 dimGridSino(Sys->Proj->Nx / 16 + Cx, Sys->Proj->Ny / 16 + Cy);
@@ -1903,7 +1905,7 @@ TomoError TomoRecon::reconStep() {
 
 		cuda(BindTexture2D(NULL, textError, d_Error, cudaCreateChannelDesc<float>(), MemP_Nx, MemP_Ny, errorPitch));
 
-		KERNELCALL2(BackProjectError, dimGridIm2, dimBlockIm2, d_Image, d_Image2, d_Error, Beta, view, ex, ey, ez);
+		KERNELCALL2(BackProjectError, dimGridIm3, dimBlockIm2, d_Image, d_Image2, d_Error, Beta, view, ex, ey, ez);
 		//KERNELCALL2(BackProjectError, blocks3, PXL_KERNEL_THREADS_PER_BLOCK, d_Image, d_Image2, d_Error, Beta, view, ex, ey, ez);
 
 		//cuda(Memset2D(d_Error, errorPitch, 0, MemR_Nx * sizeof(float), MemR_Ny));

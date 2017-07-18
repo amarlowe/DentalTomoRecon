@@ -16,6 +16,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+
+#include "../fileIO/cJSON.h"
 //#include <GL/freeglut.h>
 
 #ifdef __BORLANDC__
@@ -45,9 +47,11 @@ protected:
 	void onCancel(wxCommandEvent& event);
 
 	TomoError ParseLegacyTxt(std::string FilePath);
+	TomoError ParseJSONFile(std::string FilePath);
+	TomoError checkInputs();
 
 	//User generated filenames
-	char configFilepath[MAX_PATH] = "";
+	std::string configFilepath;
 
 public:
 	/** Constructor */

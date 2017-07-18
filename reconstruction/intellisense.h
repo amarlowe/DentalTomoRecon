@@ -16,3 +16,4 @@ void surf2Dwrite(uint1 data, cudaSurfaceObject_t srufObj, int x, int y, cudaSurf
 unsigned short surf2Dread(cudaSurfaceObject_t srufObj, int x, int y, cudaSurfaceBoundaryMode boundaryMode = cudaBoundaryModeTrap);
 template<class T> void surf2Dread(T* data, cudaSurfaceObject_t srufObj, int x, int y, cudaSurfaceBoundaryMode boundaryMode = cudaBoundaryModeTrap);
 float atomicAdd(float*, float);
+float __shfl(float var, int srcLane, int width = warpSize);
