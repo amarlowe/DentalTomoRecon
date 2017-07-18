@@ -29,9 +29,7 @@
 #pragma comment(lib, "Shlwapi.lib")
 
 #define NUMVIEWS 7
-#define PROFILER
-#define ARRAY_SIZE 10
-#define STRIDE 4
+//#define PROFILER
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {											\

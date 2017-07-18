@@ -448,46 +448,11 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Image, float *Er
 	}//image boudary check
 }
 
-__global__ void BackProjectError(float * IM, float * IM2, float * error, float beta, int view, float ex, float ey, float ez, int buffersize){
+__global__ void BackProjectError(float * IM, float * IM2, float * error, float beta, int view, float ex, float ey, float ez){
 	//Define pixel location in x, y, and z
-	int i = (blockDim.x - buffersize) * blockIdx.x + threadIdx.x;
+	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
 	//int k = blockDim.z * blockIdx.z + threadIdx.z;
-	int innerWarp = threadIdx.x;//apparently modulos are slow in cuda, this does the same thing though the x coord must be 32
-	bool active = innerWarp < warpSize - buffersize;
-	//bool active = innerWarp >= buffersize;
-	//bool active = true;
-
-	float rMax = (ez) / ((((float)d_Z_Offset)*d_PitchNz) + ez);
-	float rMin = (ez) / (((float)(d_Nz + d_Z_Offset)*d_PitchNz) + ez);
-	float x1 = (ex + rMin * (((float)i - (d_HalfNx2 - 1.0f))*d_PitchNx - ex)) * d_PitchPxInv + (d_HalfPx2 - 0.5f);
-	float x2 = (ex + rMax * (((float)i - (d_HalfNx2 - 1.0f))*d_PitchNx - ex)) * d_PitchPxInv + (d_HalfPx2 - 0.5f);
-	float x3 = (ex + rMin * (((float)i - (d_HalfNx2))*d_PitchNx - ex)) * d_PitchPxInv + (d_HalfPx2 - 0.5f);
-	float x4 = (ex + rMax * (((float)i - (d_HalfNx2))*d_PitchNx - ex)) * d_PitchPxInv + (d_HalfPx2 - 0.5f);
-	int dxMin = floor(min(min(x1, x2), min(x3, x4)));
-	//int dxMax = ceil(max(max(x1, x2), max(x3, x4)));
-	dxMin = __shfl(dxMin, 0);
-	//dxMax = __shfl(dxMax, warpSize - 1);
-
-	float y1 = (ey + rMin * (((float)j - (d_HalfNy2 - 1.0f))*d_PitchNy - ey)) * d_PitchPyInv + (d_HalfPy2 - 0.5f);
-	float y2 = (ey + rMax * (((float)j - (d_HalfNy2 - 1.0f))*d_PitchNy - ey)) * d_PitchPyInv + (d_HalfPy2 - 0.5f);
-	float y3 = (ey + rMin * (((float)j - (d_HalfNy2))*d_PitchNy - ey)) * d_PitchPyInv + (d_HalfPy2 - 0.5f);
-	float y4 = (ey + rMax * (((float)j - (d_HalfNy2))*d_PitchNy - ey)) * d_PitchPyInv + (d_HalfPy2 - 0.5f);
-	int dyMin = floor(min(min(y1, y2), min(y3, y4)));
-	int dyMax = ceil(max(max(y1, y2), max(y3, y4)));
-	//dyMin = min(__shfl(dyMin, 0), __shfl(dyMin, warpSize - 1));
-	//dyMax = max(__shfl(dyMax, 0), __shfl(dyMax, warpSize - 1));
-
-	//float* errorCache = new float[int(dyMax - dyMin + 1)]();
-	float errorCache[ARRAY_SIZE][STRIDE];
-	//if (dxMin > 0) {
-	for(int index = 0; index < STRIDE; index++){
-		for (int y = dyMin; y <= dyMax; y++) {
-			//if (y < d_Ny - 1 && y > 0) {
-				errorCache[y - dyMin][index] = tex2D(textError, (float)(dxMin + innerWarp + warpSize*index) + 0.5f, (float)y + 0.5f);
-			//}
-		}
-	}
 
 	//Image is not a power of 2
 	if ((i < d_Nx) && (j < d_Ny)){
@@ -546,23 +511,7 @@ __global__ void BackProjectError(float * IM, float * IM2, float * error, float b
 					float scale = (cos_alpha*cos_gamma)*ezz * weight;
 
 					//Update the value based on the error scaled and save the scale
-					if (active) {
-						int targetWarp = x - dxMin;
-						/*if(targetWarp < warpSize){//check if value exists in warp cache
-							for(int iter = 0; iter < ARRAY_SIZE; iter++)
-								if(iter == (y - dyMin)) val += __shfl(errorCache[iter], targetWarp) * scale;
-						}*/
-						if (targetWarp < STRIDE*warpSize) {
-							for(int index = 0; index < STRIDE; index++) {
-								targetWarp -= warpSize;//again, avoiding modulos
-								if(targetWarp < warpSize && targetWarp > 0) val += __shfl(errorCache[y - dyMin][index], targetWarp) * scale;
-							}
-						}
-						//if (x == dxMin + innerWarp) val += errorCache[y - dyMin] * scale;
-						else val += tex2D(textError, (float)x + 0.5f, (float)y + 0.5f) * scale;
-					}
-
-					//val += tex2D(textError, (float)x + 0.5f, (float)y + 0.5f) *scale;
+					val += tex2D(textError, (float)x + 0.5f, (float)y + 0.5f) *scale;
 
 					N += scale;
 					ys = yend;
@@ -572,18 +521,16 @@ __global__ void BackProjectError(float * IM, float * IM2, float * error, float b
 			//Get the current value of image
 			float update = beta*val / N;
 
-			if (active) {
-				if (N > 0) {
-					//float uval = IM[(j + k*d_MNy)*d_MNx + i];
-					//IM[(j + k*d_MNy)*d_MNx + i] = uval + update;
-					atomicAdd(&IM[(j + k*d_MNy)*d_MNx + i], update);
-					IM2[(j + k*d_MNy)*d_MNx + i] = update;
-				}
-				else IM2[(j + k*d_MNy)*d_MNx + i] = -10.0f;
+			if (N > 0) {
+				//float uval = IM[(j + k*d_MNy)*d_MNx + i];
+				//IM[(j + k*d_MNy)*d_MNx + i] = uval + update;
+				atomicAdd(&IM[(j + k*d_MNy)*d_MNx + i], update);
+				IM2[(j + k*d_MNy)*d_MNx + i] = update;
 			}
+			else IM2[(j + k*d_MNy)*d_MNx + i] = -10.0f;
 		}//z loop
 	}
-	else if(active) for (int k = 0; k < d_Nz; k++) IM2[(j + k*d_MNy)*d_MNx + i] = -10.0f;
+	else for (int k = 0; k < d_Nz; k++) IM2[(j + k*d_MNy)*d_MNx + i] = -10.0f;
 
 	//delete errorCache;
 }
@@ -1926,10 +1873,9 @@ TomoError TomoRecon::reconStep() {
 	dim3 dimBlockIm(16, 8);
 	dim3 dimGridIm(Sys->Recon->Nx / 16 + Cx, Sys->Recon->Ny / 8 + Cy, Sys->Recon->Nz);
 
-	int buffer = 0;
 	dim3 dimBlockIm2(32, 8);
 	dim3 dimGridIm2(Sys->Recon->Nx / 32 + Cx, Sys->Recon->Ny / 8 + Cy, Sys->Recon->Nz);
-	dim3 dimGridIm3(Sys->Recon->Nx / (32-buffer) + Cx, Sys->Recon->Ny / 8 + Cy);
+	dim3 dimGridIm3(Sys->Recon->Nx / 32 + Cx, Sys->Recon->Ny / 8 + Cy);
 
 	dim3 dimBlockSino(16, 16);
 	dim3 dimGridSino(Sys->Proj->Nx / 16 + Cx, Sys->Proj->Ny / 16 + Cy);
@@ -1959,7 +1905,7 @@ TomoError TomoRecon::reconStep() {
 
 		cuda(BindTexture2D(NULL, textError, d_Error, cudaCreateChannelDesc<float>(), MemP_Nx, MemP_Ny, errorPitch));
 
-		KERNELCALL2(BackProjectError, dimGridIm3, dimBlockIm2, d_Image, d_Image2, d_Error, Beta, view, ex, ey, ez, buffer);
+		KERNELCALL2(BackProjectError, dimGridIm3, dimBlockIm2, d_Image, d_Image2, d_Error, Beta, view, ex, ey, ez);
 		//KERNELCALL2(BackProjectError, blocks3, PXL_KERNEL_THREADS_PER_BLOCK, d_Image, d_Image2, d_Error, Beta, view, ex, ey, ez);
 
 		//cuda(Memset2D(d_Error, errorPitch, 0, MemR_Nx * sizeof(float), MemR_Ny));
