@@ -769,10 +769,10 @@ CudaGLCanvas::CudaGLCanvas(wxWindow *parent, struct SystemControl * Sys, wxStrin
 	recon->correctProjections();
 	recon->reconInit();
 	recon->currentDisplay = recon_images;
-	//while (recon->iteration < 30) {
+	while (recon->iteration < 30) {
 		recon->reconStep();
 		//paint();
-	//}
+	}
 	cudaDeviceSynchronize();
 	cudaDeviceReset();
 	exit(0);
@@ -868,11 +868,20 @@ ReconThread::ReconThread(wxEvtHandler* pParent, TomoRecon* recon, GLFrame* Frame
 wxThread::ExitCode ReconThread::Entry(){
 	wxStreamToTextRedirector redirect(m_textCtrl);
 	wxCommandEvent needsPaint(PAINT_IT, GetId());
+	FILETIME filetime, filetime2, filetime3;
+	LONGLONG time1, time2;
+	GetSystemTimeAsFileTime(&filetime);
+
 	//Run the entire reconstruction
 	//Swtich statement is to make it state aware, but otherwise finishes out whatever is left
 	switch (m_recon->currentDisplay) {
 	case raw_images:
 		m_recon->correctProjections();
+		GetSystemTimeAsFileTime(&filetime3);
+		time1 = (((ULONGLONG)filetime.dwHighDateTime) << 32) + filetime.dwLowDateTime;
+		time2 = (((ULONGLONG)filetime3.dwHighDateTime) << 32) + filetime3.dwLowDateTime;
+		std::cout << "Total LoadAndCorrectProjections time: " << (double)(time2 - time1) / 10000000 << " seconds";
+		std::cout << std::endl;
 		//currentFrame->m_canvas->paint();
 		wxPostEvent(m_pParent, needsPaint);
 	case sino_images:
@@ -891,11 +900,20 @@ wxThread::ExitCode ReconThread::Entry(){
 			wxPostEvent(m_pParent, needsPaint);
 			status->SetStatusText(wxT("Reconstructing:"));
 			progress->SetValue(m_recon->iteration+1);
-			this->Sleep(500);
+			this->Sleep(400);
 			//this->Yield();
 		}
 		delete progress;
 	}
+
+	GetSystemTimeAsFileTime(&filetime2);
+	time1 = (((ULONGLONG)filetime.dwHighDateTime) << 32) + filetime.dwLowDateTime;
+	time2 = (((ULONGLONG)filetime2.dwHighDateTime) << 32) + filetime2.dwLowDateTime;
+	std::cout << "Total Recon time: " << (double)(time2 - time1) / 10000000 << " seconds";
+	std::cout << std::endl;
+
+	std::cout << "Reconstruction finished successfully." << std::endl;
+
 	status->SetStatusText(wxT("Saving image..."));
 	m_recon->TomoSave();
 	status->SetStatusText(wxT("Image saved!"));

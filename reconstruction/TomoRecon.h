@@ -29,7 +29,7 @@
 #pragma comment(lib, "Shlwapi.lib")
 
 #define NUMVIEWS 7
-//#define PROFILER
+#define PROFILER
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {											\
@@ -314,6 +314,9 @@ private:
 	float * d_alpha;
 	float * d_DerivGradIm;
 	float * d_GradNorm;
+	float * beamx;
+	float * beamy;
+	float * beamz;
 
 	//Decay constant for recon
 	float Beta = 1.0f;
