@@ -28,17 +28,10 @@
 
 #pragma comment(lib, "Shlwapi.lib")
 
-/********************************************************************************************/
-/* Filepaths																				*/
-/********************************************************************************************/
-#define GAINFILE	"C:\\Users\\jdean\\Google Drive\\software\\Xinvivo_software\\Recon\\recon_files\\calibration_files\\Blank"
-#define DARKFILE	"C:\\Users\\jdean\\Desktop\\recon_files_test\\calibration_files\\Dark"
-//#define GAINFILE	"C:\\Users\\jdean\\Google Drive\\software\\Xinvivo_software\\Recon\recon_files\\calibration_files\\Blank"
-//#define DARKFILE	"C:\\Users\\jdean\\Google Drive\\software\\Xinvivo_software\\Recon\\recon_files\\calibration_files\\Dark"
-
 #define NUMVIEWS 7
-
-//#define PROFILER
+#define PROFILER
+#define ARRAY_SIZE 10
+#define STRIDE 4
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {											\
@@ -55,6 +48,7 @@
 /********************************************************************************************/
 typedef enum {
 	Tomo_OK,
+	Tomo_input_err,
 	Tomo_file_err,
 	Tomo_DICOM_err,
 	Tomo_CUDA_err

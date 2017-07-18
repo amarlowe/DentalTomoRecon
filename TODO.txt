@@ -1,20 +1,10 @@
 TomoRecon
 
 -------------Features------------------
-- File system that saves calbiration data system independently
-- Fix readGainAndDarkimages
-- Remove magic numbers and filepaths
-- Implement cjson struct building
-- Save and load json files based on user input
 - Switch between inputs in form using tab and/or enter
 - Confirm cancel or load when values have been edited
 - Check values for input before allowing running, prompt a visit to config
-- Implement a visualizer on a per project basis
-- output console output to status bar, include a progress meter
-- Implement start page in main window with instructions
-- New prompts for opening of raw files, processes and displays
 - Open opens a render, not the raw files (used for self comparisons)
-- Init openGl on program launch for minor speedups in first tab open
 - Make MAC compiltible (hopefully not)
 - Save configuration settings on project file/directory instead of registry to make them project specific
 - "Set default" options for configuration and any other setting we can come up with
@@ -23,7 +13,6 @@ TomoRecon
 - Recon norm has essentially uniform values across the entire image, consider killing to save memory (incorrect value was being read from it in the past)
 - Evaluate need to iterate through captures instead of all at once
 - Look at the lighting change from the first to others
-- Only allow one config window to be open at a time
 - Add timers to reconstructions
 - Automatic phantom reader
 - Zoom with ctrl + mouse wheel
@@ -31,6 +20,7 @@ TomoRecon
 - Look into upres using the mutltiple viewing angles
 - Clean up all non-recon memory when recon finishes
 - Siphon mem from open recons by reading from disk and just having a buffer of slices
+- Confirm overwrite on save if file already exists
 
 --------------Bugs---------------------
 - Number of Slices to Reconstruct too large may crash program
@@ -53,3 +43,18 @@ TomoRecon
 - Check normalization code, some images are completely black while others look just fine
 - Close behavior breaks when the console is the selected tab
 - Cancel on new does not cancel operation
+- Changing config after opening image set does not update
+
+-------------Completed------------------
+- Fix readGainAndDarkimages
+- Remove magic numbers and filepaths
+- Implement cjson struct building
+- Save and load json files based on user input
+- Implement a visualizer on a per project basis
+- output console output to status bar, include a progress meter
+- Implement start page in main window with instructions
+- New prompts for opening of raw files, processes and displays
+- Init openGl on program launch for minor speedups in first tab open
+- Only allow one config window to be open at a time 
+-------------Features------------------
+--------------Bugs---------------------
