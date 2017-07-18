@@ -37,8 +37,16 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	
 	config = new wxMenu();
 	wxMenuItem* configDialog;
-	configDialog = new wxMenuItem( config, wxID_PREFERENCES, wxString( wxT("Edit Config") ) , wxEmptyString, wxITEM_NORMAL );
+	configDialog = new wxMenuItem( config, wxID_PREFERENCES, wxString( wxT("Edit Geometry") ) , wxEmptyString, wxITEM_NORMAL );
 	config->Append( configDialog );
+	
+	wxMenuItem* gainSelect;
+	gainSelect = new wxMenuItem( config, wxID_ANY, wxString( wxT("Edit Gain Files") ) , wxEmptyString, wxITEM_NORMAL );
+	config->Append( gainSelect );
+	
+	wxMenuItem* darkSelect;
+	darkSelect = new wxMenuItem( config, wxID_ANY, wxString( wxT("Edit Dark Files") ) , wxEmptyString, wxITEM_NORMAL );
+	config->Append( darkSelect );
 	
 	m_menubar1->Append( config, wxT("Config") ); 
 	
@@ -73,14 +81,14 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	wxBoxSizer* bSizer1;
 	bSizer1 = new wxBoxSizer( wxVERTICAL );
 	
-	m_textCtrl8 = new wxTextCtrl( m_panel10, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE|wxTE_READONLY );
+	m_textCtrl8 = new wxTextCtrl( m_panel10, wxID_ANY, wxT("If this is your first run, make sure you set calibration and config files in the \"Config\" menu above. Any settings you change will be automatically saved for future sessions on this machine.\nOpen a series of 7 projections in the same folder using \"New\".\nReconstructions can be done either with \"enter\" or \"f5\" keys. Interactive mode (f5) will allow you to see the reconstruction as it is running, but takes significantly longer than normal mode (enter).\nLog and error outputs from the reconstructions on any tab will be displayed below this text.\n"), wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE|wxTE_READONLY );
 	bSizer1->Add( m_textCtrl8, 1, wxALL|wxEXPAND, 5 );
 	
 	
 	m_panel10->SetSizer( bSizer1 );
 	m_panel10->Layout();
 	bSizer1->Fit( m_panel10 );
-	m_auinotebook6->AddPage( m_panel10, wxT("Start Here"), false, wxNullBitmap );
+	m_auinotebook6->AddPage( m_panel10, wxT("Console"), false, wxNullBitmap );
 	
 	m_statusBar1 = this->CreateStatusBar( 1, wxST_SIZEGRIP, wxID_ANY );
 	
@@ -93,6 +101,8 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	this->Connect( Save->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onSave ) );
 	this->Connect( quit->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onQuit ) );
 	this->Connect( configDialog->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onConfig ) );
+	this->Connect( gainSelect->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onGainSelect ) );
+	this->Connect( darkSelect->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onDarkSelect ) );
 	this->Connect( cont->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContinue ) );
 	this->Connect( contRun->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContRun ) );
 	this->Connect( step->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onStep ) );
@@ -107,6 +117,8 @@ mainWindow::~mainWindow()
 	this->Disconnect( wxID_SAVE, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onSave ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onQuit ) );
 	this->Disconnect( wxID_PREFERENCES, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onConfig ) );
+	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onGainSelect ) );
+	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onDarkSelect ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContinue ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContRun ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onStep ) );
@@ -154,7 +166,7 @@ configDialog::configDialog( wxWindow* parent, wxWindowID id, const wxString& tit
 	m_staticText1->Wrap( 200 );
 	fgSizer2->Add( m_staticText1, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
 	
-	wxString generateDistanceChoices[] = { wxT("Yes"), wxT("No") };
+	wxString generateDistanceChoices[] = { wxT("No"), wxT("Yes") };
 	int generateDistanceNChoices = sizeof( generateDistanceChoices ) / sizeof( wxString );
 	generateDistance = new wxRadioBox( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, generateDistanceNChoices, generateDistanceChoices, 1, wxRA_SPECIFY_COLS );
 	generateDistance->SetSelection( 1 );
@@ -185,7 +197,7 @@ configDialog::configDialog( wxWindow* parent, wxWindowID id, const wxString& tit
 	m_staticText7->Wrap( 200 );
 	fgSizer2->Add( m_staticText7, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
 	
-	wxString edgeBlurEnabledChoices[] = { wxT("Enabled"), wxT("Disabled") };
+	wxString edgeBlurEnabledChoices[] = { wxT("Disabled"), wxT("Enabled") };
 	int edgeBlurEnabledNChoices = sizeof( edgeBlurEnabledChoices ) / sizeof( wxString );
 	edgeBlurEnabled = new wxRadioBox( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, edgeBlurEnabledNChoices, edgeBlurEnabledChoices, 1, wxRA_SPECIFY_COLS );
 	edgeBlurEnabled->SetSelection( 1 );
@@ -195,7 +207,7 @@ configDialog::configDialog( wxWindow* parent, wxWindowID id, const wxString& tit
 	m_staticText8->Wrap( 200 );
 	fgSizer2->Add( m_staticText8, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
 	
-	wxString denosingEnabledChoices[] = { wxT("Enabled"), wxT("Disabled") };
+	wxString denosingEnabledChoices[] = { wxT("Disabled"), wxT("Enabled") };
 	int denosingEnabledNChoices = sizeof( denosingEnabledChoices ) / sizeof( wxString );
 	denosingEnabled = new wxRadioBox( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, denosingEnabledNChoices, denosingEnabledChoices, 1, wxRA_SPECIFY_COLS );
 	denosingEnabled->SetSelection( 1 );
@@ -215,7 +227,7 @@ configDialog::configDialog( wxWindow* parent, wxWindowID id, const wxString& tit
 	m_staticText5->Wrap( 200 );
 	fgSizer2->Add( m_staticText5, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
 	
-	wxString rotationEnabledChoices[] = { wxT("Yes"), wxT("No") };
+	wxString rotationEnabledChoices[] = { wxT("Standard"), wxT("Flip") };
 	int rotationEnabledNChoices = sizeof( rotationEnabledChoices ) / sizeof( wxString );
 	rotationEnabled = new wxRadioBox( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, rotationEnabledNChoices, rotationEnabledChoices, 1, wxRA_SPECIFY_COLS );
 	rotationEnabled->SetSelection( 1 );

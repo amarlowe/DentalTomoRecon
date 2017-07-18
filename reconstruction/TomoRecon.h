@@ -28,18 +28,7 @@
 
 #pragma comment(lib, "Shlwapi.lib")
 
-/********************************************************************************************/
-/* Filepaths																				*/
-/********************************************************************************************/
-#define GEOMETRYFILE	"C:\\Users\\jdean\\Desktop\\recon_files_test\\geometry_files\\FocalSpotGeometry.txt"
-#define GAINFILE	"C:\\Users\\jdean\\Google Drive\\software\\Xinvivo_software\\Recon\\recon_files\\calibration_files\\Blank"
-#define DARKFILE	"C:\\Users\\jdean\\Desktop\\recon_files_test\\calibration_files\\Dark"
-//#define GEOMETRYFILE	"C:\\Users\\jdean\\Google Drive\\software\\Xinvivo_software\\Recon\\recon_files\\geometry_files\\FocalSpotGeometry.txt"
-//#define GAINFILE	"C:\\Users\\jdean\\Google Drive\\software\\Xinvivo_software\\Recon\recon_files\\calibration_files\\Blank"
-//#define DARKFILE	"C:\\Users\\jdean\\Google Drive\\software\\Xinvivo_software\\Recon\\recon_files\\calibration_files\\Dark"
-
 #define NUMVIEWS 7
-
 //#define PROFILER
 
 //Macro for checking cuda errors following a cuda launch or api call
@@ -57,6 +46,7 @@
 /********************************************************************************************/
 typedef enum {
 	Tomo_OK,
+	Tomo_input_err,
 	Tomo_file_err,
 	Tomo_DICOM_err,
 	Tomo_CUDA_err
@@ -217,24 +207,18 @@ struct params {
 	int Z_Offset;
 };
 
-/*TomoError pxl_kernel_launcher(cudaArray_t array,
-	const int         width,
-	const int         height,
-	cudaStream_t      stream);*/
-
 class TomoRecon : public interop {
 public:
 	//Functions
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//constructor/destructor
-	TomoRecon(int x, int y);
+	TomoRecon(int x, int y, struct SystemControl * Sys);
 	~TomoRecon();
 
-	TomoError init();
+	TomoError init(const char * gainFile, const char * darkFile);
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//High level functions for command line call
-	TomoError TomoMain();
 	TomoError TomoSave();
 	TomoError SetUpGPUForRecon();
 	TomoError Reconstruct();
@@ -252,7 +236,6 @@ public:
 	void map() { interop::map(stream); }
 	void unmap() { interop::unmap(stream); }
 	TomoError test(int index);
-	
 
 	/********************************************************************************************/
 	/* Variables																				*/
@@ -304,10 +287,9 @@ private:
 	int GetNumberOfScans(std::string BasePathIn);
 	int GetNumOfProjectionsPerView(std::string BasePathIn);
 	int GetNumProjectionViews(std::string BasePathIn);
-	TomoError SetUpSystemAndReadGeometry(std::string BasePathIn);
-	TomoError ReadDarkandGainImages(std::string BasePathIn);
-	TomoError ReadDarkImages();
-	TomoError ReadGainImages();
+	TomoError ReadDarkandGainImages(char * gainFile, char * darkFile);
+	TomoError ReadDarkImages(const char * darkFile);
+	TomoError ReadGainImages(const char * gainFile);
 	TomoError ReadRawProjectionData(std::string BaseFileIn, std::string FileName);
 
 	/********************************************************************************************/

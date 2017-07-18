@@ -16,6 +16,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+
+#include "../fileIO/cJSON.h"
 //#include <GL/freeglut.h>
 
 #ifdef __BORLANDC__
@@ -36,27 +38,7 @@
 
 bool first = true;
 
-class DTRMainWindow : public mainWindow{
-protected:
-	// Handlers for mainWindow events.
-	void onNew(wxCommandEvent& event);
-	void onOpen(wxCommandEvent& event);
-	void onSave(wxCommandEvent& event);
-	void onQuit(wxCommandEvent& event);
-	void onAbout(wxCommandEvent& event);
-	void onConfig(wxCommandEvent& event);
-	void onStep(wxCommandEvent& event);
-	void onContinue(wxCommandEvent& event);
-	void onContRun(wxCommandEvent& event);
-public:
-	// Constructor
-	DTRMainWindow(wxWindow* parent);
-	~DTRMainWindow();
-
-	wxPanel *DTRMainWindow::CreateNewPage() const;
-};
-
-class DTRConfigDialog : public configDialog{
+class DTRConfigDialog : public configDialog {
 protected:
 	// Handlers for configDialog events.
 	void onLoad(wxCommandEvent& event);
@@ -64,16 +46,57 @@ protected:
 	void onOK(wxCommandEvent& event);
 	void onCancel(wxCommandEvent& event);
 
+	TomoError ParseLegacyTxt(std::string FilePath);
+	TomoError ParseJSONFile(std::string FilePath);
+	TomoError checkInputs();
+
+	//User generated filenames
+	std::string configFilepath;
+
 public:
 	/** Constructor */
 	DTRConfigDialog(wxWindow* parent);
 	~DTRConfigDialog();
 };
 
+class DTRMainWindow : public mainWindow{
+protected:
+	// Generate a System object from config file
+	TomoError genSys(struct SystemControl * Sys);
+
+	// Handlers for mainWindow events.
+	void onNew(wxCommandEvent& event);
+	void onOpen(wxCommandEvent& event);
+	void onSave(wxCommandEvent& event);
+	void onQuit(wxCommandEvent& event);
+	void onAbout(wxCommandEvent& event);
+	void onConfig(wxCommandEvent& event);
+	void onGainSelect(wxCommandEvent& event);
+	void onDarkSelect(wxCommandEvent& event);
+	void onStep(wxCommandEvent& event);
+	void onContinue(wxCommandEvent& event);
+	void onContRun(wxCommandEvent& event);
+
+	//constant globals
+	const int NumViews = NUMVIEWS;
+
+public:
+	// Constructor
+	DTRMainWindow(wxWindow* parent);
+	~DTRMainWindow();
+
+	DTRConfigDialog* cfgDialog = NULL;
+	wxPanel *DTRMainWindow::CreateNewPage();
+
+	//User generated filenames
+	wxString gainFilepath;
+	wxString darkFilepath;
+};
+
 // The OpenGL-enabled canvas
 class CudaGLCanvas : public wxGLCanvas{
 public:
-	CudaGLCanvas(wxWindow *parent, wxWindowID id = wxID_ANY, int *gl_attrib = NULL, wxSize size = wxDefaultSize);
+	CudaGLCanvas(wxWindow *parent, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxWindowID id = wxID_ANY, int *gl_attrib = NULL, wxSize size = wxDefaultSize);
 
 	virtual ~CudaGLCanvas();
 
@@ -99,7 +122,7 @@ private:
 
 class GLFrame : public wxPanel {
 public:
-	GLFrame(wxAuiNotebook *frame,
+	GLFrame(wxAuiNotebook *frame, struct SystemControl * Sys, wxString gainFile, wxString darkFile,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = wxDEFAULT_FRAME_STYLE);
@@ -121,12 +144,13 @@ DECLARE_EVENT_TYPE(PAINT_IT, -1)
 END_DECLARE_EVENT_TYPES()
 class ReconThread : public wxThread{
 public:
-	ReconThread(wxEvtHandler* pParent, TomoRecon* recon, GLFrame* Frame, wxStatusBar* status);
+	ReconThread(wxEvtHandler* pParent, TomoRecon* recon, GLFrame* Frame, wxStatusBar* status, wxTextCtrl* m_textCtrl);
 private:
 	wxEvtHandler* m_pParent;
 	TomoRecon* m_recon;
 	GLFrame* currentFrame;
 	wxStatusBar* status;
+	wxTextCtrl* m_textCtrl;
 
 	ExitCode Entry();
 };

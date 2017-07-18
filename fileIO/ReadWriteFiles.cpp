@@ -15,6 +15,7 @@
 /********************************************************************************************/
 
 #include "../reconstruction/TomoRecon.h"
+#include <filesystem>
 
 /********************************************************************************************/
 /* Functions to get the size and location of the data										*/
@@ -271,214 +272,13 @@ TomoError ReadSubSetViews(struct SystemControl * Sys, int NumViews, std::string 
 	return Tomo_OK;
 }
 
-//Function to read the system geoemtry file
-TomoError TomoRecon::SetUpSystemAndReadGeometry(std::string BasePathIn){
-	//Define a new projection data pointer and define the projection geometry constants
-	Sys->Proj = new Proj_Data;
-	Sys->UsrIn = new UserInput;
-
-	Sys->Proj->NumViews = NumViews;
-	Sys->Proj->Views = new int[NumViews];
-	for (int n = 0; n < NumViews; n++) {
-		Sys->Proj->Views[n] = n;
-	}
-	
-	//Define new buffers to store the x,y,z locations of the x-ray focal spot array
-	Sys->SysGeo.EmitX = new float[Sys->Proj->NumViews];
-	Sys->SysGeo.EmitY = new float[Sys->Proj->NumViews];
-	Sys->SysGeo.EmitZ = new float[Sys->Proj->NumViews];
-
-	//Set the isocenter to the center of the detector array
-	Sys->SysGeo.IsoX = 0;
-	Sys->SysGeo.IsoY = 0;
-	Sys->SysGeo.IsoZ = 0;
-	
-	std::string FilePath = GEOMETRYFILE;
-
-	//Open fstream to text file
-	std::ifstream file(FilePath.c_str());
-
-	if (!file.is_open()) {
-		std::cout << "Error opening file: " << FilePath.c_str() << std::endl;
-		std::cout << "Please check and re-run program." << std::endl;
-		return Tomo_file_err;
-	}
-
-	//Define two character arrays to read values
-	char data[1024], data_in[12];
-
-	//skip the first line
-	file.getline(data, 1024);
-	int vnum = 0;
-	bool useview = false;
-	int count = 0, num = 0;
-
-	//Cycle through the views and read geometry
-	for (int view = 0; view < NumViews; view++)
-	{
-		file.getline(data, 1024);
-		if (view == (int)Sys->Proj->Views[vnum]) useview = true;
-
-		//Read first colomun: Beam Number	
-		do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-
-		for (int i = 0; i < 12; i++) data_in[i] = '\0';
-		count++; num = 0;
-
-		//Read second colomn: emitter x location
-		do { data_in[num] = data[count];	count++; num++; } while (data[count] != '\t' && num < 12);
-
-		if (useview == true) Sys->SysGeo.EmitX[vnum] = (float)atof(data_in);
-
-		for (int i = 0; i < 12; i++) data_in[i] = '\0';
-		count++; num = 0;
-
-		//Read third colomn: emitter y location
-		do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-
-		if (useview == true) Sys->SysGeo.EmitY[vnum] = (float)atof(data_in);
-
-		for (int i = 0; i < 12; i++) data_in[i] = '\0';
-		count++; num = 0;
-
-		//Read fourth colomn: emitter z location
-		do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-
-		if (useview == true) Sys->SysGeo.EmitZ[vnum] = (float)atof(data_in);
-
-		for (int i = 0; i < 12; i++) data_in[i] = '\0';
-		count = 0; num = 0;
-
-		if (useview == true)vnum += 1;
-		useview = false;
-
-	}
-
-	//Skip the next 2 lines and read the third to get estimated center of tooth
-	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
-
-	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-
-	Sys->SysGeo.ZDist = (float)atof(data_in);
-
-	//skip the next 2 lines and read third to get slice thickness
-	for (int i = 0; i < 12; i++) data_in[i] = '\0';
-	count = 0; num = 0;
-
-	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
-
-	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-
-	Sys->SysGeo.ZPitch = (float)atof(data_in);
-
-	for (int i = 0; i < 12; i++) data_in[i] = '\0';
-	count = 0; num = 0;
-
-	//Skip the next two lines and read the third
-	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
-
-	//Read four values defining the detector size
-	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-	Sys->Proj->Nx = (int)atof(data_in);
-
-	for (int i = 0; i < 12; i++) data_in[i] = '\0';
-	count ++; num = 0;
-
-	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-	Sys->Proj->Ny = (int)atof(data_in);
-
-	for (int i = 0; i < 12; i++) data_in[i] = '\0';
-	count ++; num = 0;
-
-	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-	Sys->Proj->Pitch_x = (float)atof(data_in);
-
-	for (int i = 0; i < 12; i++) data_in[i] = '\0';
-	count ++; num = 0;
-
-	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-	Sys->Proj->Pitch_y = (float)atof(data_in);
-
-	for (int i = 0; i < 12; i++) data_in[i] = '\0';
-	count = 0; num = 0;
-
-	//Skip the next two lines and read the third to read number of slices to reconstruct
-	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
-	
-	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-	Sys->Proj->Nz = (int)atof(data_in);
-
-	for (int i = 0; i < 12; i++) data_in[i] = '\0';
-	count = 0; num = 0;
-
-	//Skip the next two lines and read the third to see direction of data
-	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
-
-	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-	Sys->Proj->Flip = (int)atof(data_in);
-
-	for (int i = 0; i < 12; i++) data_in[i] = '\0';
-	count = 0; num = 0;
-
-	//Skip the next two lines and read the third to see if automatic offset calculation
-	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
-
-	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-	Sys->UsrIn->CalOffset = (int)atof(data_in);
-
-	for (int i = 0; i < 12; i++) data_in[i] = '\0';
-	count = 0; num = 0;
-
-	// Skip the next two lines and read the third to see if automatic offset calculation
-	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
-
-	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-	Sys->UsrIn->SmoothEdge = (int)atof(data_in);
-
-	for (int i = 0; i < 12; i++) data_in[i] = '\0';
-	count = 0; num = 0;
-
-	// Skip the next two lines and read the third to see if use TV reconstruction
-	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
-
-	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-	Sys->UsrIn->UseTV = (int)atof(data_in);
-
-	for (int i = 0; i < 12; i++) data_in[i] = '\0';
-	count = 0; num = 0;
-
-	// Skip the next two lines and read the third to see if use TV reconstruction
-	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
-
-	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-	Sys->UsrIn->Orientation = (int)atof(data_in);
-
-	for (int i = 0; i < 12; i++) data_in[i] = '\0';
-	count = 0; num = 0;
-
-	file.close();
-
-	//Define Final Image Buffers 
-	Sys->Proj->RawData = new unsigned short[Sys->Proj->Nx*Sys->Proj->Ny * Sys->Proj->NumViews];
-	Sys->Proj->SyntData = new unsigned short[Sys->Proj->Nx*Sys->Proj->Ny];
-
-	if (Sys->UsrIn->CalOffset)
-		Sys->Proj->RawDataThresh = new unsigned short[Sys->Proj->Nx*Sys->Proj->Ny * Sys->Proj->NumViews];
-
-	return Tomo_OK;
-}
-
 //Functions to read the dark and gain images
-TomoError TomoRecon::ReadDarkandGainImages(std::string BasePathIn){
+TomoError TomoRecon::ReadDarkandGainImages(char * gainFile, char * darkFile){
 	//Define two paths to gain and dark data
-	std::string GainPath;
-	std::string DarkPath;
-
-	GainPath = BasePathIn;
-	DarkPath = BasePathIn;
-
-	GainPath += "/Blank";
-	DarkPath += "/Dark";
+	char* temp = gainFile;
+	PathRemoveFileSpec(temp);
+	std::string GainPath = temp;
+	std::string DarkPath = darkFile;
 
 	int NumDarkSamples = GetNumberOfScans(DarkPath);
 	int NumGainSamples = GetNumberOfScans(GainPath);
@@ -699,7 +499,7 @@ TomoError TomoRecon::ReadDarkandGainImages(std::string BasePathIn){
 	return Tomo_OK;
 }
 
-TomoError TomoRecon::ReadDarkImages(){
+TomoError TomoRecon::ReadDarkImages(const char * darkFile){
 	int size_single_proj = Sys->Proj->Nx * Sys->Proj->Ny;
 	int size_single_proj_bytes = size_single_proj * 2;
 
@@ -708,7 +508,10 @@ TomoError TomoRecon::ReadDarkImages(){
 	Sys->Norm->DarkData = new unsigned short[size_single_proj];
 
 	//Define paths to dark data
-	std::string DarkPath = DARKFILE;
+	char temp[MAX_PATH];
+	strncpy(temp, darkFile, MAX_PATH - 1);
+	PathRemoveFileSpec(temp);
+	std::string DarkPath = temp;
 	std::string darkSearchPath = DarkPath + "/*";
 
 	std::string avgFilePath;
@@ -735,11 +538,14 @@ TomoError TomoRecon::ReadDarkImages(){
 	return Tomo_OK;
 }
 
-TomoError TomoRecon::ReadGainImages(){
+TomoError TomoRecon::ReadGainImages(const char * gainFile){
 	int size_single_proj = Sys->Proj->Nx * Sys->Proj->Ny;
 	int size_single_proj_bytes = size_single_proj * 2;
 
-	std::string GainPath = GAINFILE;
+	char temp[MAX_PATH];
+	strncpy(temp, gainFile, MAX_PATH - 1);
+	PathRemoveFileSpec(temp);
+	std::string GainPath = temp;
 
 	std::string avgFilePath;
 
