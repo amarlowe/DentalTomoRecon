@@ -216,6 +216,7 @@ void DTRMainWindow::onContRun(wxCommandEvent& WXUNUSED(event)) {
 		time1 = (((ULONGLONG)filetime.dwHighDateTime) << 32) + filetime.dwLowDateTime;
 		time2 = (((ULONGLONG)filetime3.dwHighDateTime) << 32) + filetime3.dwLowDateTime;
 		std::cout << "Total LoadAndCorrectProjections time: " << (double)(time2 - time1) / 10000000 << " seconds";
+		std::cout << std::endl;
 	case sino_images:
 	case raw_images2:
 		recon->reconInit();

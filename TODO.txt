@@ -23,8 +23,13 @@ TomoRecon
 - Confirm overwrite on save if file already exists
 - Include distance to the detector in status bar
 - Add Units to all number descriptions in settings
+- Make a labled and colored rectangular selection tool
+- Make a dialoag box that adds selections 
+- Make an automated test bench for algorithm changes
+- Correct for dead pixels
 
 --------------Bugs---------------------
+- AutoDetection breaks reconstruction badly
 - Disable console close button
 - Number of Slices to Reconstruct too large may crash program
 - texture memory accesses are not locally spaced, they're scattered

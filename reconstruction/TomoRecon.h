@@ -223,7 +223,6 @@ public:
 	//High level functions for command line call
 	TomoError TomoSave();
 	TomoError SetUpGPUForRecon();
-	TomoError Reconstruct();
 	TomoError FreeGPUMemory(void);
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
@@ -273,8 +272,6 @@ private:
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Functions to control the SART and TV reconstruction
 	TomoError FindSliceOffset();
-	TomoError AddTVandTVSquared();
-	TomoError ReconUsingSARTandTV();
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Functions to save the images
@@ -305,17 +302,10 @@ private:
 	unsigned short * d_Proj;
 	float * d_Norm;
 	float * d_Image;
-	float * d_Image2;
-	float * d_GradIm;
 	float * d_Error;
 	float * d_Sino;
 	float * d_Pro;
-	float * d_PriorIm;
-	float * d_dp;
-	float * d_dpp;
 	float * d_alpha;
-	float * d_DerivGradIm;
-	float * d_GradNorm;
 	float * beamx;
 	float * beamy;
 	float * beamz;
