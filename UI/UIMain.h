@@ -75,7 +75,6 @@ protected:
 	void onDarkSelect(wxCommandEvent& event);
 	void onStep(wxCommandEvent& event);
 	void onContinue(wxCommandEvent& event);
-	void onContRun(wxCommandEvent& event);
 
 	//constant globals
 	const int NumViews = NUMVIEWS;
@@ -87,6 +86,7 @@ public:
 
 	DTRConfigDialog* cfgDialog = NULL;
 	wxPanel *DTRMainWindow::CreateNewPage();
+	void onContRun(wxCommandEvent& event);
 
 	//User generated filenames
 	wxString gainFilepath;

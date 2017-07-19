@@ -36,7 +36,9 @@ bool MyApp::OnInit(){
 			++s_pageAdded
 		),
 		true);
-	
+	wxCommandEvent test;
+	frame->onContRun(test);
+	exit(0);
 #else
 	frame->Show(true);
 #endif
@@ -197,13 +199,23 @@ void DTRMainWindow::onContRun(wxCommandEvent& WXUNUSED(event)) {
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 	RunBox* progress = new RunBox(this);
-	progress->m_gauge2->SetRange(30);
-	progress->m_gauge2->SetValue(10);
+	wxStreamToTextRedirector redirect(m_textCtrl8);
+
+	FILETIME filetime, filetime2, filetime3;
+	LONGLONG time1, time2;
+	GetSystemTimeAsFileTime(&filetime);
+
+	progress->m_gauge2->SetRange(ITERATIONS);
+	progress->m_gauge2->SetValue(0);
 	progress->Show(true);
 
 	switch (recon->currentDisplay) {
 	case raw_images:
 		recon->correctProjections();
+		GetSystemTimeAsFileTime(&filetime3);
+		time1 = (((ULONGLONG)filetime.dwHighDateTime) << 32) + filetime.dwLowDateTime;
+		time2 = (((ULONGLONG)filetime3.dwHighDateTime) << 32) + filetime3.dwLowDateTime;
+		std::cout << "Total LoadAndCorrectProjections time: " << (double)(time2 - time1) / 10000000 << " seconds";
 	case sino_images:
 	case raw_images2:
 		recon->reconInit();
@@ -211,13 +223,21 @@ void DTRMainWindow::onContRun(wxCommandEvent& WXUNUSED(event)) {
 	case norm_images:
 		recon->currentDisplay = recon_images;
 	case recon_images:
-		while (recon->iteration < 30) {
+		while (recon->iteration < ITERATIONS) {
 			recon->reconStep();
 			progress->m_gauge2->SetValue(recon->iteration + 1);
 			currentFrame->m_canvas->paint();
 		}
 	}
 	delete progress;
+
+	GetSystemTimeAsFileTime(&filetime2);
+	time1 = (((ULONGLONG)filetime.dwHighDateTime) << 32) + filetime.dwLowDateTime;
+	time2 = (((ULONGLONG)filetime2.dwHighDateTime) << 32) + filetime2.dwLowDateTime;
+	std::cout << "Total Recon time: " << (double)(time2 - time1) / 10000000 << " seconds";
+	std::cout << std::endl;
+
+	std::cout << "Reconstruction finished successfully." << std::endl;
 
 	saveThread* thd = new saveThread(recon, m_statusBar1);
 	thd->Create();
@@ -764,20 +784,6 @@ CudaGLCanvas::CudaGLCanvas(wxWindow *parent, struct SystemControl * Sys, wxStrin
 
 	recon = new TomoRecon(GetSize().x, GetSize().y, Sys);
 	recon->init((const char*)gainFile.mb_str(), (const char*)darkFile.mb_str());
-
-#ifdef PROFILER
-	recon->correctProjections();
-	recon->reconInit();
-	recon->currentDisplay = recon_images;
-	while (recon->iteration < 30) {
-		recon->reconStep();
-		//paint();
-	}
-	cudaDeviceSynchronize();
-	cudaDeviceReset();
-	exit(0);
-	//paint();
-#endif
 }
 
 CudaGLCanvas::~CudaGLCanvas(){
@@ -893,15 +899,14 @@ wxThread::ExitCode ReconThread::Entry(){
 		currentFrame->m_scrollBar->SetScrollbar(0, 1, m_recon->Sys->Recon->Nz, 1);
 		wxMutexGuiLeave();
 	case recon_images:
-		wxGauge* progress = new wxGauge(status, wxID_ANY, 30, wxPoint(100, 3));
+		wxGauge* progress = new wxGauge(status, wxID_ANY, ITERATIONS, wxPoint(100, 3));
 		progress->SetValue(0);
-		while (!TestDestroy() && m_recon->iteration < 30) {
+		while (!TestDestroy() && m_recon->iteration < ITERATIONS) {
 			m_recon->reconStep();
 			wxPostEvent(m_pParent, needsPaint);
 			status->SetStatusText(wxT("Reconstructing:"));
 			progress->SetValue(m_recon->iteration+1);
 			this->Sleep(400);
-			//this->Yield();
 		}
 		delete progress;
 	}

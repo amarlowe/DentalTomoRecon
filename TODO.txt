@@ -21,8 +21,11 @@ TomoRecon
 - Clean up all non-recon memory when recon finishes
 - Siphon mem from open recons by reading from disk and just having a buffer of slices
 - Confirm overwrite on save if file already exists
+- Include distance to the detector in status bar
+- Add Units to all number descriptions in settings
 
 --------------Bugs---------------------
+- Disable console close button
 - Number of Slices to Reconstruct too large may crash program
 - texture memory accesses are not locally spaced, they're scattered
 - image edges given tails that are not explicitly dealt with
