@@ -75,6 +75,7 @@ protected:
 	void onDarkSelect(wxCommandEvent& event);
 	void onStep(wxCommandEvent& event);
 	void onContinue(wxCommandEvent& event);
+	void onPageChange(wxCommandEvent& event);
 
 	//constant globals
 	const int NumViews = NUMVIEWS;

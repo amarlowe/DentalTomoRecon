@@ -158,6 +158,10 @@ void DTRMainWindow::onQuit(wxCommandEvent& WXUNUSED(event)){
 }
 
 void DTRMainWindow::onStep(wxCommandEvent& WXUNUSED(event)) {
+	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
+		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
+		return;
+	}
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
@@ -187,6 +191,10 @@ void DTRMainWindow::onStep(wxCommandEvent& WXUNUSED(event)) {
 void DTRMainWindow::onContinue(wxCommandEvent& WXUNUSED(event)) {
 	//Run the entire reconstruction
 	//Swtich statement is to make it state aware, but otherwise finishes out whatever is left
+	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
+		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
+		return;
+	}
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
@@ -196,6 +204,10 @@ void DTRMainWindow::onContinue(wxCommandEvent& WXUNUSED(event)) {
 }
 
 void DTRMainWindow::onContRun(wxCommandEvent& WXUNUSED(event)) {
+	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
+		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
+		return;
+	}
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 	RunBox* progress = new RunBox(this);
@@ -305,6 +317,11 @@ void DTRMainWindow::onAbout(wxCommandEvent& WXUNUSED(event)){
 		"About Tomography Reconstruction",
 		wxOK | wxICON_INFORMATION,
 		this);
+}
+
+void DTRMainWindow::onPageChange(wxCommandEvent& WXUNUSED(event)) {
+	wxString toolTip = m_auinotebook6->GetPageToolTip(m_auinotebook6->GetPageIndex(m_auinotebook6->GetCurrentPage()));
+	(*m_textCtrl8) << toolTip;
 }
 
 DTRMainWindow::~DTRMainWindow() {
@@ -757,12 +774,19 @@ void GLFrame::OnScroll(wxScrollEvent& event) {
 }
 
 void GLFrame::OnMousewheel(wxMouseEvent& event) {
-	int newScrollPos =event.GetWheelRotation() / 120;
-	newScrollPos += m_scrollBar->GetThumbPosition();
-	if (newScrollPos < 0) newScrollPos = 0;
-	if (newScrollPos > m_scrollBar->GetRange() - 1) newScrollPos = m_scrollBar->GetRange() - 1;
-	m_scrollBar->SetThumbPosition(newScrollPos);
-	m_canvas->OnScroll(newScrollPos);
+	wxKeyboardState keyboard;
+	//GetKeyboardState()
+	int newScrollPos = event.GetWheelRotation() / 120;
+	if (keyboard.GetModifiers() == wxMOD_CONTROL) {
+		;
+	}
+	else {
+		newScrollPos += m_scrollBar->GetThumbPosition();
+		if (newScrollPos < 0) newScrollPos = 0;
+		if (newScrollPos > m_scrollBar->GetRange() - 1) newScrollPos = m_scrollBar->GetRange() - 1;
+		m_scrollBar->SetThumbPosition(newScrollPos);
+		m_canvas->OnScroll(newScrollPos);
+	}
 }
 
 //---------------------------------------------------------------------------
