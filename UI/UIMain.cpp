@@ -175,12 +175,12 @@ void DTRMainWindow::onStep(wxCommandEvent& WXUNUSED(event)) {
 		break;
 	case raw_images2:
 		recon->reconInit();
-		currentFrame->m_scrollBar->SetScrollbar(0, 1, recon->Sys->Recon->Nz, 1);
 		recon->currentDisplay = norm_images;
 		break;
 	case norm_images:
 		recon->currentDisplay = recon_images;//intentionally skipped break
 	case recon_images:
+		currentFrame->m_scrollBar->SetScrollbar(0, 1, recon->Sys->Recon->Nz, 1);
 		recon->reconStep();
 		break;
 	}
@@ -777,8 +777,7 @@ void GLFrame::OnMousewheel(wxMouseEvent& event) {
 	wxKeyboardState keyboard;
 	//GetKeyboardState()
 	int newScrollPos = event.GetWheelRotation() / 120;
-	if (keyboard.GetModifiers() == wxMOD_CONTROL) {
-		;
+	if (event.m_controlDown) {
 	}
 	else {
 		newScrollPos += m_scrollBar->GetThumbPosition();
