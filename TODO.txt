@@ -23,28 +23,27 @@ TomoRecon
 - Confirm overwrite on save if file already exists
 - Include distance to the detector in status bar
 - Add Units to all number descriptions in settings
+- Make a labled and colored rectangular selection tool
+- Make a dialoag box that adds selections 
+- Make an automated test bench for algorithm changes
+- Correct for dead pixels (not necessarily on all projection inputs)
+- Older version has apparently higher constrast, although it seems to be produced by recon artifacts
+- Recon artifacts are occuring whenever there are high derivative areas, if a lossy filter is a solution, make it optional
+- Need to rescale lighting to accent constrast, possibly with HDR algorigthms
+- Keep 1:1 ratio ALWAYS
+- Gui tools for translating scales into real world measurments
+- Window and lighting adjustment presets for diffent diagnosis types
+- Edit lighting and contrast
+- Image annotations
+- Remove focus artifacts, only show in focus areas
 
 --------------Bugs---------------------
+- AutoDetection breaks reconstruction badly
 - Disable console close button
-- Number of Slices to Reconstruct too large may crash program
-- texture memory accesses are not locally spaced, they're scattered
-- image edges given tails that are not explicitly dealt with
-- index out of bounds and other conditions set array values to an explicit -10
-- color inversion on low z layer counts
-- additional lines included on increasing z size
-- debug mode causes a crash and failure (problem likely persists in release, it just gets ignored)
-- wxwidget drag draws artifacts on the wrong screen
-- when reading in files, it will attempt to read .dicom files along with the raw files and cause errors
-- Throw all tomo errors instead of crashing the program
-- Program crashes after returning error in reconstruction
-- interop only supports a single buffer, code exits for any number, but swapping buffers fails (may not be necessary, already need to swap the main buffer)
-- creating two instances works, fails after closing one. More cleanup is required
-- Making the viewport too small crashes opengl-line 110 (cudagraphicsresource has minimum size?)
-- Loading more than 2 projections causes odd bugs
-- TONS of magic numbers left scrambled around the CUDA code
-- Program locks up when button is pressed when the last frame is selected
-- Check normalization code, some images are completely black while others look just fine
 - Close behavior breaks when the console is the selected tab
+- Number of Slices to Reconstruct too large may crash program
+- Throw all tomo errors instead of crashing the program
+- No boundary checking when changing between display types (ie, out of bounds if recon has fewer slices than input and left on the final slice)
 - Cancel on new does not cancel operation
 - Changing config after opening image set does not update
 
@@ -61,3 +60,16 @@ TomoRecon
 - Only allow one config window to be open at a time 
 -------------Features------------------
 --------------Bugs---------------------
+- additional lines included on increasing z size
+- index out of bounds and other conditions set array values to an explicit -10 (removed TV+sq)
+- image edges given tails that are not explicitly dealt with
+- debug mode causes a crash and failure (problem likely persists in release, it just gets ignored)
+- when reading in files, it will attempt to read .dicom files along with the raw files and cause errors
+- interop only supports a single buffer, code exits for any number, but swapping buffers fails (may not be necessary, already need to swap the main buffer)
+- creating two instances works, fails after closing one. More cleanup is required
+- TONS of magic numbers left scrambled around the CUDA code
+- Making the viewport too small crashes opengl-line 110 (cudagraphicsresource has minimum size?)
+- color inversion on low z layer counts (fixed with color normalization)
+- Program locks up when button is pressed when the last frame is selected
+- Loading more than 2 projections causes odd bugs
+- Check for console tab before running reconstructions

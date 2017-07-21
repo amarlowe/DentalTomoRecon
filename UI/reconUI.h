@@ -53,6 +53,8 @@ class mainWindow : public wxFrame
 		wxStatusBar* m_statusBar1;
 		
 		// Virtual event handlers, overide them in your derived class
+		virtual void onKeyDown( wxKeyEvent& event ) { event.Skip(); }
+		virtual void onKeyUp( wxKeyEvent& event ) { event.Skip(); }
 		virtual void onNew( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onOpen( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onSave( wxCommandEvent& event ) { event.Skip(); }
@@ -64,6 +66,7 @@ class mainWindow : public wxFrame
 		virtual void onContRun( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onStep( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onAbout( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onPageChange( wxAuiNotebookEvent& event ) { event.Skip(); }
 		
 	
 	public:
@@ -89,7 +92,7 @@ class RunBox : public wxDialog
 	public:
 		wxGauge* m_gauge2;
 		
-		RunBox( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Reconstruction running"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 208,61 ), long style = wxDEFAULT_DIALOG_STYLE ); 
+		RunBox( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Reconstruction running"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 208,61 ), long style = wxDEFAULT_DIALOG_STYLE|wxSTAY_ON_TOP ); 
 		~RunBox();
 	
 };

@@ -102,7 +102,6 @@ TomoError TomoRecon::init(const char * gainFile, const char * darkFile) {
 	tomo_err_throw(SetUpGPUForRecon());
 	std::cout << "GPU Ready" << std::endl;
 
-	LoadProjections(0);
 	initialized = true;
 }
 

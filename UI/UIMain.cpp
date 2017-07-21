@@ -158,6 +158,10 @@ void DTRMainWindow::onQuit(wxCommandEvent& WXUNUSED(event)){
 }
 
 void DTRMainWindow::onStep(wxCommandEvent& WXUNUSED(event)) {
+	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
+		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
+		return;
+	}
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
@@ -171,12 +175,12 @@ void DTRMainWindow::onStep(wxCommandEvent& WXUNUSED(event)) {
 		break;
 	case raw_images2:
 		recon->reconInit();
-		currentFrame->m_scrollBar->SetScrollbar(0, 1, recon->Sys->Recon->Nz, 1);
 		recon->currentDisplay = norm_images;
 		break;
 	case norm_images:
 		recon->currentDisplay = recon_images;//intentionally skipped break
 	case recon_images:
+		currentFrame->m_scrollBar->SetScrollbar(0, 1, recon->Sys->Recon->Nz, 1);
 		recon->reconStep();
 		break;
 	}
@@ -187,6 +191,10 @@ void DTRMainWindow::onStep(wxCommandEvent& WXUNUSED(event)) {
 void DTRMainWindow::onContinue(wxCommandEvent& WXUNUSED(event)) {
 	//Run the entire reconstruction
 	//Swtich statement is to make it state aware, but otherwise finishes out whatever is left
+	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
+		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
+		return;
+	}
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
@@ -196,6 +204,10 @@ void DTRMainWindow::onContinue(wxCommandEvent& WXUNUSED(event)) {
 }
 
 void DTRMainWindow::onContRun(wxCommandEvent& WXUNUSED(event)) {
+	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
+		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
+		return;
+	}
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 	RunBox* progress = new RunBox(this);
@@ -216,6 +228,7 @@ void DTRMainWindow::onContRun(wxCommandEvent& WXUNUSED(event)) {
 		time1 = (((ULONGLONG)filetime.dwHighDateTime) << 32) + filetime.dwLowDateTime;
 		time2 = (((ULONGLONG)filetime3.dwHighDateTime) << 32) + filetime3.dwLowDateTime;
 		std::cout << "Total LoadAndCorrectProjections time: " << (double)(time2 - time1) / 10000000 << " seconds";
+		std::cout << std::endl;
 	case sino_images:
 	case raw_images2:
 		recon->reconInit();
@@ -304,6 +317,11 @@ void DTRMainWindow::onAbout(wxCommandEvent& WXUNUSED(event)){
 		"About Tomography Reconstruction",
 		wxOK | wxICON_INFORMATION,
 		this);
+}
+
+void DTRMainWindow::onPageChange(wxCommandEvent& WXUNUSED(event)) {
+	wxString toolTip = m_auinotebook6->GetPageToolTip(m_auinotebook6->GetPageIndex(m_auinotebook6->GetCurrentPage()));
+	(*m_textCtrl8) << toolTip;
 }
 
 DTRMainWindow::~DTRMainWindow() {
@@ -756,12 +774,18 @@ void GLFrame::OnScroll(wxScrollEvent& event) {
 }
 
 void GLFrame::OnMousewheel(wxMouseEvent& event) {
-	int newScrollPos =event.GetWheelRotation() / 120;
-	newScrollPos += m_scrollBar->GetThumbPosition();
-	if (newScrollPos < 0) newScrollPos = 0;
-	if (newScrollPos > m_scrollBar->GetRange() - 1) newScrollPos = m_scrollBar->GetRange() - 1;
-	m_scrollBar->SetThumbPosition(newScrollPos);
-	m_canvas->OnScroll(newScrollPos);
+	wxKeyboardState keyboard;
+	//GetKeyboardState()
+	int newScrollPos = event.GetWheelRotation() / 120;
+	if (event.m_controlDown) {
+	}
+	else {
+		newScrollPos += m_scrollBar->GetThumbPosition();
+		if (newScrollPos < 0) newScrollPos = 0;
+		if (newScrollPos > m_scrollBar->GetRange() - 1) newScrollPos = m_scrollBar->GetRange() - 1;
+		m_scrollBar->SetThumbPosition(newScrollPos);
+		m_canvas->OnScroll(newScrollPos);
+	}
 }
 
 //---------------------------------------------------------------------------
