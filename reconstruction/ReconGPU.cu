@@ -410,9 +410,9 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Error){
 
 			//Change deltas to offset per stepsize relative to emmiter
 			dx1 = (float)d_PitchNz * (dx1 - ex / d_PitchNx) / ez;
-			dy1 = (float)d_PitchNz * (dy1 - ey / d_PitchNx) / ez;
+			dy1 = (float)d_PitchNz * (dy1 - ey / d_PitchNy) / ez;
 			dx2 = (float)d_PitchNz * (dx2 - ex / d_PitchNx) / ez;
-			dy2 = (float)d_PitchNz * (dy2 - ey / d_PitchNx) / ez;
+			dy2 = (float)d_PitchNz * (dy2 - ey / d_PitchNy) / ez;
 
 			//Add slice offset
 			x1 += dx1 * (float)d_Z_Offset;
@@ -464,7 +464,8 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Error){
 					ys = yend;
 				}//y loop
 			}//z loop
-			err = (Sino[i + d_MPx*(j + view*d_MPy)] - Pro*NP) / (max(count, 1.0f));
+			if(count != 0)
+				err = (Sino[i + d_MPx*(j + view*d_MPy)] - Pro*NP) / count;
 		}//Norm check
 
 		//Get the projection error and add calculated error to an error image to back project
