@@ -382,7 +382,8 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Error){
 
 	//within image boudary
 	if ((i < d_Px) && (j < d_Py)) {
-		float NP = Norm[(j + view*d_MPy)*d_MPx + i];
+		//float NP = Norm[(j + view*d_MPy)*d_MPx + i];
+		float NP = 1.0;
 		float err = 0;
 
 		if (NP != 0) {
@@ -394,10 +395,10 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Error){
 			float scale = 1.0f / (dx2*dy2);
 
 			//Full pixel area translated to recon space
-			dx1 = (((float)i - d_HalfPx) * d_PitchPx) / d_PitchNx;
-			dy1 = (((float)j - d_HalfPy) * d_PitchPy) / d_PitchNy;
-			dx2 = (((float)i - d_HalfPx - 1.0f) * d_PitchPx) / d_PitchNx;
-			dy2 = (((float)j - d_HalfPy - 1.0f) * d_PitchPy) / d_PitchNy;
+			dx1 = (((float)i - d_HalfPx - 0.5f) * d_PitchPx) / d_PitchNx;
+			dy1 = (((float)j - d_HalfPy - 0.5f) * d_PitchPy) / d_PitchNy;
+			dx2 = (((float)i - d_HalfPx - 0.5f) * d_PitchPx) / d_PitchNx;
+			dy2 = (((float)j - d_HalfPy - 0.5f) * d_PitchPy) / d_PitchNy;
 
 			float Pro = 0.0f;
 			float count = 0.0f;
@@ -436,22 +437,26 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Error){
 				float yMax = max(y1, y2);
 
 				//Get the length of the ray in the slice in x and y
-				float dist = 1.0f / fabsf((x2 - x1)*(y2 - y1));
+				//float dist = 1.0f / fabsf((x2 - x1)*(y2 - y1));
+				float dist = 1.0f;
 
 				//Set the first x value to the first pixel
 				float ys = yMin;
 
 				//Cycle through pixels x and y and used to calculate projection
-				for (float y = yMin; y < yMax; y++) {
+				//for (float y = yMin; y < yMax; y++) {
+				float y = yMin;
 					float yend = min(y + 1, yMax);
 
 					//float xs = x1;
 					float xs = xMin;
-					for (float x = xMin; x < xMax; x++) {
+					//for (float x = xMin; x < xMax; x++) {
+					float x = xMin;
 						float xend = min(x + 1, xMax);
 
 						//Calculate the weight as the overlap in x and y
-						float weight = scale*((xend - xs)*(yend - ys)*dist);
+						//float weight = scale*((xend - xs)*(yend - ys)*dist);
+						float weight = scale;
 
 						//Out of bounds and mid pixel interpolation handled by texture call
 						//TODO!!!!: bounds are not checked for y direction, make 3d texture or bounds handle here
@@ -460,9 +465,9 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Error){
 						count += weight;
 
 						xs = xend;
-					}//x loop
+					//}//x loop
 					ys = yend;
-				}//y loop
+				//}//y loop
 			}//z loop
 			err = (Sino[i + d_MPx*(j + view*d_MPy)] - Pro*NP) / (max(count, 1.0f));
 		}//Norm check
@@ -492,10 +497,14 @@ __global__ void BackProjectError(float * IM, float beta){
 			float r = (ez) / (((float)(k + d_Z_Offset)*d_PitchNz) + ez);
 
 			//Use r to get detecor x and y
-			float dx1 = ex + r * (((float)i - (d_HalfNx))*d_PitchNx - ex);
-			float dy1 = ey + r * (((float)j - (d_HalfNy))*d_PitchNy - ey);
-			float dx2 = dx1 + r * d_PitchNx;
-			float dy2 = dy1 + r * d_PitchNy;
+			//float dx1 = ex + r * (((float)i - (d_HalfNx))*d_PitchNx - ex);
+			//float dy1 = ey + r * (((float)j - (d_HalfNy))*d_PitchNy - ey);
+			//float dx2 = dx1 + r * d_PitchNx;
+			//float dy2 = dy1 + r * d_PitchNy;
+			float dx1 = ex + r * (((float)i - d_HalfNx + 0.5)*d_PitchNx - ex);
+			float dy1 = ey + r * (((float)j - d_HalfNy + 0.5)*d_PitchNy - ey);
+			float dx2 = dx1;
+			float dy2 = dy1;
 
 			//Use detector x and y to get pixels
 			float x1 = dx1 / d_PitchPx + d_HalfPx;
@@ -510,7 +519,8 @@ __global__ void BackProjectError(float * IM, float beta){
 			float yMax = max(y1, y2);
 
 			//Get the length of the ray in the slice in x and y
-			float dist = 1.0f / fabsf((x2 - x1)*(y2 - y1));
+			//float dist = 1.0f / fabsf((x2 - x1)*(y2 - y1));
+			float dist = 1.0f;
 
 			//Set a normalization and pixel value to 0
 			float N = 0;
@@ -523,15 +533,18 @@ __global__ void BackProjectError(float * IM, float beta){
 
 			float xs = xMin;
 			//Cycle through pixels x and y and used to calculate projection
-			for (float x = xMin; x < xMax; x++){
+			//for (float x = xMin; x < xMax; x++){
+			float x = xMin;
 				float ys = yMin;
 				float xend = min(x + 1, xMax);
 
-				for (float y = yMin; y < yMax; y++){
+				//for (float y = yMin; y < yMax; y++){
+				float y = yMin;
 					float yend = min(y + 1, yMax);
 
 					//Calculate the weight as the overlap in x and y
-					float weight = (xend - xs)*(yend - ys)*dist;
+					//float weight = (xend - xs)*(yend - ys)*dist;
+					float weight = 1.0;
 
 					//Calculate the scaling of a ray from the center of the pixel
 					//to the detector
@@ -545,9 +558,9 @@ __global__ void BackProjectError(float * IM, float beta){
 
 					N += scale;
 					ys = yend;
-				}//y loop
+				//}//y loop
 				xs = xend;
-			}//x loop
+			//}//x loop
 			//Get the current value of image
 			float update = beta*val / N;
 
@@ -1460,7 +1473,7 @@ TomoError TomoRecon::SetUpGPUForRecon(){
 	tomo_err_throw(SetUpGPUMemory());
 
 	//Calulate the reconstruction Normalization for the SART
-	tomo_err_throw(GetReconNorm());
+	//tomo_err_throw(GetReconNorm());
 
 	return Tomo_OK;
 }
