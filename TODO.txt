@@ -45,6 +45,8 @@ TomoRecon
 - No boundary checking when changing between display types (ie, out of bounds if recon has fewer slices than input and left on the final slice)
 - Cancel on new does not cancel operation
 - Changing config after opening image set does not update
+- Images saved are offset by about 10 pixels, giving garbage data at the top and cutting off the bottom
+- If left to run, error comes in from bottom and does not stop
 
 -------------Completed------------------
 - Fix readGainAndDarkimages
@@ -72,3 +74,4 @@ TomoRecon
 - Program locks up when button is pressed when the last frame is selected
 - Loading more than 2 projections causes odd bugs
 - Check for console tab before running reconstructions
+- Y axis not checked for out of bounds, leading to white noise on top and bottom

@@ -86,20 +86,16 @@ __device__ __constant__ int d_MPx;
 __device__ __constant__ int d_MPy;
 __device__ __constant__ int d_MNx;
 __device__ __constant__ int d_MNy;
-__device__ __constant__ float d_HalfPx2;
-__device__ __constant__ float d_HalfPy2;
-__device__ __constant__ float d_HalfNx2;
-__device__ __constant__ float d_HalfNy2;
+__device__ __constant__ float d_HalfPx;
+__device__ __constant__ float d_HalfPy;
+__device__ __constant__ float d_HalfNx;
+__device__ __constant__ float d_HalfNy;
 __device__ __constant__ int d_Nz;
 __device__ __constant__ int d_Views;
 __device__ __constant__ float d_PitchPx;
 __device__ __constant__ float d_PitchPy;
-__device__ __constant__ float d_PitchPxInv;
-__device__ __constant__ float d_PitchPyInv;
 __device__ __constant__ float d_PitchNx;
 __device__ __constant__ float d_PitchNy;
-__device__ __constant__ float d_PitchNxInv;
-__device__ __constant__ float d_PitchNyInv;
 __device__ __constant__ float d_PitchNz;
 __device__ __constant__ float d_alpharelax;
 __device__ __constant__ float d_rmax;
@@ -193,31 +189,31 @@ __global__ void ProjectionNorm(float * Norm){
 	//Check image boundaries
 	if ((i < d_Px) && (j < d_Py)){
 		//Get scale factor
-		float dx1 = ((float)i - (d_HalfPx2 - 0.5f)) * d_PitchPx - ex;//Center x offset in mm relative to emmiter
-		float dy1 = ((float)j - (d_HalfPy2 - 0.5f)) * d_PitchPy - ey;//Center y offset in mm relative to emmiter
+		float dx1 = ((float)i - d_HalfPx) * d_PitchPx - ex;//Center x offset in mm relative to emmiter
+		float dy1 = ((float)j - d_HalfPy) * d_PitchPy - ey;//Center y offset in mm relative to emmiter
 		float dx2 = ez / sqrtf(pow(dx1, 2) + pow(ez, 2));//Z direction vector in xz plane
 		float dy2 = ez / sqrtf(pow(dy1, 2) + pow(ez, 2));//Z direction vector in yz plane
 		float scale = 1.0f / (dx2*dy2);
 
 		//Full pixel area translated to recon space
-		dx1 = (((float)i - (d_HalfPx2)) * d_PitchPx)*d_PitchNxInv;
-		dy1 = (((float)j - (d_HalfPy2)) * d_PitchPy)*d_PitchNyInv;
-		dx2 = (((float)i - (d_HalfPx2 - 1.0f)) * d_PitchPx) * d_PitchNxInv;
-		dy2 = (((float)j - (d_HalfPy2 - 1.0f)) * d_PitchPy) * d_PitchNyInv;
+		dx1 = (((float)i - d_HalfPx) * d_PitchPx) / d_PitchNx;
+		dy1 = (((float)j - d_HalfPy) * d_PitchPy) / d_PitchNy;
+		dx2 = (((float)i - d_HalfPx - 1.0f) * d_PitchPx) / d_PitchNx;
+		dy2 = (((float)j - d_HalfPy - 1.0f) * d_PitchPy) / d_PitchNy;
 
 		float Pro = 0.0f;
 
 		//Coordinates relative to the recon center, geometry independent
-		float x1 = dx1 + d_HalfNx2 - 0.5f;
-		float y1 = dy1 + d_HalfNy2 - 0.5f;
-		float x2 = dx2 + d_HalfNx2 - 0.5f;
-		float y2 = dy2 + d_HalfNy2 - 0.5f;
+		float x1 = dx1 + d_HalfNx;
+		float y1 = dy1 + d_HalfNy;
+		float x2 = dx2 + d_HalfNx;
+		float y2 = dy2 + d_HalfNy;
 
 		//Change deltas to offset per stepsize relative to emmiter
-		dx1 = (float)d_PitchNz * (dx1 - ex * d_PitchNxInv) / ez;
-		dy1 = (float)d_PitchNz * (dy1 - ey * d_PitchNxInv) / ez;
-		dx2 = (float)d_PitchNz * (dx2 - ex * d_PitchNxInv) / ez;
-		dy2 = (float)d_PitchNz * (dy2 - ey * d_PitchNxInv) / ez;
+		dx1 = (float)d_PitchNz * (dx1 - ex / d_PitchNx) / ez;
+		dy1 = (float)d_PitchNz * (dy1 - ey / d_PitchNx) / ez;
+		dx2 = (float)d_PitchNz * (dx2 - ex / d_PitchNx) / ez;
+		dy2 = (float)d_PitchNz * (dy2 - ey / d_PitchNx) / ez;
 
 		//Add slice offset
 		x1 += dx1 * (float)d_Z_Offset;
@@ -302,7 +298,8 @@ __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, flo
 		float val = logf(MaxVal) - logf(sample);
 		if (sample > MaxVal) val = 0.0f;
 
-		Sino[(j + view*d_MPy)*d_MPx + i] = val;
+		//Sino[(j + view*d_MPy)*d_MPx + i] = val;
+		Sino[(j + view*d_MPy)*d_MPx + i] = sample;
 	}
 }
 
@@ -390,32 +387,32 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Error){
 
 		if (NP != 0) {
 			//Get scale factor
-			float dx1 = ((float)i - (d_HalfPx2 - 0.5f)) * d_PitchPx - ex;//Center x offset in mm relative to emmiter
-			float dy1 = ((float)j - (d_HalfPy2 - 0.5f)) * d_PitchPy - ey;//Center y offset in mm relative to emmiter
+			float dx1 = ((float)i - d_HalfPx) * d_PitchPx - ex;//Center x offset in mm relative to emmiter
+			float dy1 = ((float)j - d_HalfPy) * d_PitchPy - ey;//Center y offset in mm relative to emmiter
 			float dx2 = ez / sqrtf(pow(dx1, 2) + pow(ez, 2));//Z direction vector in xz plane
 			float dy2 = ez / sqrtf(pow(dy1, 2) + pow(ez, 2));//Z direction vector in yz plane
 			float scale = 1.0f / (dx2*dy2);
 
 			//Full pixel area translated to recon space
-			dx1 = (((float)i - (d_HalfPx2)) * d_PitchPx)*d_PitchNxInv;
-			dy1 = (((float)j - (d_HalfPy2)) * d_PitchPy)*d_PitchNyInv;
-			dx2 = (((float)i - (d_HalfPx2 - 1.0f)) * d_PitchPx) * d_PitchNxInv;
-			dy2 = (((float)j - (d_HalfPy2 - 1.0f)) * d_PitchPy) * d_PitchNyInv;
+			dx1 = (((float)i - d_HalfPx) * d_PitchPx) / d_PitchNx;
+			dy1 = (((float)j - d_HalfPy) * d_PitchPy) / d_PitchNy;
+			dx2 = (((float)i - d_HalfPx - 1.0f) * d_PitchPx) / d_PitchNx;
+			dy2 = (((float)j - d_HalfPy - 1.0f) * d_PitchPy) / d_PitchNy;
 
 			float Pro = 0.0f;
 			float count = 0.0f;
 
 			//Coordinates relative to the recon center, geometry independent
-			float x1 = dx1 + d_HalfNx2 - 0.5f;
-			float y1 = dy1 + d_HalfNy2 - 0.5f;
-			float x2 = dx2 + d_HalfNx2 - 0.5f;
-			float y2 = dy2 + d_HalfNy2 - 0.5f;
+			float x1 = dx1 + d_HalfNx;
+			float y1 = dy1 + d_HalfNy;
+			float x2 = dx2 + d_HalfNx;
+			float y2 = dy2 + d_HalfNy;
 
 			//Change deltas to offset per stepsize relative to emmiter
-			dx1 = (float)d_PitchNz * (dx1 - ex * d_PitchNxInv) / ez;
-			dy1 = (float)d_PitchNz * (dy1 - ey * d_PitchNxInv) / ez;
-			dx2 = (float)d_PitchNz * (dx2 - ex * d_PitchNxInv) / ez;
-			dy2 = (float)d_PitchNz * (dy2 - ey * d_PitchNxInv) / ez;
+			dx1 = (float)d_PitchNz * (dx1 - ex / d_PitchNx) / ez;
+			dy1 = (float)d_PitchNz * (dy1 - ey / d_PitchNx) / ez;
+			dx2 = (float)d_PitchNz * (dx2 - ex / d_PitchNx) / ez;
+			dy2 = (float)d_PitchNz * (dy2 - ey / d_PitchNx) / ez;
 
 			//Add slice offset
 			x1 += dx1 * (float)d_Z_Offset;
@@ -457,7 +454,9 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Error){
 						float weight = scale*((xend - xs)*(yend - ys)*dist);
 
 						//Out of bounds and mid pixel interpolation handled by texture call
-						Pro += tex2D(textImage, x + 0.5f, y + 0.5f + z*d_MNy) * weight;
+						//TODO!!!!: bounds are not checked for y direction, make 3d texture or bounds handle here
+						if(y > 0 && y < d_MNy)
+							Pro += tex2D(textImage, x, y + z*d_MNy) * weight;
 						count += weight;
 
 						xs = xend;
@@ -493,16 +492,16 @@ __global__ void BackProjectError(float * IM, float beta){
 			float r = (ez) / (((float)(k + d_Z_Offset)*d_PitchNz) + ez);
 
 			//Use r to get detecor x and y
-			float dx1 = ex + r * (((float)i - (d_HalfNx2))*d_PitchNx - ex);
-			float dy1 = ey + r * (((float)j - (d_HalfNy2))*d_PitchNy - ey);
+			float dx1 = ex + r * (((float)i - (d_HalfNx))*d_PitchNx - ex);
+			float dy1 = ey + r * (((float)j - (d_HalfNy))*d_PitchNy - ey);
 			float dx2 = dx1 + r * d_PitchNx;
 			float dy2 = dy1 + r * d_PitchNy;
 
 			//Use detector x and y to get pixels
-			float x1 = dx1 * d_PitchPxInv + (d_HalfPx2 - 0.5f);
-			float x2 = dx2 * d_PitchPxInv + (d_HalfPx2 - 0.5f);
-			float y1 = dy1 * d_PitchPyInv + (d_HalfPy2 - 0.5f);
-			float y2 = dy2 * d_PitchPyInv + (d_HalfPy2 - 0.5f);
+			float x1 = dx1 / d_PitchPx + d_HalfPx;
+			float x2 = dx2 / d_PitchPx + d_HalfPx;
+			float y1 = dy1 / d_PitchPy + d_HalfPy;
+			float y2 = dy2 / d_PitchPy + d_HalfPy;
 
 			//Get the first and last pixels in x and y the ray passes through
 			float xMin = min(x1, x2);
@@ -519,8 +518,8 @@ __global__ void BackProjectError(float * IM, float beta){
 
 			//Set the first x value to the first pixel
 			float ezz = pow(ex,2);
-			float xx = (d_HalfPx2 - 0.5f)*d_PitchPx - ex;
-			float yy = (d_HalfPy2 - 0.5f)*d_PitchPy - ey;
+			float xx = d_HalfPx * d_PitchPx - ex;
+			float yy = d_HalfPy * d_PitchPy - ey;
 
 			float xs = xMin;
 			//Cycle through pixels x and y and used to calculate projection
@@ -541,7 +540,8 @@ __global__ void BackProjectError(float * IM, float beta){
 					float scale = (cos_alpha*cos_gamma) / ezz * weight;
 
 					//Update the value based on the error scaled and save the scale
-					val += tex2D(textError, x + 0.5f, y + view*d_MPy + 0.5f) * scale;
+					if (y > 0 && y < d_MPy)
+						val += tex2D(textError, x, y + view*d_MPy) * scale;
 
 					N += scale;
 					ys = yend;
@@ -555,12 +555,9 @@ __global__ void BackProjectError(float * IM, float beta){
 				//float uval = IM[(j + k*d_MNy)*d_MNx + i];
 				//IM[(j + k*d_MNy)*d_MNx + i] = uval + update;
 				atomicAdd(&IM[(j + k*d_MNy)*d_MNx + i], update);
-				//IM2[(j + k*d_MNy)*d_MNx + i] = update;
 			}
-			//else IM2[(j + k*d_MNy)*d_MNx + i] = -10.0f;
 		}//z loop
 	}
-	//else for (int k = 0; k < d_Nz; k++) IM2[(j + k*d_MNy)*d_MNx + i] = -10.0f;
 }
 
 __global__ void BackProjectSliceOff(float * IM, float beta) {
@@ -582,16 +579,16 @@ __global__ void BackProjectSliceOff(float * IM, float beta) {
 			float r = (ez) / (((float)(k + d_Z_Offset)*d_PitchNz) + ez);
 
 			//Use r to get detecor x and y
-			float dx1 = ex + r * (((float)i - (d_HalfNx2))*d_PitchNx - ex);
-			float dy1 = ey + r * (((float)j - (d_HalfNy2))*d_PitchNy - ey);
+			float dx1 = ex + r * (((float)i - (d_HalfNx))*d_PitchNx - ex);
+			float dy1 = ey + r * (((float)j - (d_HalfNy))*d_PitchNy - ey);
 			float dx2 = dx1 + r * d_PitchNx;
 			float dy2 = dy1 + r * d_PitchNy;
 
 			//Use detector x and y to get pixels
-			float x1 = dx1 * d_PitchPxInv + (d_HalfPx2 - 0.5f);
-			float x2 = dx2 * d_PitchPxInv + (d_HalfPx2 - 0.5f);
-			float y1 = dy1 * d_PitchPyInv + (d_HalfPy2 - 0.5f);
-			float y2 = dy2 * d_PitchPyInv + (d_HalfPy2 - 0.5f);
+			float x1 = dx1 / d_PitchPx + (d_HalfPx - 0.5f);
+			float x2 = dx2 / d_PitchPx + (d_HalfPx - 0.5f);
+			float y1 = dy1 / d_PitchPy + (d_HalfPy - 0.5f);
+			float y2 = dy2 / d_PitchPy + (d_HalfPy - 0.5f);
 
 			//Get the first and last pixels in x and y the ray passes through
 			int xMin = max((int)floorf(min(x1, x2)), 0);
@@ -608,8 +605,8 @@ __global__ void BackProjectSliceOff(float * IM, float beta) {
 
 			//Set the first x value to the first pixel
 			float ezz = 1.0f / (ez*ez);
-			float xx = (d_HalfPx2 - 0.5f)*d_PitchPx - ex;
-			float yy = (d_HalfPy2 - 0.5f)*d_PitchPy - ey;
+			float xx = (d_HalfPx - 0.5f)*d_PitchPx - ex;
+			float yy = (d_HalfPy - 0.5f)*d_PitchPy - ey;
 
 			float xs = x1;
 			//Cycle through pixels x and y and used to calculate projection
@@ -1202,10 +1199,6 @@ TomoError TomoRecon::SetUpGPUMemory(){
 	float HalfPy = (float)Sys->Proj->Ny / 2.0f;
 	float HalfNx = (float)Sys->Recon->Nx / 2.0f;
 	float HalfNy = (float)Sys->Recon->Ny / 2.0f;
-	float PitchPxInv = 1.0f / Sys->Proj->Pitch_x;
-	float PitchPyInv = 1.0f / Sys->Proj->Pitch_y;
-	float PitchNxInv = 1.0f / Sys->Recon->Pitch_x;
-	float PitchNyInv = 1.0f / Sys->Recon->Pitch_y;
 	int Sice_Offset =(int)(((float)Sys->Recon->Slice_0_z)
 		/(float)(Sys->Recon->Pitch_z));
 
@@ -1218,19 +1211,15 @@ TomoError TomoRecon::SetUpGPUMemory(){
 	cuda(MemcpyToSymbolAsync(d_MNx, &MemR_Nx, sizeof(int)));
 	cuda(MemcpyToSymbolAsync(d_MNy, &MemR_Ny, sizeof(int)));
 
-	cuda(MemcpyToSymbolAsync(d_HalfPx2, &HalfPx, sizeof(float)));
-	cuda(MemcpyToSymbolAsync(d_HalfPy2, &HalfPy, sizeof(float)));
-	cuda(MemcpyToSymbolAsync(d_HalfNx2, &HalfNx, sizeof(float)));
-	cuda(MemcpyToSymbolAsync(d_HalfNy2, &HalfNy, sizeof(float)));
+	cuda(MemcpyToSymbolAsync(d_HalfPx, &HalfPx, sizeof(float)));
+	cuda(MemcpyToSymbolAsync(d_HalfPy, &HalfPy, sizeof(float)));
+	cuda(MemcpyToSymbolAsync(d_HalfNx, &HalfNx, sizeof(float)));
+	cuda(MemcpyToSymbolAsync(d_HalfNy, &HalfNy, sizeof(float)));
 	cuda(MemcpyToSymbolAsync(d_Nz, &Sys->Recon->Nz, sizeof(int)));
 	cuda(MemcpyToSymbolAsync(d_PitchPx, &Sys->Proj->Pitch_x, sizeof(float)));
 	cuda(MemcpyToSymbolAsync(d_PitchPy, &Sys->Proj->Pitch_y, sizeof(float)));
-	cuda(MemcpyToSymbolAsync(d_PitchPxInv, &PitchPxInv, sizeof(float)));
-	cuda(MemcpyToSymbolAsync(d_PitchPyInv, &PitchPyInv, sizeof(float)));
 	cuda(MemcpyToSymbolAsync(d_PitchNx, &Sys->Recon->Pitch_x, sizeof(float)));
 	cuda(MemcpyToSymbolAsync(d_PitchNy, &Sys->Recon->Pitch_y, sizeof(float)));
-	cuda(MemcpyToSymbolAsync(d_PitchNxInv, &PitchNxInv, sizeof(float)));
-	cuda(MemcpyToSymbolAsync(d_PitchNyInv, &PitchNyInv, sizeof(float)));
 	cuda(MemcpyToSymbolAsync(d_PitchNz, &Sys->Recon->Pitch_z, sizeof(float)));
 	cuda(MemcpyToSymbolAsync(d_Views, &Sys->Proj->NumViews, sizeof(int)));
 	cuda(MemcpyToSymbolAsync(d_rmax, &rmax, sizeof(float)));
@@ -1546,14 +1535,14 @@ TomoError TomoRecon::correctProjections() {
 
 		KERNELCALL4(LogCorrectProj, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, view, d_Proj, SHRT_MAX);
 
-		cuda(Memset(d_SinoBlurX, 0, size_sino * sizeof(float)));
+		//cuda(Memset(d_SinoBlurX, 0, size_sino * sizeof(float)));
 
-		KERNELCALL4(ApplyGaussianBlurX, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, d_SinoBlurX, view);
-		KERNELCALL4(ApplyGaussianBlurY, dimGridProj, dimBlockProj, 0, streams[view], d_SinoBlurX, d_SinoBlurXY);
+		//KERNELCALL4(ApplyGaussianBlurX, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, d_SinoBlurX, view);
+		//KERNELCALL4(ApplyGaussianBlurY, dimGridProj, dimBlockProj, 0, streams[view], d_SinoBlurX, d_SinoBlurXY);
 
-		KERNELCALL4(ScatterCorrect, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, d_Proj, d_SinoBlurXY, view, log(SHRT_MAX) - 1);
+		//KERNELCALL4(ScatterCorrect, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, d_Proj, d_SinoBlurXY, view, log(SHRT_MAX) - 1);
 
-		cuda(MemcpyAsync(Sys->Proj->RawData + view*size_proj, d_Proj, sizeProj, cudaMemcpyDeviceToHost));
+		//cuda(MemcpyAsync(Sys->Proj->RawData + view*size_proj, d_Proj, sizeProj, cudaMemcpyDeviceToHost));
 	}
 
 	cuda(Free(d_SinoBlurX));
@@ -1579,7 +1568,8 @@ TomoError TomoRecon::test(int index) {
 		size_proj = 1920 * Sys->Proj->Ny;
 		//size_t sizeProj = size_proj * sizeof(float);
 		//cuda(Memcpy(d_Sino, Sys->Proj->RawData + index*size_proj, sizeProj, cudaMemcpyHostToDevice));
-		resizeImage(d_Sino+ size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, log(USHRT_MAX) - 1);
+		//resizeImage(d_Sino+ size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, log(USHRT_MAX) - 1);
+		resizeImage(d_Sino + size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, USHRT_MAX);
 		break;
 	case norm_images:
 		resizeImage(d_Norm + size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, 1);

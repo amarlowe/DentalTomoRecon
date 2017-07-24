@@ -30,7 +30,7 @@
 
 #define NUMVIEWS 7
 //#define PROFILER
-#define ITERATIONS 1
+#define ITERATIONS 7
 #define DECAY 1.0f
 #define MAXZOOM 30
 
