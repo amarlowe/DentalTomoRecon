@@ -29,9 +29,9 @@
 #pragma comment(lib, "Shlwapi.lib")
 
 #define NUMVIEWS 7
-#define PROFILER
-#define ITERATIONS 7
-#define DECAY 0.8f
+//#define PROFILER
+#define ITERATIONS 1
+#define DECAY 1.0f
 #define MAXZOOM 30
 
 //Macro for checking cuda errors following a cuda launch or api call
@@ -62,10 +62,6 @@ typedef enum {
 	norm_images,
 	recon_images
 } display_t;
-
-typedef enum {
-
-};
 
 #define tomo_err_throw(x) {TomoError err = x; if(err != Tomo_OK) return err;}
 

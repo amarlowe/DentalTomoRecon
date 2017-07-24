@@ -30,7 +30,6 @@ TomoRecon
 - Older version has apparently higher constrast, although it seems to be produced by recon artifacts
 - Recon artifacts are occuring whenever there are high derivative areas, if a lossy filter is a solution, make it optional
 - Need to rescale lighting to accent constrast, possibly with HDR algorigthms
-- Keep 1:1 ratio ALWAYS
 - Gui tools for translating scales into real world measurments
 - Window and lighting adjustment presets for diffent diagnosis types
 - Edit lighting and contrast

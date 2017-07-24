@@ -930,7 +930,7 @@ wxThread::ExitCode ReconThread::Entry(){
 			wxPostEvent(m_pParent, needsPaint);
 			status->SetStatusText(wxT("Reconstructing:"));
 			progress->SetValue(m_recon->iteration+1);
-			this->Sleep(400);
+			this->Sleep(200);
 		}
 		delete progress;
 	}
