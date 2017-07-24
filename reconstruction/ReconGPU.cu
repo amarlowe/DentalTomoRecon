@@ -189,77 +189,35 @@ __global__ void ProjectionNorm(float * Norm){
 	//Check image boundaries
 	if ((i < d_Px) && (j < d_Py)){
 		//Get scale factor
-		float dx1 = ((float)i - d_HalfPx) * d_PitchPx - ex;//Center x offset in mm relative to emmiter
-		float dy1 = ((float)j - d_HalfPy) * d_PitchPy - ey;//Center y offset in mm relative to emmiter
-		float dx2 = ez / sqrtf(pow(dx1, 2) + pow(ez, 2));//Z direction vector in xz plane
-		float dy2 = ez / sqrtf(pow(dy1, 2) + pow(ez, 2));//Z direction vector in yz plane
-		float scale = 1.0f / (dx2*dy2);
-
-		//Full pixel area translated to recon space
-		dx1 = (((float)i - d_HalfPx) * d_PitchPx) / d_PitchNx;
-		dy1 = (((float)j - d_HalfPy) * d_PitchPy) / d_PitchNy;
-		dx2 = (((float)i - d_HalfPx - 1.0f) * d_PitchPx) / d_PitchNx;
-		dy2 = (((float)j - d_HalfPy - 1.0f) * d_PitchPy) / d_PitchNy;
+		float dx = ((float)i + 0.5f - d_HalfPx) * d_PitchPx;//Center x offset in mm
+		float dy = ((float)j + 0.5f - d_HalfPy) * d_PitchPy;//Center y offset in mm
 
 		float Pro = 0.0f;
 
-		//Coordinates relative to the recon center, geometry independent
-		float x1 = dx1 + d_HalfNx;
-		float y1 = dy1 + d_HalfNy;
-		float x2 = dx2 + d_HalfNx;
-		float y2 = dy2 + d_HalfNy;
+		//Coordinates relative to the recon upper left, geometry independent
+		float x = dx / d_PitchNx + d_HalfNx;
+		float y = dy / d_PitchNy + d_HalfNy;
 
 		//Change deltas to offset per stepsize relative to emmiter
-		dx1 = (float)d_PitchNz * (dx1 - ex / d_PitchNx) / ez;
-		dy1 = (float)d_PitchNz * (dy1 - ey / d_PitchNx) / ez;
-		dx2 = (float)d_PitchNz * (dx2 - ex / d_PitchNx) / ez;
-		dy2 = (float)d_PitchNz * (dy2 - ey / d_PitchNx) / ez;
+		dx = d_PitchNz / ez * (dx - ex) / d_PitchNx;
+		dy = d_PitchNz / ez * (dy - ey) / d_PitchNx;
 
 		//Add slice offset
-		x1 += dx1 * (float)d_Z_Offset;
-		x2 += dx2 * (float)d_Z_Offset;
-		y1 += dy1 * (float)d_Z_Offset;
-		y2 += dy2 * (float)d_Z_Offset;
+		x += dx * (float)d_Z_Offset;
+		y += dy * (float)d_Z_Offset;
 
-		//Project by stepping through the image one slice at a time
-		for (int z = 0; z < d_Nz; z++){
+		//Step through the image space by slice in z direction
+		for (int z = 0; z < d_Nz; z++) {
 			//Get the next n and x
-			x1 += dx1;
-			x2 += dx2;
-			y1 += dy1;
-			y2 += dy2;
+			x += dx;
+			y += dy;
 
-			//Get the first and last pixels in x and y the ray passes through
-			float xMin = min(x1, x2);
-			float xMax = max(x1, x2);
-			float yMin = min(y1, y2);
-			float yMax = max(y1, y2);
-
-			//Get the length of the ray in the slice in x and y
-			float dist = scale / ((x2 - x1)*(y2 - y1));
-
-			//Set the first x value to the first pixel
-			float ys = yMin;
-
-			//Cycle through pixels x and y and used to calculate projection
-			for (float y = yMin; y < yMax; y++) {
-				float yend = min(y + 1, yMax);
-				float xs = xMin;
-				float temp = (yend - ys)*dist;
-
-				for (float x = xMin; x < xMax; x++) {
-					float xend = min(x + 1, xMax);
-
-					//Calculate the weight as the overlap in x and y
-					Pro += temp*(xend - xs);
-
-					xs = xend;
-				}
-				ys = yend;
-			}
+			//Add any pixels that fall within valid values
+			if (x > 0 && y > 0 && x < d_Px && y < d_Py)
+				Pro++;
 		}
 
-		Norm[(j + view*d_MPy)*d_MPx + i] = 1.0f;
+		Norm[(j + view*d_MPy)*d_MPx + i] = Pro;
 	}
 }
 
@@ -382,7 +340,6 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Error){
 
 	//within image boudary
 	if ((i < d_Px) && (j < d_Py)) {
-		float err = 0;
 		//Get scale factor
 		float dx = ((float)i + 0.5f - d_HalfPx) * d_PitchPx;//Center x offset in mm
 		float dy = ((float)j + 0.5f - d_HalfPy) * d_PitchPy;//Center y offset in mm
@@ -420,8 +377,9 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Error){
 				}
 			}
 		}//z loop
+
 		if (count == 0) count = 1.0f;
-		err = (Sino[i + d_MPx*(j + view*d_MPy)] / scale - Pro / count) / (float)d_Nz;
+		float err = (Sino[i + d_MPx*(j + view*d_MPy)] / scale - Pro * Norm[(j + view*d_MPy)*d_MPx + i]) / count;
 
 		//Get the projection error and add calculated error to an error image to back project
 		//atomicAdd(&Error[(j + view*d_MPy)*d_MPx + i], err);
@@ -1369,7 +1327,7 @@ TomoError TomoRecon::SetUpGPUForRecon(){
 	tomo_err_throw(SetUpGPUMemory());
 
 	//Calulate the reconstruction Normalization for the SART
-	//tomo_err_throw(GetReconNorm());
+	tomo_err_throw(GetReconNorm());
 
 	return Tomo_OK;
 }
