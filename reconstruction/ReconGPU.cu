@@ -259,7 +259,7 @@ __global__ void ProjectionNorm(float * Norm){
 			}
 		}
 
-		Norm[(j + view*d_MPy)*d_MPx + i] = Pro;
+		Norm[(j + view*d_MPy)*d_MPx + i] = 1.0f;
 	}
 }
 
@@ -382,95 +382,49 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Error){
 
 	//within image boudary
 	if ((i < d_Px) && (j < d_Py)) {
-		//float NP = Norm[(j + view*d_MPy)*d_MPx + i];
-		float NP = 1.0;
 		float err = 0;
+		//Get scale factor
+		float dx = ((float)i + 0.5f - d_HalfPx) * d_PitchPx;//Center x offset in mm
+		float dy = ((float)j + 0.5f - d_HalfPy) * d_PitchPy;//Center y offset in mm
+		float dx2 = ez / sqrtf(pow(dx - ex, 2) + pow(ez, 2));//Z direction vector in xz plane
+		float dy2 = ez / sqrtf(pow(dy - ey, 2) + pow(ez, 2));//Z direction vector in yz plane
+		float scale = dx2*dy2;
 
-		if (NP != 0) {
-			//Get scale factor
-			float dx1 = ((float)i - d_HalfPx) * d_PitchPx - ex;//Center x offset in mm relative to emmiter
-			float dy1 = ((float)j - d_HalfPy) * d_PitchPy - ey;//Center y offset in mm relative to emmiter
-			float dx2 = ez / sqrtf(pow(dx1, 2) + pow(ez, 2));//Z direction vector in xz plane
-			float dy2 = ez / sqrtf(pow(dy1, 2) + pow(ez, 2));//Z direction vector in yz plane
-			float scale = 1.0f / (dx2*dy2);
+		float Pro = 0.0f;
+		float count = 0.0f;
 
-			//Full pixel area translated to recon space
-			dx1 = (((float)i - d_HalfPx - 0.5f) * d_PitchPx) / d_PitchNx;
-			dy1 = (((float)j - d_HalfPy - 0.5f) * d_PitchPy) / d_PitchNy;
-			dx2 = (((float)i - d_HalfPx - 0.5f) * d_PitchPx) / d_PitchNx;
-			dy2 = (((float)j - d_HalfPy - 0.5f) * d_PitchPy) / d_PitchNy;
+		//Coordinates relative to the recon upper left, geometry independent
+		float x = dx / d_PitchNx + d_HalfNx;
+		float y = dy / d_PitchNy + d_HalfNy;
 
-			float Pro = 0.0f;
-			float count = 0.0f;
+		//Change deltas to offset per stepsize relative to emmiter
+		dx = d_PitchNz / ez * (dx - ex) / d_PitchNx;
+		dy = d_PitchNz / ez * (dy - ey) / d_PitchNx;
 
-			//Coordinates relative to the recon center, geometry independent
-			float x1 = dx1 + d_HalfNx;
-			float y1 = dy1 + d_HalfNy;
-			float x2 = dx2 + d_HalfNx;
-			float y2 = dy2 + d_HalfNy;
+		//Add slice offset
+		x += dx * (float)d_Z_Offset;
+		y += dy * (float)d_Z_Offset;
 
-			//Change deltas to offset per stepsize relative to emmiter
-			dx1 = (float)d_PitchNz * (dx1 - ex / d_PitchNx) / ez;
-			dy1 = (float)d_PitchNz * (dy1 - ey / d_PitchNx) / ez;
-			dx2 = (float)d_PitchNz * (dx2 - ex / d_PitchNx) / ez;
-			dy2 = (float)d_PitchNz * (dy2 - ey / d_PitchNx) / ez;
-
-			//Add slice offset
-			x1 += dx1 * (float)d_Z_Offset;
-			x2 += dx2 * (float)d_Z_Offset;
-			y1 += dy1 * (float)d_Z_Offset;
-			y2 += dy2 * (float)d_Z_Offset;
-
-
-			//Step through the image space by slice in z direction
-			for (int z = 0; z < d_Nz; z++) {
-				//Get the next n and x
-				x1 += dx1;
-				x2 += dx2;
-				y1 += dy1;
-				y2 += dy2;
-
-				//Get the first and last pixels in x and y the ray passes through
-				float xMin = min(x1, x2);
-				float xMax = max(x1, x2);
-				float yMin = min(y1, y2);
-				float yMax = max(y1, y2);
-
-				//Get the length of the ray in the slice in x and y
-				//float dist = 1.0f / fabsf((x2 - x1)*(y2 - y1));
-				float dist = 1.0f;
-
-				//Set the first x value to the first pixel
-				float ys = yMin;
-
-				//Cycle through pixels x and y and used to calculate projection
-				//for (float y = yMin; y < yMax; y++) {
-				float y = yMin;
-					float yend = min(y + 1, yMax);
-
-					//float xs = x1;
-					float xs = xMin;
-					//for (float x = xMin; x < xMax; x++) {
-					float x = xMin;
-						float xend = min(x + 1, xMax);
-
-						//Calculate the weight as the overlap in x and y
-						//float weight = scale*((xend - xs)*(yend - ys)*dist);
-						float weight = scale;
-
-						//Out of bounds and mid pixel interpolation handled by texture call
-						//TODO!!!!: bounds are not checked for y direction, make 3d texture or bounds handle here
-						if(y > 0 && y < d_MNy)
-							Pro += tex2D(textImage, x, y + z*d_MNy) * weight;
-						count += weight;
-
-						xs = xend;
-					//}//x loop
-					ys = yend;
-				//}//y loop
-			}//z loop
-			err = (Sino[i + d_MPx*(j + view*d_MPy)] - Pro*NP) / (max(count, 1.0f));
-		}//Norm check
+		//Step through the image space by slice in z direction
+		for (int z = 0; z < d_Nz; z++) {
+			//Get the next n and x
+			x += dx;
+			y += dy;
+			//Out of bounds and mid pixel interpolation handled by texture call
+			//TODO!!!!: bounds are not checked for y direction, make 3d texture or bounds handle here
+			if (y > 0 && y < d_MNy) {
+				float value = tex2D(textImage, x, y + z*d_MNy);
+				if (value != 0) {
+					Pro += value;
+					count += 1.0f;
+				}
+			}
+		}//z loop
+		if (count == 0) {
+			count = 1;
+			Pro = 0;
+		}
+		err = (Sino[i + d_MPx*(j + view*d_MPy)] - Pro / count) / (float)d_Nz;
 
 		//Get the projection error and add calculated error to an error image to back project
 		//atomicAdd(&Error[(j + view*d_MPy)*d_MPx + i], err);
@@ -492,83 +446,28 @@ __global__ void BackProjectError(float * IM, float beta){
 	//Check image boundaries
 	if ((i < d_Nx) && (j < d_Ny)){
 		for (int k = 0; k < d_Nz; k++) {
-		//int k = 0;
 			//Define the direction in z to get r
 			float r = (ez) / (((float)(k + d_Z_Offset)*d_PitchNz) + ez);
 
 			//Use r to get detecor x and y
-			//float dx1 = ex + r * (((float)i - (d_HalfNx))*d_PitchNx - ex);
-			//float dy1 = ey + r * (((float)j - (d_HalfNy))*d_PitchNy - ey);
-			//float dx2 = dx1 + r * d_PitchNx;
-			//float dy2 = dy1 + r * d_PitchNy;
-			float dx1 = ex + r * (((float)i - d_HalfNx + 0.5)*d_PitchNx - ex);
-			float dy1 = ey + r * (((float)j - d_HalfNy + 0.5)*d_PitchNy - ey);
-			float dx2 = dx1;
-			float dy2 = dy1;
+			float dx = ex + r * (((float)i - d_HalfNx + 0.5)*d_PitchNx - ex);
+			float dy = ey + r * (((float)j - d_HalfNy + 0.5)*d_PitchNy - ey);
 
 			//Use detector x and y to get pixels
-			float x1 = dx1 / d_PitchPx + d_HalfPx;
-			float x2 = dx2 / d_PitchPx + d_HalfPx;
-			float y1 = dy1 / d_PitchPy + d_HalfPy;
-			float y2 = dy2 / d_PitchPy + d_HalfPy;
-
-			//Get the first and last pixels in x and y the ray passes through
-			float xMin = min(x1, x2);
-			float xMax = max(x1, x2);
-			float yMin = min(y1, y2);
-			float yMax = max(y1, y2);
-
-			//Get the length of the ray in the slice in x and y
-			//float dist = 1.0f / fabsf((x2 - x1)*(y2 - y1));
-			float dist = 1.0f;
+			float x = dx / d_PitchPx + d_HalfPx;
+			float y = dy / d_PitchPy + d_HalfPy;
 
 			//Set a normalization and pixel value to 0
-			float N = 0;
 			float val = 0.0f;
 
-			//Set the first x value to the first pixel
-			float ezz = pow(ex,2);
-			float xx = d_HalfPx * d_PitchPx - ex;
-			float yy = d_HalfPy * d_PitchPy - ey;
+			//Update the value based on the error scaled and save the scale
+			if (y > 0 && y < d_MPy)
+				val = tex2D(textError, x, y + view*d_MPy);
 
-			float xs = xMin;
-			//Cycle through pixels x and y and used to calculate projection
-			//for (float x = xMin; x < xMax; x++){
-			float x = xMin;
-				float ys = yMin;
-				float xend = min(x + 1, xMax);
-
-				//for (float y = yMin; y < yMax; y++){
-				float y = yMin;
-					float yend = min(y + 1, yMax);
-
-					//Calculate the weight as the overlap in x and y
-					//float weight = (xend - xs)*(yend - ys)*dist;
-					float weight = 1.0;
-
-					//Calculate the scaling of a ray from the center of the pixel
-					//to the detector
-					float cos_alpha = sqrtf(pow(x - xx,2) + ezz);
-					float cos_gamma = sqrtf(pow(y - yy,2) + ezz);
-					float scale = (cos_alpha*cos_gamma) / ezz * weight;
-
-					//Update the value based on the error scaled and save the scale
-					if (y > 0 && y < d_MPy)
-						val += tex2D(textError, x, y + view*d_MPy) * scale;
-
-					N += scale;
-					ys = yend;
-				//}//y loop
-				xs = xend;
-			//}//x loop
-			//Get the current value of image
-			float update = beta*val / N;
-
-			if (N > 0) {
-				//float uval = IM[(j + k*d_MNy)*d_MNx + i];
-				//IM[(j + k*d_MNy)*d_MNx + i] = uval + update;
-				atomicAdd(&IM[(j + k*d_MNy)*d_MNx + i], update);
-			}
+			//float uval = IM[(j + k*d_MNy)*d_MNx + i];
+			//IM[(j + k*d_MNy)*d_MNx + i] = uval + beta*val;
+			IM[(j + k*d_MNy)*d_MNx + i] += beta*val;
+			//atomicAdd(&IM[(j + k*d_MNy)*d_MNx + i], beta*val);
 		}//z loop
 	}
 }
@@ -1575,14 +1474,14 @@ TomoError TomoRecon::test(int index) {
 		size_proj = Sys->Proj->Nx * Sys->Proj->Ny;
 		sizeProj = size_proj * sizeof(unsigned short);
 		cuda(MemcpyAsync(d_Proj, Sys->Proj->RawData + index*size_proj, sizeProj, cudaMemcpyHostToDevice));
-		resizeImage(d_Proj, Sys->Proj->Nx, Sys->Proj->Ny, *ca, width, height, USHRT_MAX);
+		resizeImage(d_Proj, Sys->Proj->Nx, Sys->Proj->Ny, *ca, width, height, SHRT_MAX);
 		break;
 	case sino_images:
 		size_proj = 1920 * Sys->Proj->Ny;
 		//size_t sizeProj = size_proj * sizeof(float);
 		//cuda(Memcpy(d_Sino, Sys->Proj->RawData + index*size_proj, sizeProj, cudaMemcpyHostToDevice));
 		//resizeImage(d_Sino+ size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, log(USHRT_MAX) - 1);
-		resizeImage(d_Sino + size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, USHRT_MAX);
+		resizeImage(d_Sino + size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, SHRT_MAX);
 		break;
 	case norm_images:
 		resizeImage(d_Norm + size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, 1);

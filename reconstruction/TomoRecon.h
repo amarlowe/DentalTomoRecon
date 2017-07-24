@@ -31,7 +31,7 @@
 #define NUMVIEWS 7
 //#define PROFILER
 #define ITERATIONS 7
-#define DECAY 0.8f
+#define DECAY 1.0f
 #define MAXZOOM 30
 
 //Macro for checking cuda errors following a cuda launch or api call
