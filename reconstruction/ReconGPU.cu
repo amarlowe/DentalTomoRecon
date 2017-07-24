@@ -420,11 +420,8 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Error){
 				}
 			}
 		}//z loop
-		if (count == 0) {
-			count = 1;
-			Pro = 0;
-		}
-		err = (Sino[i + d_MPx*(j + view*d_MPy)] - Pro / count) / (float)d_Nz;
+		if (count == 0) count = 1.0f;
+		err = (Sino[i + d_MPx*(j + view*d_MPy)] / scale - Pro / count) / (float)d_Nz;
 
 		//Get the projection error and add calculated error to an error image to back project
 		//atomicAdd(&Error[(j + view*d_MPy)*d_MPx + i], err);
