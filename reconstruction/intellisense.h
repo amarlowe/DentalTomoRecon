@@ -14,6 +14,7 @@ cudaError_t cudaMemcpyToSymbol(float, float*, int);
 cudaError_t cudaMemcpyToSymbol(int, int*, int);
 cudaError_t cudaMemcpyToSymbolAsync(float, float*, int);
 cudaError_t cudaMemcpyToSymbolAsync(int, int*, int);
+cudaError_t cudaMemcpyToSymbolAsync(size_t, size_t*, int);
 cudaError_t cudaMemcpyToSymbolAsync(float*, float**, int);
 cudaError_t cudaBindTextureToArray(texture, cudaArray*);
 void surf2Dwrite(uint1 data, cudaSurfaceObject_t srufObj, int x, int y, cudaSurfaceBoundaryMode boundaryMode = cudaBoundaryModeTrap);

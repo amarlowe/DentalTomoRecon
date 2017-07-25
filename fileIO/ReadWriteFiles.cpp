@@ -876,7 +876,7 @@ TomoError TomoRecon::ReadRawProjectionData(std::string BaseFileIn, std::string F
 					float C_gval = (float)(gval);
 
 					float n_val = C_val / C_gval;
-					if (C_val > C_gval) n_val = 1.0;
+					if (C_val + 100 > C_gval) n_val = 0.0;
 
 					int loc3 = (y + view*Sys->Proj->Ny)*Sys->Proj->Nx
 						+ Sys->Proj->Nx - (x + 1);
@@ -901,7 +901,7 @@ TomoError TomoRecon::ReadRawProjectionData(std::string BaseFileIn, std::string F
 				int loc = (y + view*Sys->Proj->Ny)*Sys->Proj->Nx + x;
 				float val = Sys->Norm->CorrBuf[loc];
 				val = val / (float)NumProjSamples;
-				Sys->Proj->RawData[loc] = (unsigned short)(val *32768.0f);
+				Sys->Proj->RawData[loc] = (unsigned short)(val * USHRT_MAX);
 				if (Sys->UsrIn->CalOffset)
 				{
 					if (Sys->Proj->RawData[loc] > 3000)

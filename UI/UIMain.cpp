@@ -178,10 +178,25 @@ void DTRMainWindow::onStep(wxCommandEvent& WXUNUSED(event)) {
 		recon->currentDisplay = norm_images;
 		break;
 	case norm_images:
-		recon->currentDisplay = recon_images;//intentionally skipped break
+		//recon->currentDisplay = recon_images;//intentionally skipped break
 	case recon_images:
-		currentFrame->m_scrollBar->SetScrollbar(0, 1, recon->Sys->Recon->Nz, 1);
+	{
+		recon->currentDisplay = error_images;
+		int pos = ((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_scrollBar->GetThumbPosition();
+		if (pos > recon->Sys->Proj->NumViews) pos = recon->Sys->Proj->NumViews - 1;
+		currentFrame->m_scrollBar->SetScrollbar(pos, 1, recon->Sys->Proj->NumViews, 1);
 		recon->reconStep();
+		currentFrame->m_canvas->OnScroll(pos);
+	}
+		break;
+	case error_images:
+	{
+		recon->currentDisplay = recon_images;
+		int pos = ((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_scrollBar->GetThumbPosition();
+		if (pos > recon->Sys->Recon->Nz) pos = recon->Sys->Recon->Nz - 1;
+		currentFrame->m_scrollBar->SetScrollbar(pos, 1, recon->Sys->Recon->Nz, 1);		
+		currentFrame->m_canvas->OnScroll(pos);
+	}
 		break;
 	}
 

@@ -56,6 +56,17 @@ __device__ static float atomicMax(float* address, float val){
 	return __int_as_float(old);
 }
 
+__device__ static float atomicMin(float* address, float val) {
+	int* address_as_i = (int*)address;
+	int old = *address_as_i, assumed;
+	do {
+		assumed = old;
+		old = ::atomicCAS(address_as_i, assumed,
+			__float_as_int(::fminf(val, __int_as_float(assumed))));
+	} while (assumed != old);
+	return __int_as_float(old);
+}
+
 #define PXL_KERNEL_THREADS_PER_BLOCK  256
 
 surface<void, cudaSurfaceType2D> displaySurface;
@@ -103,6 +114,9 @@ __device__ __constant__ int d_Z_Offset;
 __device__ __constant__ float* d_beamx;
 __device__ __constant__ float* d_beamy;
 __device__ __constant__ float* d_beamz;
+__device__ __constant__ size_t d_errorPitch;
+__device__ __constant__ size_t d_imagePitch;
+__device__ __constant__ size_t d_sinoPitch;
 
 /********************************************************************************************/
 /* GPU Function specific functions															*/
@@ -150,7 +164,8 @@ __global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, float * ma
 	if (i > 0 && j > 0 && i < wIn && j < hIn)
 		sum = tex2D(textImage, (float)i + 0.5f, (float)j + 0.5f + (float)(index * hIn));;
 
-	sum = sum / *maxVar * 255;
+	//sum = sum / *maxVar * 255;
+	sum = sum / USHRT_MAX * 255;
 
 	union pxl_rgbx_24 rgbx;
 	if (sum > 255) {
@@ -173,75 +188,6 @@ __global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, float * ma
 		cudaBoundaryModeZero); // squelches out-of-bound writes
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////
-//Functions to normalize the reconstruction
-__global__ void ProjectionNorm(float * Norm){
-	//Define pixel location in x, y, and z
-	int i = blockDim.x * blockIdx.x + threadIdx.x;
-	int j = blockDim.y * blockIdx.y + threadIdx.y;
-	int view = blockDim.z * blockIdx.z + threadIdx.z;
-
-	//geometry cache
-	float ex = d_beamx[view];
-	float ey = d_beamy[view];
-	float ez = d_beamz[view];
-
-	//Check image boundaries
-	if ((i < d_Px) && (j < d_Py)){
-		//Get scale factor
-		float dx = ((float)i + 0.5f - d_HalfPx) * d_PitchPx;//Center x offset in mm
-		float dy = ((float)j + 0.5f - d_HalfPy) * d_PitchPy;//Center y offset in mm
-
-		float Pro = 0.0f;
-
-		//Coordinates relative to the recon upper left, geometry independent
-		float x = dx / d_PitchNx + d_HalfNx;
-		float y = dy / d_PitchNy + d_HalfNy;
-
-		//Change deltas to offset per stepsize relative to emmiter
-		dx = d_PitchNz / ez * (dx - ex) / d_PitchNx;
-		dy = d_PitchNz / ez * (dy - ey) / d_PitchNx;
-
-		//Add slice offset
-		x += dx * (float)d_Z_Offset;
-		y += dy * (float)d_Z_Offset;
-
-		//Step through the image space by slice in z direction
-		for (int z = 0; z < d_Nz; z++) {
-			//Get the next n and x
-			x += dx;
-			y += dy;
-
-			//Add any pixels that fall within valid values
-			if (x > 0 && y > 0 && x < d_Px && y < d_Py)
-				Pro++;
-		}
-
-		Norm[(j + view*d_MPy)*d_MPx + i] = Pro;
-	}
-}
-
-__global__ void AverageProjectionNorm(float * Norm){
-	//Define pixel location in x and y
-	int i = blockDim.x * blockIdx.x + threadIdx.x;
-	int j = blockDim.y * blockIdx.y + threadIdx.y;
-
-	//Check image boundaries
-	if ((i < d_Px) && (j < d_Py)){
-		float count = 0;
-
-		//Get the value of the projection over all views
-		for (int n = 0; n < d_Views; n++) count += Norm[(j + n*d_MPy)*d_MPx + i];
-
-		//For each view calculate the precent contribution to the total
-		for (int n = 0; n < d_Views; n++){
-			if (count > 0)
-				Norm[(j + n*d_MPy)*d_MPx + i] /= count;
-			else Norm[(j + n*d_MPy)*d_MPx + i] = 0.0;
-		}
-	}
-}
-
 /////////////////////////////////////////////////////////////////////////////////////////////
 //Functions to do initial correction of raw data: log and scatter correction
 __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, float MaxVal){
@@ -257,7 +203,21 @@ __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, flo
 		if (sample > MaxVal) val = 0.0f;
 
 		//Sino[(j + view*d_MPy)*d_MPx + i] = val;
-		Sino[(j + view*d_MPy)*d_MPx + i] = sample;
+		Sino[(j + view*d_MPy)*d_sinoPitch + i] = sample;
+	}
+}
+
+__global__ void rescale(float * Sino, int view, float * MaxVal, float * MinVal) {
+	//Define pixel location in x and y
+	int i = blockDim.x * blockIdx.x + threadIdx.x;
+	int j = blockDim.y * blockIdx.y + threadIdx.y;
+
+	//Check image boundaries
+	if ((i < d_Px) && (j < d_Py)) {
+		float test = Sino[(j + view*d_MPy)*d_sinoPitch + i];
+		if (test > 0) {
+			Sino[(j + view*d_MPy)*d_sinoPitch + i] = (test - *MinVal + 1.0f) / *MaxVal * USHRT_MAX;//scale from 1 to max
+		}
 	}
 }
 
@@ -327,7 +287,7 @@ __global__ void ScatterCorrect(float * Sino, unsigned short * Proj, float * Blur
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 //START part of the reconstuction code
-__global__ void ProjectImage(float * Sino, float * Norm, float *Error){
+__global__ void ProjectImage(float * Sino, float *Error){
 	//Define pixel location in x and y
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
@@ -359,8 +319,8 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Error){
 		dy = d_PitchNz / ez * (dy - ey) / d_PitchNx;
 
 		//Add slice offset
-		x += dx * (float)d_Z_Offset;
-		y += dy * (float)d_Z_Offset;
+		x += dx * (float)(d_Z_Offset - 1);
+		y += dy * (float)(d_Z_Offset - 1);
 
 		//Step through the image space by slice in z direction
 		for (int z = 0; z < d_Nz; z++) {
@@ -369,7 +329,7 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Error){
 			y += dy;
 			//Out of bounds and mid pixel interpolation handled by texture call
 			//TODO!!!!: bounds are not checked for y direction, make 3d texture or bounds handle here
-			if (y > 0 && y < d_MNy) {
+			if (y > 0 && y < d_MNy && x > 0 && x < d_MNx) {
 				float value = tex2D(textImage, x, y + z*d_MNy);
 				if (value != 0) {
 					Pro += value;
@@ -378,12 +338,15 @@ __global__ void ProjectImage(float * Sino, float * Norm, float *Error){
 			}
 		}//z loop
 
-		if (count == 0) count = 1.0f;
-		float err = (Sino[i + d_MPx*(j + view*d_MPy)] / scale - Pro * Norm[(j + view*d_MPy)*d_MPx + i]) / count;
+		float err;
+		if (count == 0) err = 0.0f;
+		//else err = Sino[i + d_sinoPitch*(j + view*d_MPy)] * scale - Pro / count;
+		else err = Sino[i + d_sinoPitch*(j + view*d_MPy)] - Pro / count;
 
 		//Get the projection error and add calculated error to an error image to back project
 		//atomicAdd(&Error[(j + view*d_MPy)*d_MPx + i], err);
-		Error[(j + view*d_MPy)*d_MPx + i] = err;
+		Error[(j + view*d_MPy)*d_errorPitch + i] = err;
+		//Error[(j + view*d_MPy)*d_errorPitch + i] = 0.0;
 	}//image boudary check
 }
 
@@ -391,40 +354,68 @@ __global__ void BackProjectError(float * IM, float beta){
 	//Define pixel location in x, y, and z
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
-	int view = blockDim.z * blockIdx.z + threadIdx.z;
+	int k = blockDim.z * blockIdx.z + threadIdx.z;
 
-	//geometry cache
-	float ex = d_beamx[view];
-	float ey = d_beamy[view];
-	float ez = d_beamz[view];
+	//Set a normalization and pixel value to 0
+	float error[NUMVIEWS];
+	float count = 0.0f;
 
-	//Check image boundaries
-	if ((i < d_Nx) && (j < d_Ny)){
-		for (int k = 0; k < d_Nz; k++) {
-			//Define the direction in z to get r
-			float r = (ez) / (((float)(k + d_Z_Offset)*d_PitchNz) + ez);
+	for (int view = 0; view < NUMVIEWS; view++) {
+		//geometry cache (in pixels)
+		float ex = d_beamx[view] / d_PitchNx;
+		float ey = d_beamy[view] / d_PitchNy;
+		float ezInv = d_PitchNz / d_beamz[view];
 
-			//Use r to get detecor x and y
-			float dx = ex + r * (((float)i - d_HalfNx + 0.5)*d_PitchNx - ex);
-			float dy = ey + r * (((float)j - d_HalfNy + 0.5)*d_PitchNy - ey);
+		float NtoP = d_PitchNx / d_PitchPx;
 
-			//Use detector x and y to get pixels
-			float x = dx / d_PitchPx + d_HalfPx;
-			float y = dy / d_PitchPy + d_HalfPy;
-
-			//Set a normalization and pixel value to 0
-			float val = 0.0f;
+		//Check image boundaries
+		if ((i < d_Nx) && (j < d_Ny)) {
+			float dx = (d_Z_Offset + k) * ezInv;
+			float x = (i - d_HalfNx + ex * dx) / (1 + dx) * NtoP - 0.5 + d_HalfPx;
+			float y = (j - d_HalfNy + ey * dx) / (1 + dx) * NtoP - 0.5 + d_HalfPy;
 
 			//Update the value based on the error scaled and save the scale
-			if (y > 0 && y < d_MPy)
-				val = tex2D(textError, x, y + view*d_MPy);
-
-			//float uval = IM[(j + k*d_MNy)*d_MNx + i];
-			//IM[(j + k*d_MNy)*d_MNx + i] = uval + beta*val;
-			IM[(j + k*d_MNy)*d_MNx + i] += beta*val;
-			//atomicAdd(&IM[(j + k*d_MNy)*d_MNx + i], beta*val);
-		}//z loop
+			if (y > 0 && y < d_MPy && x > 10 && x < d_MPx - 10) {
+				float val = tex2D(textError, x, y + view*d_MPy);
+				if (val != 0) {
+					error[view] = val;
+					count++;
+				}
+			}
+		}
 	}
+
+	//find the median
+	for (int iter1 = 0; iter1 < NUMVIEWS - 1; iter1++) {
+		for (int iter2 = iter1 + 1; iter2 < NUMVIEWS; iter2++) {
+			if (error[iter2] < error[iter1]) {
+				// swap elements
+				float temp = error[iter1];
+				error[iter1] = error[iter2];
+				error[iter2] = temp;
+			}
+		}
+	}
+
+	int index = NUMVIEWS;
+	for (int iter1 = 0; iter1 < NUMVIEWS; iter1++) 
+		if (error[iter1] == 0.0f) {
+			index = iter1 + 1;
+			break;
+		}
+
+	float err;
+	if (index % 2 == 0) {
+		// if there is an even number of elements, return mean of the two elements in the middle
+		err = (error[index / 2] + error[index / 2 - 1]) / 2.0;
+	}
+	else {
+		// else return the element in the middle
+		err = error[index / 2];
+	}
+
+	if (count > 0)
+		IM[(j + k*d_MNy)*d_MNx + i] += beta*err;
 }
 
 __global__ void BackProjectSliceOff(float * IM, float beta) {
@@ -832,8 +823,7 @@ __global__ void CreateSyntheticProjection(unsigned short * Proj, float * Win, fl
 	}
 }
 
-__global__ void CreateSyntheticProjectionNew(unsigned short * Proj, float* Win, float * StIm, float *Im, float MaxVal, int cz)
-{
+__global__ void CreateSyntheticProjectionNew(unsigned short * Proj, float* Win, float * StIm, float *Im, float MaxVal, int cz){
 	//Define pixel location in x, y, and z
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
@@ -922,6 +912,61 @@ __global__ void GetMaxImageVal(float * Image, int sizeIM, float * MaxVal){
 	//write the result for this block to global memory
 	if (thread == 0) {
 		atomicMax(MaxVal, val);
+	}
+}
+
+__global__ void GetMinImageVal(float * Image, int sizeIM, float * MinVal) {
+	//Define shared memory to read all the threads
+	extern __shared__ float data[];
+
+	//define the thread and block location
+	int thread = threadIdx.x;
+	int i = blockIdx.x * (blockDim.x * 2) + threadIdx.x;
+	int j = blockIdx.y *blockDim.y + threadIdx.y;
+	int gridSize = blockDim.x * 2 * gridDim.x;
+
+	if (i == 0 && j == 0) *MinVal = (float)SHRT_MAX;
+	__syncthreads();
+
+	//Declare a sum value and iterat through grid to sum
+	float val = (float)SHRT_MAX;
+	for (int n = i; n + blockDim.x < sizeIM; n += gridSize) {
+		float val1 = Image[j*sizeIM + n];
+		float val2 = Image[j*sizeIM + n + blockDim.x];
+		if (val1 == 0.0f) val1 = (float)SHRT_MAX;
+		if (val2 == 0.0f) val2 = (float)SHRT_MAX;
+		val = min(val, min(val1, val2));
+	}
+
+	//Each thread puts its local sum into shared memory
+	data[thread] = val;
+	__syncthreads();
+
+	//Do reduction in shared memory
+	if (thread < 512) { data[thread] = val = min(val, data[thread + 512]); }
+	__syncthreads();
+
+	if (thread < 256) { data[thread] = val = min(val, data[thread + 256]); }
+	__syncthreads();
+
+	if (thread < 128) { data[thread] = val = min(val, data[thread + 128]); }
+	__syncthreads();
+
+	if (thread < 64) { data[thread] = val = min(val, data[thread + 64]); }
+	__syncthreads();
+
+	if (thread < 32) {
+		// Fetch final intermediate sum from 2nd warp
+		data[thread] = val = min(val, data[thread + 32]);
+		// Reduce final warp using shuffle
+		for (int offset = warpSize / 2; offset > 0; offset /= 2) {
+			val = min(val, __shfl_down(val, offset));
+		}
+	}
+
+	//write the result for this block to global memory
+	if (thread == 0) {
+		atomicMin(MinVal, val);
 	}
 }
 
@@ -1020,34 +1065,33 @@ TomoError TomoRecon::SetUpGPUMemory(){
 	//Define the size of each of the memory spaces on the gpu in number of bytes
 	size_t sizeIM = MemR_Nx * MemR_Ny * Sys->Recon->Nz * sizeof(float);
 	size_t sizeProj = Sys->Proj->Nx * Sys->Proj->Ny * sizeof(unsigned short);
-	size_t sizeSino = MemP_Nx  * MemP_Ny * Sys->Proj->NumViews * sizeof(float);
-	size_t sizeError = MemP_Nx  * MemP_Ny * sizeof(float);
+	size_t sizeSino = MemP_Nx * MemP_Ny * Sys->Proj->NumViews * sizeof(float);
+	size_t sizeError = MemP_Nx * MemP_Ny * sizeof(float);
 	size_t sizeSlice = Sys->Recon->Nz * sizeof(float);
 
 	//Allocate memory on GPU
 	cuda(MallocPitch((void**)&d_Image, &imagePitch, MemR_Nx * sizeof(float), MemR_Ny * Sys->Recon->Nz));;
 	cuda(Malloc((void**)&d_Proj, sizeProj));
 	cuda(MallocPitch((void**)&d_Error, &errorPitch, MemP_Nx * sizeof(float), MemP_Ny * Sys->Proj->NumViews));
-	cuda(Malloc((void**)&d_Sino, sizeSino));
-	cuda(Malloc((void**)&d_Norm, sizeSino));
+	cuda(MallocPitch((void**)&d_Sino, &sinoPitch, MemP_Nx * sizeof(float), MemP_Ny * Sys->Proj->NumViews));
 	cuda(Malloc((void**)&d_Pro, sizeSino));
 	cuda(Malloc((void**)&beamx, Sys->Proj->NumViews * sizeof(float)));
 	cuda(Malloc((void**)&beamy, Sys->Proj->NumViews * sizeof(float)));
 	cuda(Malloc((void**)&beamz, Sys->Proj->NumViews * sizeof(float)));
 	cuda(Malloc((void**)&d_MaxVal, sizeof(float)));
+	cuda(Malloc((void**)&d_MinVal, sizeof(float)));
 
 	//Set the values of the image and sinogram to all 0
 	cuda(Memset2DAsync(d_Image, imagePitch, 0, MemR_Nx * sizeof(float), MemR_Ny * Sys->Recon->Nz));
 	cuda(Memset2DAsync(d_Error, errorPitch, 0, MemP_Nx * sizeof(float), MemP_Ny * Sys->Proj->NumViews));
+	cuda(Memset2DAsync(d_Sino, sinoPitch, 0, MemP_Nx * sizeof(float), MemP_Ny * Sys->Proj->NumViews));
 	cuda(MemcpyAsync(beamx, Sys->SysGeo.EmitX, Sys->Proj->NumViews * sizeof(float), cudaMemcpyHostToDevice));
 	cuda(MemcpyAsync(beamy, Sys->SysGeo.EmitY, Sys->Proj->NumViews * sizeof(float), cudaMemcpyHostToDevice));
 	cuda(MemcpyAsync(beamz, Sys->SysGeo.EmitZ, Sys->Proj->NumViews * sizeof(float), cudaMemcpyHostToDevice));
-	cuda(MemsetAsync(d_Sino, 0, sizeSino));
-	cuda(MemsetAsync(d_Norm, 0, sizeSino));
 	cuda(MemsetAsync(d_Pro, 0, sizeProj));
 
 	//Define the textures
-	textImage.filterMode = cudaFilterModePoint;
+	textImage.filterMode = cudaFilterModeLinear;
 	textImage.addressMode[0] = cudaAddressModeClamp;
 	textImage.addressMode[1] = cudaAddressModeClamp;
 
@@ -1055,7 +1099,7 @@ TomoError TomoRecon::SetUpGPUMemory(){
 	textError.addressMode[0] = cudaAddressModeClamp;
 	textError.addressMode[1] = cudaAddressModeClamp;
 
-	textSino.filterMode = cudaFilterModePoint;
+	textSino.filterMode = cudaFilterModeLinear;
 	textSino.addressMode[0] = cudaAddressModeClamp;
 	textSino.addressMode[1] = cudaAddressModeClamp;
 
@@ -1095,31 +1139,12 @@ TomoError TomoRecon::SetUpGPUMemory(){
 	cuda(MemcpyToSymbolAsync(d_beamx, &beamx, sizeof(float*)));
 	cuda(MemcpyToSymbolAsync(d_beamy, &beamy, sizeof(float*)));
 	cuda(MemcpyToSymbolAsync(d_beamz, &beamz, sizeof(float*)));
-
-	return Tomo_OK;
-}
-
-TomoError TomoRecon::GetReconNorm(){
-	int Cx = 1;
-	int Cy = 1;
-	if (Sys->Proj->Nx % 16 == 0) Cx = 0;
-	if (Sys->Proj->Ny % 16 == 0) Cy = 0;
-
-	//Set up GPU kernel thread and block sizes based on image size
-	dim3 dimBlockProj(16, 16);
-	dim3 dimGridProj(Sys->Proj->Nx / 16 + Cx, Sys->Proj->Ny / 16 + Cy);
-	dim3 dimBlockProj2(32, 8);
-	dim3 dimGridProj2(Sys->Proj->Nx / 32 + Cx, Sys->Proj->Ny / 8 + Cy, NumViews);
-
-	//this is a GPU function call that causes the threads to perform the projection norm calculation
-	KERNELCALL2(ProjectionNorm, dimGridProj2, dimBlockProj2, d_Norm);
-
-	//Calculate the contribution of each view to the total number of views
-	KERNELCALL2(AverageProjectionNorm, dimGridProj, dimBlockProj, d_Norm);
-
-	// Check the last error to make sure that norm calculations correction worked properly
-	cudaError_t error = cudaGetLastError();
-	std::cout << "Calculate projection norm: " << cudaGetErrorString(error) << std::endl;
+	size_t pitch = errorPitch / sizeof(float);
+	cuda(MemcpyToSymbolAsync(d_errorPitch, &pitch, sizeof(size_t)));
+	pitch = imagePitch / sizeof(float);
+	cuda(MemcpyToSymbolAsync(d_imagePitch, &pitch, sizeof(size_t)));
+	pitch = sinoPitch / sizeof(float);
+	cuda(MemcpyToSymbolAsync(d_sinoPitch, &pitch, sizeof(size_t)));
 
 	return Tomo_OK;
 }
@@ -1225,7 +1250,7 @@ TomoError TomoRecon::FindSliceOffset(){
 	//Single SART Iteration with larger z_Pitch
 	cuda(BindTexture2D(NULL, textImage, d_Image, textImage.channelDesc, MemR_Nx, MemR_Ny*Sys->Recon->Nz, imagePitch));
 
-	KERNELCALL2(ProjectImage, dimGridIm4, dimBlockIm2, d_Sino, d_Norm, d_Error);
+	KERNELCALL2(ProjectImage, dimGridIm4, dimBlockIm2, d_Sino, d_Error);
 
 	cuda(BindTexture2D(NULL, textError, d_Error, textImage.channelDesc, MemP_Nx, MemP_Ny, MemP_Nx * sizeof(float)));
 
@@ -1266,8 +1291,6 @@ TomoError TomoRecon::FindSliceOffset(){
 	cuda(MemcpyToSymbol(&d_PitchNz, &Sys->Recon->Pitch_z, sizeof(float)));
 	
 	cuda(Memset(d_Image, 0, sizeIm));
-
-	tomo_err_throw(GetReconNorm());
 
 	return Tomo_OK;
 }
@@ -1326,9 +1349,6 @@ TomoError TomoRecon::SetUpGPUForRecon(){
 	//Set up GPU memory space
 	tomo_err_throw(SetUpGPUMemory());
 
-	//Calulate the reconstruction Normalization for the SART
-	tomo_err_throw(GetReconNorm());
-
 	return Tomo_OK;
 }
 
@@ -1337,7 +1357,6 @@ TomoError TomoRecon::SetUpGPUForRecon(){
 TomoError TomoRecon::FreeGPUMemory(void){
 	//Free memory allocated on the GPU
 	cuda(Free(d_Proj));
-	cuda(Free(d_Norm));
 	cuda(Free(d_Image));
 	cuda(Free(d_Error));
 	cuda(Free(d_Sino));
@@ -1377,6 +1396,12 @@ TomoError TomoRecon::correctProjections() {
 
 	for (int view = 0; view < Sys->Proj->NumViews; view++) cudaStreamCreate(&(streams[view]));
 
+	//Define the size of the Image space
+	int MemR_Nx = (Sys->Recon->Nx / 16 + Cx) * 16;
+	int MemR_Ny = (Sys->Recon->Ny / 16 + Cy) * 16;
+	int MemP_Nx = (Sys->Proj->Nx / 16 + Cx) * 16;
+	int MemP_Ny = (Sys->Proj->Ny / 16 + Cy) * 16;
+
 	//Define memory size of the raw data as unsigned short
 	int size_proj = Sys->Proj->Nx * Sys->Proj->Ny;
 	size_t sizeProj = size_proj * sizeof(unsigned short);
@@ -1385,9 +1410,12 @@ TomoError TomoRecon::correctProjections() {
 	dim3 dimBlockProj(32, 32);
 	dim3 dimGridProj(Sys->Proj->Nx / 32 + Cx, Sys->Proj->Ny / 32 + Cy);
 
+	dim3 dimBlockIm2(32, 8);
+	dim3 dimGridIm2(Sys->Recon->Nx / 32 + Cx, Sys->Recon->Ny / 8 + Cy, Sys->Recon->Nz);
+	dim3 dimGridIm3(Sys->Recon->Nx / 32 + Cx, Sys->Recon->Ny / 8 + Cy, Sys->Proj->NumViews * Sys->Recon->Nz);//, Sys->Proj->NumViews
+	dim3 dimGridIm4(Sys->Recon->Nx / 32 + Cx, Sys->Recon->Ny / 8 + Cy, 1);//Sys->Proj->NumViews
+
 	//Define the size of the sinogram space
-	int MemP_Nx = (Sys->Proj->Nx / 16 + Cx) * 16;
-	int MemP_Ny = (Sys->Proj->Ny / 16 + Cy) * 16;
 	int size_sino = MemP_Nx * MemP_Ny;
 	size_t sizeSino = MemP_Nx  * MemP_Ny * Sys->Proj->NumViews * sizeof(float);
 
@@ -1396,11 +1424,20 @@ TomoError TomoRecon::correctProjections() {
 	cuda(Malloc((void**)&d_SinoBlurX, size_sino * sizeof(float)));
 	cuda(Malloc((void**)&d_SinoBlurXY, size_sino * sizeof(float)));
 
+	dim3 dimGridSum(1, 1);
+	dim3 dimBlockSum(1024, 1);
+
 	//Cycle through each stream and do simple log correction
 	for (int view = 0; view < Sys->Proj->NumViews; view++) {
 		cuda(MemcpyAsync(d_Proj, Sys->Proj->RawData + view*size_proj, sizeProj, cudaMemcpyHostToDevice));
 
-		KERNELCALL4(LogCorrectProj, dimGridProj, dimBlockProj, 0, streams[view], d_Sino, view, d_Proj, SHRT_MAX);
+		KERNELCALL2(LogCorrectProj, dimGridProj, dimBlockProj, d_Sino, view, d_Proj, USHRT_MAX);
+
+		KERNELCALL3(GetMaxImageVal, dimGridSum, dimBlockSum, 1024 * sizeof(float), d_Sino + (MemR_Nx * MemR_Ny)*view, MemR_Nx * MemR_Ny, d_MaxVal);
+
+		KERNELCALL3(GetMinImageVal, dimGridSum, dimBlockSum, 1024 * sizeof(float), d_Sino + (MemR_Nx * MemR_Ny)*view, MemR_Nx * MemR_Ny, d_MinVal);
+
+		KERNELCALL2(rescale, dimGridProj, dimBlockProj, d_Sino, view, d_MaxVal, d_MinVal);
 
 		//cuda(Memset(d_SinoBlurX, 0, size_sino * sizeof(float)));
 
@@ -1411,6 +1448,11 @@ TomoError TomoRecon::correctProjections() {
 
 		//cuda(MemcpyAsync(Sys->Proj->RawData + view*size_proj, d_Proj, sizeProj, cudaMemcpyDeviceToHost));
 	}
+
+	//Initial projection
+	cuda(BindTexture2D(NULL, textError, d_Sino, cudaCreateChannelDesc<float>(), MemP_Nx, MemP_Ny*Sys->Proj->NumViews, sinoPitch));
+
+	KERNELCALL2(BackProjectError, dimGridIm2, dimBlockIm2, d_Image, Beta);
 
 	cuda(Free(d_SinoBlurX));
 	cuda(Free(d_SinoBlurXY));
@@ -1429,19 +1471,21 @@ TomoError TomoRecon::test(int index) {
 		size_proj = Sys->Proj->Nx * Sys->Proj->Ny;
 		sizeProj = size_proj * sizeof(unsigned short);
 		cuda(MemcpyAsync(d_Proj, Sys->Proj->RawData + index*size_proj, sizeProj, cudaMemcpyHostToDevice));
-		resizeImage(d_Proj, Sys->Proj->Nx, Sys->Proj->Ny, *ca, width, height, SHRT_MAX);
+		resizeImage(d_Proj, Sys->Proj->Nx, Sys->Proj->Ny, *ca, width, height, USHRT_MAX);
 		break;
 	case sino_images:
 		size_proj = 1920 * Sys->Proj->Ny;
 		//size_t sizeProj = size_proj * sizeof(float);
 		//cuda(Memcpy(d_Sino, Sys->Proj->RawData + index*size_proj, sizeProj, cudaMemcpyHostToDevice));
 		//resizeImage(d_Sino+ size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, log(USHRT_MAX) - 1);
-		resizeImage(d_Sino + size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, SHRT_MAX);
+		resizeImage(d_Sino + size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, USHRT_MAX);
 		break;
 	case norm_images:
-		resizeImage(d_Norm + size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, 1);
-		break;
+		//skip straight to the first iteration
+		//resizeImage(d_Norm + size_proj*index, 1920, Sys->Proj->Ny, *ca, width, height, 1);
+		//break;
 	case recon_images:
+	{
 		int Cx = 1;
 		int Cy = 1;
 		if (Sys->Proj->Nx % 16 == 0) Cx = 0;
@@ -1458,14 +1502,52 @@ TomoError TomoRecon::test(int index) {
 
 		const int blocks = (width * height + PXL_KERNEL_THREADS_PER_BLOCK - 1) / PXL_KERNEL_THREADS_PER_BLOCK;
 
-		dim3 dimGridSum(1, Sys->Recon->Nz);
-		dim3 dimBlockSum(1024, 1);
-		KERNELCALL4(GetMaxImageVal, dimGridSum, dimBlockSum, 1024 * sizeof(float), stream, d_Image, MemR_Nx * MemR_Ny, d_MaxVal);
+		//dim3 dimGridSum(1, Sys->Recon->Nz);
+		//dim3 dimBlockSum(1024, 1);
+		//KERNELCALL4(GetMaxImageVal, dimGridSum, dimBlockSum, 1024 * sizeof(float), stream, d_Image, MemR_Nx * MemR_Ny, d_MaxVal);
 		if (blocks > 0)
 			KERNELCALL4(resizeKernelTex, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, Sys->Proj->Nx, Sys->Proj->Ny, width, height, d_MaxVal, index);
+
+		//float h_MaxVal;
+		//cuda(Memcpy(&h_MaxVal, d_MaxVal, sizeof(float), cudaMemcpyDeviceToHost));
+
+		//std::cout << "The max reconstructed value is: " << h_MaxVal << std::endl;
 		//resizeImage(d_Image + size_proj*index, Sys->Proj->Nx, Sys->Proj->Ny, *ca, width, height, log(SHRT_MAX) - 1);
 		//resizeImage(d_Error, 1920, Sys->Proj->Ny, *ca, width, height, log(SHRT_MAX) - 1);
+	}
 		break;
+	case error_images:
+	{
+		int Cx = 1;
+		int Cy = 1;
+		if (Sys->Proj->Nx % 16 == 0) Cx = 0;
+		if (Sys->Proj->Ny % 16 == 0) Cy = 0;
+
+		//Define the size of the Image space
+		int MemR_Nx = (Sys->Recon->Nx / 16 + Cx) * 16;
+		int MemR_Ny = (Sys->Recon->Ny / 16 + Cy) * 16;
+		int MemP_Nx = (Sys->Proj->Nx / 16 + Cx) * 16;
+		int MemP_Ny = (Sys->Proj->Ny / 16 + Cy) * 16;
+
+		size_proj = Sys->Proj->Nx * Sys->Proj->Ny;
+		cuda(BindTexture2D(NULL, textImage, d_Error, cudaCreateChannelDesc<float>(), MemP_Nx, MemP_Ny*Sys->Proj->NumViews, errorPitch));
+		cuda(BindSurfaceToArray(displaySurface, *ca));
+		//cuda(BindSurfaceToArray(imageSurface, (cudaArray_t)d_Proj));
+
+		const int blocks = (width * height + PXL_KERNEL_THREADS_PER_BLOCK - 1) / PXL_KERNEL_THREADS_PER_BLOCK;
+
+		//dim3 dimGridSum(1, Sys->Proj->NumViews);
+		//dim3 dimBlockSum(1024, 1);
+		//KERNELCALL4(GetMaxImageVal, dimGridSum, dimBlockSum, 1024 * sizeof(float), stream, d_Error, MemR_Nx * MemR_Ny, d_MaxVal);
+		if (blocks > 0)
+			KERNELCALL4(resizeKernelTex, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, Sys->Proj->Nx, Sys->Proj->Ny, width, height, d_MaxVal, index);
+
+		//float h_MaxVal;
+		//cuda(Memcpy(&h_MaxVal, d_MaxVal, sizeof(float), cudaMemcpyDeviceToHost));
+
+		//std::cout << "The max reconstructed value is: " << h_MaxVal << std::endl;
+	}
+	break;
 	}
 	return Tomo_OK;
 }
@@ -1499,7 +1581,7 @@ TomoError TomoRecon::reconStep() {
 
 	dim3 dimBlockIm2(32, 8);
 	dim3 dimGridIm2(Sys->Recon->Nx / 32 + Cx, Sys->Recon->Ny / 8 + Cy, Sys->Recon->Nz);
-	dim3 dimGridIm3(Sys->Recon->Nx / 32 + Cx, Sys->Recon->Ny / 8 + Cy, Sys->Proj->NumViews * Sys->Recon->Nz);//, Sys->Proj->NumViews
+	dim3 dimGridIm3(Sys->Recon->Nx / 32 + Cx, Sys->Recon->Ny / 8 + Cy, 1);//Sys->Proj->NumViews * Sys->Recon->Nz
 	dim3 dimGridIm4(Sys->Recon->Nx / 32 + Cx, Sys->Recon->Ny / 8 + Cy, Sys->Proj->NumViews);
 
 	dim3 dimBlockSino(16, 16);
@@ -1516,11 +1598,11 @@ TomoError TomoRecon::reconStep() {
 
 	cuda(BindTexture2D(NULL, textImage, d_Image, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny*Sys->Recon->Nz, imagePitch));
 
-	KERNELCALL2(ProjectImage, dimGridIm4, dimBlockIm2, d_Sino, d_Norm, d_Error);
+	KERNELCALL2(ProjectImage, dimGridIm4, dimBlockIm2, d_Sino, d_Error);
 
 	cuda(BindTexture2D(NULL, textError, d_Error, cudaCreateChannelDesc<float>(), MemP_Nx, MemP_Ny*Sys->Proj->NumViews, errorPitch));
 
-	KERNELCALL2(BackProjectError, dimGridIm4, dimBlockIm2, d_Image, Beta);
+	KERNELCALL2(BackProjectError, dimGridIm2, dimBlockIm2, d_Image, Beta);
 	//if (Sys->UsrIn->SmoothEdge == 1)
 	//	KERNELCALL2(CorrectEdgesX, dimGridCorr, dimBlockCorr, d_Image, d_Image2);
 

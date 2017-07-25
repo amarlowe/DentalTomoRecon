@@ -60,7 +60,8 @@ typedef enum {
 	sino_images,
 	raw_images2,
 	norm_images,
-	recon_images
+	recon_images,
+	error_images
 } display_t;
 
 #define tomo_err_throw(x) {TomoError err = x; if(err != Tomo_OK) return err;}
@@ -260,7 +261,6 @@ private:
 	//Functions to Initialize the GPU and set up the reconstruction normalization
 	void DefineReconstructSpace();
 	TomoError SetUpGPUMemory();
-	TomoError GetReconNorm();
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Functions called to control the stages of reconstruction
@@ -297,7 +297,6 @@ private:
 
 	//Define data buffer
 	unsigned short * d_Proj;
-	float * d_Norm;
 	float * d_Image;
 	float * d_Error;
 	float * d_Sino;
@@ -306,6 +305,7 @@ private:
 	float * beamy;
 	float * beamz;
 	float * d_MaxVal;
+	float * d_MinVal;
 
 	//Decay constant for recon
 	float Beta = 1.0f;
@@ -317,7 +317,7 @@ private:
 
 	//cuda pitch variables generated from 2d mallocs
 	size_t imagePitch;
-	size_t image2Pitch;
+	size_t sinoPitch;
 	size_t errorPitch;
 
 	std::string savefilename;
