@@ -413,6 +413,7 @@ __global__ void BackProjectError(float * IM, float beta){
 		// else return the element in the middle
 		err = error[index / 2];
 	}
+	err = error[index - 1];
 
 	if (count > 0)
 		IM[(j + k*d_MNy)*d_MNx + i] += beta*err;
