@@ -65,6 +65,7 @@ class mainWindow : public wxFrame
 		virtual void onContinue( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onContRun( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onStep( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onContinuous( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onAbout( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onPageChange( wxAuiNotebookEvent& event ) { event.Skip(); }
 		

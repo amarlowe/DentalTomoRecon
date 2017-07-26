@@ -229,6 +229,8 @@ public:
 	TomoError correctProjections();
 	TomoError reconInit();
 	TomoError reconStep();
+	TomoError singleFrame();
+	float getDistance();
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//interop extensions
@@ -251,6 +253,8 @@ public:
 	int NumViews;
 
 	int iteration = 0;
+	bool continuousMode = false;
+	int sliceIndex = 0;
 
 private:
 	/********************************************************************************************/

@@ -136,7 +136,7 @@ wxPanel *DTRMainWindow::CreateNewPage() {
 	struct SystemControl * Sys = new SystemControl;
 	genSys(Sys);
 	wxStreamToTextRedirector redirect(m_textCtrl8);
-	return new GLFrame(m_auinotebook6, Sys, gainFilepath, darkFilepath);
+	return new GLFrame(m_auinotebook6, m_statusBar1, Sys, gainFilepath, darkFilepath);
 }
 
 void DTRMainWindow::onOpen(wxCommandEvent& WXUNUSED(event)) {
@@ -175,7 +175,14 @@ void DTRMainWindow::onStep(wxCommandEvent& WXUNUSED(event)) {
 		break;
 	case raw_images2:
 		recon->reconInit();
-		recon->currentDisplay = norm_images;
+		//recon->currentDisplay = norm_images;
+		recon->currentDisplay = recon_images;
+		{
+			int pos = ((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_scrollBar->GetThumbPosition();
+			if (pos > recon->Sys->Recon->Nz) pos = recon->Sys->Recon->Nz - 1;
+			currentFrame->m_scrollBar->SetScrollbar(pos, 1, recon->Sys->Recon->Nz, 1);
+			currentFrame->m_canvas->OnScroll(pos);
+		}
 		break;
 	case norm_images:
 		//recon->currentDisplay = recon_images;//intentionally skipped break
@@ -216,6 +223,28 @@ void DTRMainWindow::onContinue(wxCommandEvent& WXUNUSED(event)) {
 	ReconThread* thd = new ReconThread(currentFrame->m_canvas, recon, currentFrame, m_statusBar1, m_textCtrl8);
 	thd->Create();
 	thd->Run();
+}
+
+void DTRMainWindow::onContinuous(wxCommandEvent& WXUNUSED(event)) {
+	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
+		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
+		return;
+	}
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->continuousMode = true;
+	wxStreamToTextRedirector redirect(m_textCtrl8);
+	recon->correctProjections();
+	recon->reconInit();
+	recon->sliceIndex = 0;//initialization in recon.h doesn't work for some reason
+	recon->singleFrame();
+	recon->currentDisplay = recon_images;
+	currentFrame->m_scrollBar->SetThumbPosition(0);
+	currentFrame->m_canvas->OnScroll(0);
+	currentFrame->m_scrollBar->Show(false);
+	currentFrame->m_canvas->paint();
+	m_statusBar1->SetStatusText(wxString::Format(wxT("Distance from detector to current slice: %.2f mm."), recon->getDistance()));
 }
 
 void DTRMainWindow::onContRun(wxCommandEvent& WXUNUSED(event)) {
@@ -757,8 +786,8 @@ EVT_SCROLL(GLFrame::OnScroll)
 EVT_MOUSEWHEEL(GLFrame::OnMousewheel)
 wxEND_EVENT_TABLE()
 
-GLFrame::GLFrame(wxAuiNotebook *frame, struct SystemControl * Sys, wxString gainFile, wxString darkFile, const wxPoint& pos, const wxSize& size, long style)
-	: wxPanel(frame, wxID_ANY, pos, size), m_canvas(NULL){
+GLFrame::GLFrame(wxAuiNotebook *frame, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString darkFile, const wxPoint& pos, const wxSize& size, long style)
+	: wxPanel(frame, wxID_ANY, pos, size), m_canvas(NULL), m_status(status){
 	//Set up sizer to make the canvas take up the entire panel (wxWidgets handles garbage collection)
 	wxBoxSizer* bSizer;
 	bSizer = new wxBoxSizer(wxVERTICAL);
@@ -795,11 +824,19 @@ void GLFrame::OnMousewheel(wxMouseEvent& event) {
 	if (event.m_controlDown) {
 	}
 	else {
-		newScrollPos += m_scrollBar->GetThumbPosition();
-		if (newScrollPos < 0) newScrollPos = 0;
-		if (newScrollPos > m_scrollBar->GetRange() - 1) newScrollPos = m_scrollBar->GetRange() - 1;
-		m_scrollBar->SetThumbPosition(newScrollPos);
-		m_canvas->OnScroll(newScrollPos);
+		if (m_canvas->recon->continuousMode) {
+			m_canvas->recon->sliceIndex += newScrollPos;
+			m_canvas->recon->singleFrame();
+			m_canvas->paint();
+			m_status->SetStatusText(wxString::Format(wxT("Distance from detector to current slice: %.2f mm."), m_canvas->recon->getDistance()));
+		}
+		else {
+			newScrollPos += m_scrollBar->GetThumbPosition();
+			if (newScrollPos < 0) newScrollPos = 0;
+			if (newScrollPos > m_scrollBar->GetRange() - 1) newScrollPos = m_scrollBar->GetRange() - 1;
+			m_scrollBar->SetThumbPosition(newScrollPos);
+			m_canvas->OnScroll(newScrollPos);
+		}
 	}
 }
 

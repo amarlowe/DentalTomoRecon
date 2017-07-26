@@ -876,7 +876,7 @@ TomoError TomoRecon::ReadRawProjectionData(std::string BaseFileIn, std::string F
 					float C_gval = (float)(gval);
 
 					float n_val = C_val / C_gval;
-					if (C_val + 100 > C_gval) n_val = 0.0;
+					if (C_val + 25 > C_gval) n_val = 0.0;
 
 					int loc3 = (y + view*Sys->Proj->Ny)*Sys->Proj->Nx
 						+ Sys->Proj->Nx - (x + 1);

@@ -63,6 +63,10 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	step = new wxMenuItem( reconstruction, wxID_ANY, wxString( wxT("Step\t") ) + wxT('\t') + wxT("Space"), wxEmptyString, wxITEM_NORMAL );
 	reconstruction->Append( step );
 	
+	wxMenuItem* continous;
+	continous = new wxMenuItem( reconstruction, wxID_ANY, wxString( wxT("Continuous") ) + wxT('\t') + wxT("F6"), wxEmptyString, wxITEM_NORMAL );
+	reconstruction->Append( continous );
+	
 	m_menubar1->Append( reconstruction, wxT("Reconstruction") ); 
 	
 	help = new wxMenu();
@@ -110,6 +114,7 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	this->Connect( cont->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContinue ) );
 	this->Connect( contRun->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContRun ) );
 	this->Connect( step->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onStep ) );
+	this->Connect( continous->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContinuous ) );
 	this->Connect( about->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onAbout ) );
 	m_auinotebook6->Connect( wxEVT_COMMAND_AUINOTEBOOK_PAGE_CHANGED, wxAuiNotebookEventHandler( mainWindow::onPageChange ), NULL, this );
 }
@@ -129,6 +134,7 @@ mainWindow::~mainWindow()
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContinue ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContRun ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onStep ) );
+	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContinuous ) );
 	this->Disconnect( wxID_ABOUT, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onAbout ) );
 	m_auinotebook6->Disconnect( wxEVT_COMMAND_AUINOTEBOOK_PAGE_CHANGED, wxAuiNotebookEventHandler( mainWindow::onPageChange ), NULL, this );
 	

@@ -75,6 +75,7 @@ protected:
 	void onDarkSelect(wxCommandEvent& event);
 	void onStep(wxCommandEvent& event);
 	void onContinue(wxCommandEvent& event);
+	void onContinuous(wxCommandEvent& event);
 	void onPageChange(wxCommandEvent& event);
 
 	//constant globals
@@ -123,7 +124,7 @@ private:
 
 class GLFrame : public wxPanel {
 public:
-	GLFrame(wxAuiNotebook *frame, struct SystemControl * Sys, wxString gainFile, wxString darkFile,
+	GLFrame(wxAuiNotebook *frame, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString darkFile,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = wxDEFAULT_FRAME_STYLE);
@@ -135,6 +136,7 @@ public:
 
 	CudaGLCanvas *m_canvas;
 	wxScrollBar* m_scrollBar;
+	wxStatusBar* m_status;
 
 	wxDECLARE_NO_COPY_CLASS(GLFrame);
 	wxDECLARE_EVENT_TABLE();
