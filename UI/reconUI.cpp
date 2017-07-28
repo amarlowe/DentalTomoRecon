@@ -37,7 +37,7 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	
 	config = new wxMenu();
 	wxMenuItem* configDialog;
-	configDialog = new wxMenuItem( config, wxID_PREFERENCES, wxString( wxT("Edit Geometry") ) , wxEmptyString, wxITEM_NORMAL );
+	configDialog = new wxMenuItem( config, wxID_PREFERENCES, wxString( wxT("Settings") ) , wxEmptyString, wxITEM_NORMAL );
 	config->Append( configDialog );
 	
 	wxMenuItem* gainSelect;
@@ -68,6 +68,29 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	reconstruction->Append( continous );
 	
 	m_menubar1->Append( reconstruction, wxT("Reconstruction") ); 
+	
+	calibration = new wxMenu();
+	wxMenuItem* resList;
+	resList = new wxMenuItem( calibration, wxID_ANY, wxString( wxT("Set Resolution Phantoms") ) , wxEmptyString, wxITEM_NORMAL );
+	calibration->Append( resList );
+	
+	wxMenuItem* contList;
+	contList = new wxMenuItem( calibration, wxID_ANY, wxString( wxT("Set Contrast Phantom") ) , wxEmptyString, wxITEM_NORMAL );
+	calibration->Append( contList );
+	
+	wxMenuItem* runTest;
+	runTest = new wxMenuItem( calibration, wxID_ANY, wxString( wxT("Run Tests") ) , wxEmptyString, wxITEM_NORMAL );
+	calibration->Append( runTest );
+	
+	wxMenuItem* testGeo;
+	testGeo = new wxMenuItem( calibration, wxID_ANY, wxString( wxT("Test Geometries") ) , wxEmptyString, wxITEM_NORMAL );
+	calibration->Append( testGeo );
+	
+	wxMenuItem* autoGeo;
+	autoGeo = new wxMenuItem( calibration, wxID_ANY, wxString( wxT("Auto-detect Geometry") ) , wxEmptyString, wxITEM_NORMAL );
+	calibration->Append( autoGeo );
+	
+	m_menubar1->Append( calibration, wxT("Calibration") ); 
 	
 	help = new wxMenu();
 	wxMenuItem* about;
@@ -115,6 +138,11 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	this->Connect( contRun->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContRun ) );
 	this->Connect( step->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onStep ) );
 	this->Connect( continous->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContinuous ) );
+	this->Connect( resList->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onResList ) );
+	this->Connect( contList->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContList ) );
+	this->Connect( runTest->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onRunTest ) );
+	this->Connect( testGeo->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onTestGeo ) );
+	this->Connect( autoGeo->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onAutoGeo ) );
 	this->Connect( about->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onAbout ) );
 	m_auinotebook6->Connect( wxEVT_COMMAND_AUINOTEBOOK_PAGE_CHANGED, wxAuiNotebookEventHandler( mainWindow::onPageChange ), NULL, this );
 }
@@ -135,6 +163,11 @@ mainWindow::~mainWindow()
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContRun ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onStep ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContinuous ) );
+	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onResList ) );
+	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContList ) );
+	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onRunTest ) );
+	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onTestGeo ) );
+	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onAutoGeo ) );
 	this->Disconnect( wxID_ABOUT, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onAbout ) );
 	m_auinotebook6->Disconnect( wxEVT_COMMAND_AUINOTEBOOK_PAGE_CHANGED, wxAuiNotebookEventHandler( mainWindow::onPageChange ), NULL, this );
 	
@@ -163,6 +196,91 @@ RunBox::RunBox( wxWindow* parent, wxWindowID id, const wxString& title, const wx
 }
 
 RunBox::~RunBox()
+{
+}
+
+resDialog::resDialog( wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style ) : wxDialog( parent, id, title, pos, size, style )
+{
+	this->SetSizeHints( wxDefaultSize, wxDefaultSize );
+	
+	wxFlexGridSizer* fgSizer3;
+	fgSizer3 = new wxFlexGridSizer( 4, 0, 0, 0 );
+	fgSizer3->SetFlexibleDirection( wxVERTICAL );
+	fgSizer3->SetNonFlexibleGrowMode( wxFLEX_GROWMODE_SPECIFIED );
+	
+	m_listCtrl = new wxListCtrl( this, wxID_ANY, wxDefaultPosition, wxSize( 800,300 ), wxLC_REPORT );
+	fgSizer3->Add( m_listCtrl, 0, wxALL, 5 );
+	
+	wxGridSizer* gSizer2;
+	gSizer2 = new wxGridSizer( 0, 2, 0, 0 );
+	
+	addNew = new wxButton( this, wxID_ANY, wxT("Add New Image Sets"), wxPoint( 10,-1 ), wxDefaultSize, 0 );
+	gSizer2->Add( addNew, 0, wxALL|wxALIGN_CENTER_HORIZONTAL, 5 );
+	
+	remove = new wxButton( this, wxID_ANY, wxT("Remove Selected"), wxDefaultPosition, wxDefaultSize, 0 );
+	gSizer2->Add( remove, 0, wxALL|wxALIGN_CENTER_HORIZONTAL, 5 );
+	
+	
+	fgSizer3->Add( gSizer2, 1, wxEXPAND, 5 );
+	
+	m_staticline3 = new wxStaticLine( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLI_HORIZONTAL );
+	fgSizer3->Add( m_staticline3, 0, wxEXPAND | wxALL, 5 );
+	
+	wxGridSizer* gSizer3;
+	gSizer3 = new wxGridSizer( 0, 2, 0, 0 );
+	
+	ok = new wxButton( this, wxID_ANY, wxT("OK"), wxDefaultPosition, wxDefaultSize, 0 );
+	gSizer3->Add( ok, 0, wxALL|wxALIGN_CENTER_HORIZONTAL, 5 );
+	
+	cancel = new wxButton( this, wxID_ANY, wxT("Cancel"), wxDefaultPosition, wxDefaultSize, 0 );
+	gSizer3->Add( cancel, 0, wxALL|wxALIGN_CENTER_HORIZONTAL, 5 );
+	
+	
+	fgSizer3->Add( gSizer3, 1, wxEXPAND, 5 );
+	
+	
+	this->SetSizer( fgSizer3 );
+	this->Layout();
+	
+	this->Centre( wxBOTH );
+	
+	// Connect Events
+	addNew->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( resDialog::onAddNew ), NULL, this );
+	remove->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( resDialog::onRemove ), NULL, this );
+	ok->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( resDialog::onOk ), NULL, this );
+	cancel->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( resDialog::onCancel ), NULL, this );
+}
+
+resDialog::~resDialog()
+{
+	// Disconnect Events
+	addNew->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( resDialog::onAddNew ), NULL, this );
+	remove->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( resDialog::onRemove ), NULL, this );
+	ok->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( resDialog::onOk ), NULL, this );
+	cancel->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( resDialog::onCancel ), NULL, this );
+	
+}
+
+MyDialog3::MyDialog3( wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style ) : wxDialog( parent, id, title, pos, size, style )
+{
+	this->SetSizeHints( wxDefaultSize, wxDefaultSize );
+	
+	wxGridBagSizer* gbSizer1;
+	gbSizer1 = new wxGridBagSizer( 0, 0 );
+	gbSizer1->SetFlexibleDirection( wxBOTH );
+	gbSizer1->SetNonFlexibleGrowMode( wxFLEX_GROWMODE_SPECIFIED );
+	
+	
+	gbSizer1->Add( 0, 0, wxGBPosition( 0, 3 ), wxGBSpan( 1, 1 ), wxEXPAND, 5 );
+	
+	
+	this->SetSizer( gbSizer1 );
+	this->Layout();
+	
+	this->Centre( wxBOTH );
+}
+
+MyDialog3::~MyDialog3()
 {
 }
 

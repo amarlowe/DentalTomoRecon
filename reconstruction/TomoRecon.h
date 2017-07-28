@@ -33,6 +33,11 @@
 #define ITERATIONS 7
 #define DECAY 1.0f
 #define MAXZOOM 30
+#define ZOOMFACTOR 1.1
+#define LIGHTFACTOR 1.1
+#define LIGHTOFFFACTOR 3
+#define LINEWIDTH 3
+#define BARHEIGHT 40
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {											\
@@ -215,7 +220,7 @@ public:
 	TomoRecon(int x, int y, struct SystemControl * Sys);
 	~TomoRecon();
 
-	TomoError init(const char * gainFile, const char * darkFile);
+	TomoError init(const char * gainFile, const char * darkFile, const char * mainFile);
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//High level functions for command line call
@@ -255,6 +260,28 @@ public:
 	int iteration = 0;
 	bool continuousMode = false;
 	int sliceIndex = 0;
+	int zoom = 0;
+	int light = 0;
+	int lightOff = 0;
+	int xOff = 0;
+	int yOff = 0;
+	float scale = 1.5;
+
+	//Selection variables
+
+	//box
+	int baseX = -1;
+	int baseY = -1;
+	int currX = -1;
+	int currY = -1;
+
+	//lower tick
+	int lowX = -1;
+	int lowY = -1;
+
+	//upper tick
+	int upX = -1;
+	int upY = -1;
 
 private:
 	/********************************************************************************************/

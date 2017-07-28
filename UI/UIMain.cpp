@@ -76,7 +76,21 @@ DTRMainWindow::DTRMainWindow(wxWindow* parent) : mainWindow(parent){
 void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 	static int s_pageAdded = 1;
 	(*m_textCtrl8) << "Opening new tab titled: \"" << (int)s_pageAdded << "\"\n";
-	m_auinotebook6->AddPage(CreateNewPage(), wxString::Format(wxT("%u"), s_pageAdded++), true);
+
+	//Step 1: Get and example file for get the path
+#ifdef PROFILER
+	wxString filename = wxT("C:\\Users\\jdean\\Desktop\\Patient18\\AcquiredImage1_0.raw");
+#else
+	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
+		"Raw File (*.raw)|*.raw", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+
+	if (openFileDialog.ShowModal() == wxID_CANCEL)
+		return;
+
+	wxString filename(openFileDialog.GetPath());
+#endif
+
+	m_auinotebook6->AddPage(CreateNewPage(filename), wxString::Format(wxT("%u"), s_pageAdded++), true);
 }
 
 TomoError DTRMainWindow::genSys(struct SystemControl * Sys) {
@@ -132,11 +146,11 @@ TomoError DTRMainWindow::genSys(struct SystemControl * Sys) {
 	return Tomo_OK;
 }
 
-wxPanel *DTRMainWindow::CreateNewPage() {
+wxPanel *DTRMainWindow::CreateNewPage(wxString filename) {
 	struct SystemControl * Sys = new SystemControl;
 	genSys(Sys);
 	wxStreamToTextRedirector redirect(m_textCtrl8);
-	return new GLFrame(m_auinotebook6, m_statusBar1, Sys, gainFilepath, darkFilepath);
+	return new GLFrame(m_auinotebook6, m_statusBar1, Sys, gainFilepath, darkFilepath, filename);
 }
 
 void DTRMainWindow::onOpen(wxCommandEvent& WXUNUSED(event)) {
@@ -232,19 +246,19 @@ void DTRMainWindow::onContinuous(wxCommandEvent& WXUNUSED(event)) {
 	}
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
+	int statusWidths[] = { -4, -1, -1, -1, -1 };
 
+	m_statusBar1->SetFieldsCount(5, statusWidths);
 	recon->continuousMode = true;
 	wxStreamToTextRedirector redirect(m_textCtrl8);
 	recon->correctProjections();
 	recon->reconInit();
-	recon->sliceIndex = 0;//initialization in recon.h doesn't work for some reason
 	recon->singleFrame();
 	recon->currentDisplay = recon_images;
 	currentFrame->m_scrollBar->SetThumbPosition(0);
 	currentFrame->m_canvas->OnScroll(0);
 	currentFrame->m_scrollBar->Show(false);
 	currentFrame->m_canvas->paint();
-	m_statusBar1->SetStatusText(wxString::Format(wxT("Distance from detector to current slice: %.2f mm."), recon->getDistance()));
 }
 
 void DTRMainWindow::onContRun(wxCommandEvent& WXUNUSED(event)) {
@@ -350,6 +364,37 @@ void DTRMainWindow::onDarkSelect(wxCommandEvent& WXUNUSED(event)) {
 
 	//Save filepath for next session
 	wxConfigBase::Get()->Write(wxT("/darkFilePath"), darkFilepath);
+}
+
+void DTRMainWindow::onResList(wxCommandEvent& event) {
+	if (resDialog == NULL) {
+		resDialog = new DTRResDialog(this);
+		resDialog->Show(true);
+	}
+}
+
+void DTRMainWindow::onContList(wxCommandEvent& event) {
+	wxMessageBox(wxT("TODO"),
+		wxT("TODO"),
+		wxICON_INFORMATION | wxOK);
+}
+
+void DTRMainWindow::onRunTest(wxCommandEvent& event) {
+	wxMessageBox(wxT("TODO"),
+		wxT("TODO"),
+		wxICON_INFORMATION | wxOK);
+}
+
+void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
+	wxMessageBox(wxT("TODO"),
+		wxT("TODO"),
+		wxICON_INFORMATION | wxOK);
+}
+
+void DTRMainWindow::onAutoGeo(wxCommandEvent& event) {
+	wxMessageBox(wxT("TODO"),
+		wxT("TODO"),
+		wxICON_INFORMATION | wxOK);
 }
 
 void DTRMainWindow::onAbout(wxCommandEvent& WXUNUSED(event)){
@@ -777,6 +822,202 @@ DTRConfigDialog::~DTRConfigDialog() {
 	
 }
 
+// ----------------------------------------------------------------------------
+// Resolution phatom selector frame handling
+// ----------------------------------------------------------------------------
+
+DTRResDialog::DTRResDialog(wxWindow* parent) : resDialog(parent) {
+	//load all values from previously saved settings
+	wxConfigBase *pConfig = wxConfigBase::Get();
+
+	//Setup column structure    
+	wxListItem col0;
+	col0.SetId(0);
+	col0.SetText(_("Filepaths"));
+	col0.SetWidth(400);
+	m_listCtrl->InsertColumn(0, col0);
+
+	wxListItem col1;
+	col1.SetId(1);
+	col1.SetText(_("BoxUx"));
+	col1.SetWidth(50);
+	m_listCtrl->InsertColumn(1, col1);
+
+	wxListItem col2;
+	col2.SetId(2);
+	col2.SetText(_("BoxUy"));
+	col2.SetWidth(50);
+	m_listCtrl->InsertColumn(2, col2);
+
+	wxListItem col3;
+	col3.SetId(3);
+	col3.SetText(_("BoxLx"));
+	col3.SetWidth(50);
+	m_listCtrl->InsertColumn(3, col3);
+
+	wxListItem col4;
+	col4.SetId(4);
+	col4.SetText(_("BoxLy"));
+	col4.SetWidth(50);
+	m_listCtrl->InsertColumn(4, col4);
+
+	wxListItem col5;
+	col5.SetId(5);
+	col5.SetText(_("Lowx"));
+	col5.SetWidth(50);
+	m_listCtrl->InsertColumn(5, col5);
+
+	wxListItem col6;
+	col6.SetId(6);
+	col6.SetText(_("Lowy"));
+	col6.SetWidth(50);
+	m_listCtrl->InsertColumn(6, col6);
+
+	wxListItem col7;
+	col7.SetId(7);
+	col7.SetText(_("Upx"));
+	col7.SetWidth(50);
+	m_listCtrl->InsertColumn(7, col7);
+
+	wxListItem col8;
+	col8.SetId(8);
+	col8.SetText(_("Upy"));
+	col8.SetWidth(50);
+	m_listCtrl->InsertColumn(8, col8);
+
+	for (int i = 0; i < pConfig->Read(wxT("/resPhanItems"), 0l); i++) {
+		m_listCtrl->InsertItem(i, pConfig->Read(wxString::Format(wxT("/resPhanFile%d"), i), wxT("")));
+		m_listCtrl->SetItem(i, 1, wxString::Format(wxT("%d"),pConfig->Read(wxString::Format(wxT("/resPhanBoxUx%d"), i), 0l)));
+		m_listCtrl->SetItem(i, 2, wxString::Format(wxT("%d"), pConfig->Read(wxString::Format(wxT("/resPhanBoxUy%d"), i), 0l)));
+		m_listCtrl->SetItem(i, 3, wxString::Format(wxT("%d"), pConfig->Read(wxString::Format(wxT("/resPhanBoxLx%d"), i), 0l)));
+		m_listCtrl->SetItem(i, 4, wxString::Format(wxT("%d"), pConfig->Read(wxString::Format(wxT("/resPhanBoxLy%d"), i), 0l)));
+		m_listCtrl->SetItem(i, 5, wxString::Format(wxT("%d"), pConfig->Read(wxString::Format(wxT("/resPhanLowx%d"), i), 0l)));
+		m_listCtrl->SetItem(i, 6, wxString::Format(wxT("%d"), pConfig->Read(wxString::Format(wxT("/resPhanLowy%d"), i), 0l)));
+		m_listCtrl->SetItem(i, 7, wxString::Format(wxT("%d"), pConfig->Read(wxString::Format(wxT("/resPhanUpx%d"), i), 0l)));
+		m_listCtrl->SetItem(i, 8, wxString::Format(wxT("%d"), pConfig->Read(wxString::Format(wxT("/resPhanUpy%d"), i), 0l)));
+	}
+}
+
+void DTRResDialog::onAddNew(wxCommandEvent& event) {
+	wxFileDialog openFileDialog(this, _("Open raw image file"), "", "",
+			"Raw File (*.raw)|*.raw", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+
+	if (openFileDialog.ShowModal() == wxID_CANCEL)
+		return;
+
+	struct SystemControl * Sys = new SystemControl;
+	((DTRMainWindow*)GetParent())->genSys(Sys);
+	frame = new GLWindow(this, Sys, ((DTRMainWindow*)GetParent())->gainFilepath, ((DTRMainWindow*)GetParent())->darkFilepath, openFileDialog.GetPath());
+	int res = frame->ShowModal();
+
+	if (res == wxID_OK) {
+		//User successfully completed the dialog interaction
+		wxFileName fname(openFileDialog.GetPath());
+		wxString file = fname.GetPath();
+		int index = m_listCtrl->FindItem(-1, file);
+		if (index == wxNOT_FOUND)
+			index = m_listCtrl->InsertItem(0, file);
+
+		float scale = frame->m_canvas->recon->scale;
+		float xOff = frame->m_canvas->recon->xOff;
+		float yOff = frame->m_canvas->recon->yOff;
+		m_listCtrl->SetItem(index, 1, wxString::Format(wxT("%d"), (int)(frame->m_canvas->recon->baseX * scale + xOff)));
+		m_listCtrl->SetItem(index, 2, wxString::Format(wxT("%d"), (int)(frame->m_canvas->recon->baseY * scale + yOff)));
+		m_listCtrl->SetItem(index, 3, wxString::Format(wxT("%d"), (int)(frame->m_canvas->recon->currX * scale + xOff)));
+		m_listCtrl->SetItem(index, 4, wxString::Format(wxT("%d"), (int)(frame->m_canvas->recon->currY * scale + yOff)));
+		m_listCtrl->SetItem(index, 5, wxString::Format(wxT("%d"), (int)(frame->m_canvas->recon->lowX * scale + xOff)));
+		m_listCtrl->SetItem(index, 6, wxString::Format(wxT("%d"), (int)(frame->m_canvas->recon->lowY * scale + yOff)));
+		m_listCtrl->SetItem(index, 7, wxString::Format(wxT("%d"), (int)(frame->m_canvas->recon->upX * scale + xOff)));
+		m_listCtrl->SetItem(index, 8, wxString::Format(wxT("%d"), (int)(frame->m_canvas->recon->upY * scale + yOff)));
+	}
+}
+
+void DTRResDialog::onRemove(wxCommandEvent& event) {
+	int selection = wxNOT_FOUND;
+	while (true) {
+		selection = m_listCtrl->GetNextItem(wxNOT_FOUND, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
+		if (selection == wxNOT_FOUND) break;
+		m_listCtrl->DeleteItem(selection);//stride backwards to avoid indexing issues
+	}
+}
+
+void DTRResDialog::onOk(wxCommandEvent& event) {
+	//save values using a saved array value
+	//currently, it does no garbage collection if fewer filenames are saved
+	wxConfigBase *pConfig = wxConfigBase::Get();
+
+	//save array size
+	int items = m_listCtrl->GetItemCount();
+	pConfig->Write(wxT("/resPhanItems"), items);
+
+	int selection = wxNOT_FOUND;
+	while (true) {
+		selection = m_listCtrl->GetNextItem(selection);
+		if (selection == wxNOT_FOUND) break;
+
+		//find the selection
+		wxListItem item;
+		long value;
+		item.m_itemId = selection;
+		item.m_mask = wxLIST_MASK_TEXT;
+
+		//"iterate" through the columns
+		pConfig->Write(wxString::Format(wxT("/resPhanFile%d"), selection), m_listCtrl->GetItemText(selection));
+
+		item.m_col = 1;
+		m_listCtrl->GetItem(item);
+		item.m_text.ToLong(&value);
+		pConfig->Write(wxString::Format(wxT("/resPhanBoxUx%d"), selection), value);
+
+		item.m_col = 2;
+		m_listCtrl->GetItem(item);
+		item.m_text.ToLong(&value);
+		pConfig->Write(wxString::Format(wxT("/resPhanBoxUy%d"), selection), value);
+
+		item.m_col = 3;
+		m_listCtrl->GetItem(item);
+		item.m_text.ToLong(&value);
+		pConfig->Write(wxString::Format(wxT("/resPhanBoxLx%d"), selection), value);
+
+		item.m_col = 4;
+		m_listCtrl->GetItem(item);
+		item.m_text.ToLong(&value);
+		pConfig->Write(wxString::Format(wxT("/resPhanBoxLy%d"), selection), value);
+
+		item.m_col = 5;
+		m_listCtrl->GetItem(item);
+		item.m_text.ToLong(&value);
+		pConfig->Write(wxString::Format(wxT("/resPhanLowx%d"), selection), value);
+
+		item.m_col = 6;
+		m_listCtrl->GetItem(item);
+		item.m_text.ToLong(&value);
+		pConfig->Write(wxString::Format(wxT("/resPhanLowy%d"), selection), value);
+
+		item.m_col = 7;
+		m_listCtrl->GetItem(item);
+		item.m_text.ToLong(&value);
+		pConfig->Write(wxString::Format(wxT("/resPhanUpx%d"), selection), value);
+
+		item.m_col = 8;
+		m_listCtrl->GetItem(item);
+		item.m_text.ToLong(&value);
+		pConfig->Write(wxString::Format(wxT("/resPhanUpy%d"), selection), value);
+	}
+
+	((DTRMainWindow*)GetParent())->resDialog = NULL;
+	Close(true);
+}
+
+void DTRResDialog::onCancel(wxCommandEvent& event) {
+	((DTRMainWindow*)GetParent())->resDialog = NULL;
+	Close(true);
+}
+
+DTRResDialog::~DTRResDialog() {
+
+}
+
 //---------------------------------------------------------------------------
 // GLFrame
 //---------------------------------------------------------------------------
@@ -786,14 +1027,15 @@ EVT_SCROLL(GLFrame::OnScroll)
 EVT_MOUSEWHEEL(GLFrame::OnMousewheel)
 wxEND_EVENT_TABLE()
 
-GLFrame::GLFrame(wxAuiNotebook *frame, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString darkFile, const wxPoint& pos, const wxSize& size, long style)
+GLFrame::GLFrame(wxAuiNotebook *frame, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
+	const wxPoint& pos, const wxSize& size, long style)
 	: wxPanel(frame, wxID_ANY, pos, size), m_canvas(NULL), m_status(status){
 	//Set up sizer to make the canvas take up the entire panel (wxWidgets handles garbage collection)
 	wxBoxSizer* bSizer;
 	bSizer = new wxBoxSizer(wxVERTICAL);
 
 	//initialize the canvas to this object
-	m_canvas = new CudaGLCanvas(this, Sys, gainFile, darkFile, wxID_ANY, NULL, GetClientSize());
+	m_canvas = new CudaGLCanvas(this, status, Sys, gainFile, darkFile, filename, wxID_ANY, NULL, GetClientSize());
 	bSizer->Add(m_canvas, 1, wxEXPAND | wxALL, 5);
 
 	m_scrollBar = new wxScrollBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSB_HORIZONTAL);
@@ -821,14 +1063,27 @@ void GLFrame::OnMousewheel(wxMouseEvent& event) {
 	wxKeyboardState keyboard;
 	//GetKeyboardState()
 	int newScrollPos = event.GetWheelRotation() / 120;
-	if (event.m_controlDown) {
+	if (event.m_controlDown && event.m_altDown) {
+		m_canvas->recon->lightOff += newScrollPos;
+		m_canvas->paint();
+	}
+	else if (event.m_controlDown) {
+		m_canvas->recon->zoom += newScrollPos;
+		if (m_canvas->recon->zoom < 0) m_canvas->recon->zoom = 0;
+		m_canvas->paint();
+		m_canvas->recon->xOff += (event.GetX() - GetSize().x / 2)*m_canvas->recon->scale / 10 * newScrollPos;//- GetScreenPosition().x
+		m_canvas->recon->yOff += (event.GetY() - GetSize().y / 2)*m_canvas->recon->scale / 10 * newScrollPos;// - GetScreenPosition().y
+	}
+	else if (event.m_altDown) {
+		m_canvas->recon->light += newScrollPos;
+		//if (m_canvas->recon->light < 0) m_canvas->recon->light = 0;
+		m_canvas->paint();
 	}
 	else {
 		if (m_canvas->recon->continuousMode) {
 			m_canvas->recon->sliceIndex += newScrollPos;
 			m_canvas->recon->singleFrame();
 			m_canvas->paint();
-			m_status->SetStatusText(wxString::Format(wxT("Distance from detector to current slice: %.2f mm."), m_canvas->recon->getDistance()));
 		}
 		else {
 			newScrollPos += m_scrollBar->GetThumbPosition();
@@ -838,6 +1093,61 @@ void GLFrame::OnMousewheel(wxMouseEvent& event) {
 			m_canvas->OnScroll(newScrollPos);
 		}
 	}
+}
+
+//---------------------------------------------------------------------------
+// GLWindow
+//---------------------------------------------------------------------------
+
+wxBEGIN_EVENT_TABLE(GLWindow, wxWindow)
+EVT_MOUSEWHEEL(GLWindow::OnMousewheel)
+EVT_CLOSE(GLWindow::onClose)
+wxEND_EVENT_TABLE()
+
+GLWindow::GLWindow(wxWindow *parent, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
+	const wxPoint& pos, const wxSize& size, long style)
+	: wxDialog(parent, wxID_ANY, wxT("Select area of interest in the phantom with ctrl+mouse drag. Hit space once selected."), pos, size, style), m_canvas(NULL) {
+	//Set up sizer to make the canvas take up the entire panel (wxWidgets handles garbage collection)
+	wxBoxSizer* bSizer;
+	bSizer = new wxBoxSizer(wxVERTICAL);
+
+	//initialize the canvas to this object
+	m_canvas = new CudaGLInCanvas(this, Sys, gainFile, darkFile, filename, wxID_ANY, NULL, GetClientSize());
+	bSizer->Add(m_canvas, 1, wxEXPAND | wxALL, 5);
+
+	this->SetSizer(bSizer);
+	this->Layout();
+	bSizer->Fit(this);
+}
+
+GLWindow::~GLWindow() {
+	delete m_canvas;
+}
+
+void GLWindow::OnMousewheel(wxMouseEvent& event) {
+	wxKeyboardState keyboard;
+	//GetKeyboardState()
+	int newScrollPos = event.GetWheelRotation() / 120;
+	if (event.m_controlDown && event.m_altDown) {
+		m_canvas->recon->lightOff += newScrollPos;
+		m_canvas->paint();
+	}
+	else if (event.m_controlDown) {
+		m_canvas->recon->zoom += newScrollPos;
+		if (m_canvas->recon->zoom < 0) m_canvas->recon->zoom = 0;
+		m_canvas->paint();
+		m_canvas->recon->xOff += (event.GetX() - GetSize().x / 2)*m_canvas->recon->scale / 10 * newScrollPos;//- GetScreenPosition().x
+		m_canvas->recon->yOff += (event.GetY() - GetSize().y / 2)*m_canvas->recon->scale / 10 * newScrollPos;// - GetScreenPosition().y
+	}
+	else if (event.m_altDown) {
+		m_canvas->recon->light += newScrollPos;
+		//if (m_canvas->recon->light < 0) m_canvas->recon->light = 0;
+		m_canvas->paint();
+	}
+}
+
+void GLWindow::onClose(wxCloseEvent& event) {
+	Destroy();
 }
 
 //---------------------------------------------------------------------------
@@ -851,15 +1161,19 @@ EVT_MOUSE_EVENTS(CudaGLCanvas::OnMouseEvent)
 EVT_COMMAND(wxID_ANY, PAINT_IT, CudaGLCanvas::OnEvent)
 wxEND_EVENT_TABLE()
 
-CudaGLCanvas::CudaGLCanvas(wxWindow *parent, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxWindowID id, int* gl_attrib, wxSize size)
-	: wxGLCanvas(parent, id, gl_attrib, wxDefaultPosition, size, wxFULL_REPAINT_ON_RESIZE){
+CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename, 
+	wxWindowID id, int* gl_attrib, wxSize size)
+	: wxGLCanvas(parent, id, gl_attrib, wxDefaultPosition, size, wxFULL_REPAINT_ON_RESIZE), m_status(status){
 	// Explicitly create a new rendering context instance for this canvas.
 	m_glRC = new wxGLContext(this);
 
 	SetCurrent(*m_glRC);
 
 	recon = new TomoRecon(GetSize().x, GetSize().y, Sys);
-	recon->init((const char*)gainFile.mb_str(), (const char*)darkFile.mb_str());
+	recon->init((const char*)gainFile.mb_str(), (const char*)darkFile.mb_str(), (const char*)filename.mb_str());
+
+	recon->sliceIndex = 0;//initialization in recon.h doesn't work for some reason
+	recon->zoom = 0;
 }
 
 CudaGLCanvas::~CudaGLCanvas(){
@@ -903,38 +1217,190 @@ void CudaGLCanvas::paint() {
 	recon->swap();
 
 	SwapBuffers();
+
+	if (recon->continuousMode) {
+		m_status->SetStatusText(wxString::Format(wxT("Zoom: %.2fx"), pow(ZOOMFACTOR, recon->zoom)), scaleNum);
+		m_status->SetStatusText(wxString::Format(wxT("X offset: %d px."), recon->xOff), xOffset);
+		m_status->SetStatusText(wxString::Format(wxT("Y offset: %d px."), recon->yOff), yOffset);
+		m_status->SetStatusText(wxString::Format(wxT("Detector distance: %.2f mm."), recon->getDistance()), zPosition);
+	}
+}
+
+void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
+	static float last_x, last_y, last_x_off, last_y_off;
+	float this_x = event.GetX();
+	float this_y = event.GetY();
+
+	// Allow default processing to happen, or else the canvas cannot gain focus
+	// (for key events).
+	event.Skip();
+
+	if (event.LeftDown()) {
+		last_x = this_x;
+		last_y = this_y;
+		last_x_off = recon->xOff;
+		last_y_off = recon->yOff;
+	}
+
+	if (event.LeftIsDown())	{
+		if(event.Dragging()){
+			if (!event.m_controlDown) {
+				recon->xOff = last_x_off - (this_x - last_x)*recon->scale;
+				recon->yOff = last_y_off - (this_y - last_y)*recon->scale;
+			}
+			paint();
+		}
+	}
 }
 
 void CudaGLCanvas::OnChar(wxKeyEvent& event){
 	//Moved to main window, can delete
 }
 
-void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event){
-	static int dragging = 0;
-	static float last_x, last_y;
+//---------------------------------------------------------------------------
+// CudaGLInCanvas
+//---------------------------------------------------------------------------
+
+wxBEGIN_EVENT_TABLE(CudaGLInCanvas, wxGLCanvas)
+EVT_PAINT(CudaGLInCanvas::OnPaint)
+EVT_MOUSE_EVENTS(CudaGLInCanvas::OnMouseEvent)
+EVT_CHAR(CudaGLInCanvas::OnChar)
+EVT_COMMAND(wxID_ANY, PAINT_IT, CudaGLInCanvas::OnEvent)
+wxEND_EVENT_TABLE()
+
+CudaGLInCanvas::CudaGLInCanvas(wxWindow *parent, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
+	wxWindowID id, int* gl_attrib, wxSize size)
+	: wxGLCanvas(parent, id, gl_attrib, wxDefaultPosition, size, wxFULL_REPAINT_ON_RESIZE) {
+	// Explicitly create a new rendering context instance for this canvas.
+	m_glRC = new wxGLContext(this);
+
+	SetCurrent(*m_glRC);
+
+	recon = new TomoRecon(GetSize().x, GetSize().y, Sys);
+	recon->init((const char*)gainFile.mb_str(), (const char*)darkFile.mb_str(), (const char*)filename.mb_str());
+}
+
+CudaGLInCanvas::~CudaGLInCanvas() {
+	delete recon;
+	delete m_glRC;
+}
+
+void CudaGLInCanvas::OnEvent(wxCommandEvent& WXUNUSED(event)) {
+	if (recon->initialized) {
+		paint();
+	}
+}
+
+void CudaGLInCanvas::OnPaint(wxPaintEvent& WXUNUSED(event)) {
+	// This is a dummy, to avoid an endless succession of paint messages.
+	// OnPaint handlers must always create a wxPaintDC.
+	wxPaintDC(this);
+
+	if (recon->initialized) {
+		paint();
+	}
+}
+
+void CudaGLInCanvas::paint() {
+	SetCurrent(*m_glRC);//tells opengl which buffers to use, mutliple windows fail without this
+	int width = GetSize().x;
+	int height = GetSize().y;
+	recon->display(width, height);
+	recon->map();
+
+	recon->test(imageIndex);
+
+	recon->unmap();
+
+	recon->blit();
+	recon->swap();
+
+	SwapBuffers();
+}
+
+void CudaGLInCanvas::OnMouseEvent(wxMouseEvent& event) {
+	static float last_x, last_y, last_x_off, last_y_off;
+	float this_x = event.GetX();
+	float this_y = event.GetY();
 
 	// Allow default processing to happen, or else the canvas cannot gain focus
 	// (for key events).
 	event.Skip();
 
-	if (event.LeftIsDown())
-	{
-		if (!dragging)
-		{
-			dragging = 1;
+	if (event.LeftDown()) {
+		if (event.m_controlDown) {
+			switch (state) {
+			case box:
+				recon->baseX = this_x;
+				recon->baseY = this_y;
+				break;
+			case lower:
+				recon->lowX = this_x;
+				recon->lowY = this_y;
+				break;
+			case upper:
+				recon->upX = this_x;
+				recon->upY = this_y;
+				break;
+			}
+			paint();
 		}
-		else
-		{
-			//m_yrot += (event.GetX() - last_x)*1.0;
-			//m_xrot += (event.GetY() - last_y)*1.0;
-			Refresh(false);
-		}
-		last_x = event.GetX();
-		last_y = event.GetY();
+		last_x = this_x;
+		last_y = this_y;
+		last_x_off = recon->xOff;
+		last_y_off = recon->yOff;
 	}
-	else
-	{
-		dragging = 0;
+
+	if (event.LeftIsDown()) {
+		if (event.Dragging()) {
+			if (event.m_controlDown) {
+				switch (state) {
+				case box:
+					recon->currX = this_x;
+					recon->currY = this_y;
+					break;
+				case lower:
+					recon->lowX = this_x;
+					recon->lowY = this_y;
+					break;
+				case upper:
+					recon->upX = this_x;
+					recon->upY = this_y;
+					break;
+				}
+			}
+			else {
+				recon->xOff = last_x_off - (this_x - last_x)*recon->scale;
+				recon->yOff = last_y_off - (this_y - last_y)*recon->scale;
+			}
+			paint();
+		}
+	}
+}
+
+void CudaGLInCanvas::OnChar(wxKeyEvent& event) {
+	//pressing space advances state to next input
+	if (event.GetKeyCode() == 32) {//32=space, enter is a system dialog reserved key
+		switch (state) {
+		case box:
+			if (recon->baseX >= 0 && recon->currX >= 0) {
+				state = lower;
+				((GLWindow*)GetParent())->SetTitle(wxT("Choose the lower bound on line pairs with ctrl+click. Hit space when done."));
+			}
+			break;
+		case lower:
+			if (recon->lowX >= 0) {
+				state = upper;
+				((GLWindow*)GetParent())->SetTitle(wxT("Choose the upper bound on line pairs with ctrl+click. Hit space when done."));
+			}
+			break;
+		case upper:
+			if (recon->upX >= 0) {
+				//Close up and save (handled in parents)
+				((GLWindow*)GetParent())->EndModal(wxID_OK);
+			}
+			break;
+		}
 	}
 }
 

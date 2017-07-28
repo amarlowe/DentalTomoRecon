@@ -28,10 +28,13 @@
 #include <wx/aui/aui.h>
 #include <wx/gauge.h>
 #include <wx/dialog.h>
+#include <wx/listctrl.h>
+#include <wx/button.h>
+#include <wx/statline.h>
+#include <wx/gbsizer.h>
 #include <wx/stattext.h>
 #include <wx/radiobox.h>
 #include <wx/grid.h>
-#include <wx/button.h>
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -48,6 +51,7 @@ class mainWindow : public wxFrame
 		wxMenu* file;
 		wxMenu* config;
 		wxMenu* reconstruction;
+		wxMenu* calibration;
 		wxMenu* help;
 		wxPanel* m_panel10;
 		wxStatusBar* m_statusBar1;
@@ -66,6 +70,11 @@ class mainWindow : public wxFrame
 		virtual void onContRun( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onStep( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onContinuous( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onResList( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onContList( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onRunTest( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onTestGeo( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onAutoGeo( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onAbout( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onPageChange( wxAuiNotebookEvent& event ) { event.Skip(); }
 		
@@ -95,6 +104,51 @@ class RunBox : public wxDialog
 		
 		RunBox( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Reconstruction running"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 208,61 ), long style = wxDEFAULT_DIALOG_STYLE|wxSTAY_ON_TOP ); 
 		~RunBox();
+	
+};
+
+///////////////////////////////////////////////////////////////////////////////
+/// Class resDialog
+///////////////////////////////////////////////////////////////////////////////
+class resDialog : public wxDialog 
+{
+	private:
+	
+	protected:
+		wxListCtrl* m_listCtrl;
+		wxButton* addNew;
+		wxButton* remove;
+		wxStaticLine* m_staticline3;
+		wxButton* ok;
+		wxButton* cancel;
+		
+		// Virtual event handlers, overide them in your derived class
+		virtual void onAddNew( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onRemove( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onOk( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onCancel( wxCommandEvent& event ) { event.Skip(); }
+		
+	
+	public:
+		
+		resDialog( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Resolution Pantoms"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 821,438 ), long style = wxDEFAULT_DIALOG_STYLE ); 
+		~resDialog();
+	
+};
+
+///////////////////////////////////////////////////////////////////////////////
+/// Class MyDialog3
+///////////////////////////////////////////////////////////////////////////////
+class MyDialog3 : public wxDialog 
+{
+	private:
+	
+	protected:
+	
+	public:
+		
+		MyDialog3( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxEmptyString, const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 619,499 ), long style = wxDEFAULT_DIALOG_STYLE ); 
+		~MyDialog3();
 	
 };
 

@@ -42,34 +42,14 @@ TomoRecon::~TomoRecon() {
 	delete Sys;
 }
 
-TomoError TomoRecon::init(const char * gainFile, const char * darkFile) {
-	//Step 1: Get and example file for get the path
-#ifdef PROFILER
-	char filename[] = "C:\\Users\\jdean\\Desktop\\Patient18\\AcquiredImage1_0.raw";
-#else
-	char filename[MAX_PATH];
-
-	OPENFILENAME ofn;
-	ZeroMemory(&filename, sizeof(filename));
-	ZeroMemory(&ofn, sizeof(ofn));
-	ofn.lStructSize = sizeof(ofn);
-	ofn.hwndOwner = NULL;  // If you have a window to center over, put its HANDLE here
-	ofn.lpstrFilter = "Raw File\0*.raw\0Any File\0*.*\0";
-	ofn.lpstrFile = filename;
-	ofn.nMaxFile = MAX_PATH;
-	ofn.lpstrTitle = "Select one raw image file";
-	ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST;
-
-	GetOpenFileNameA(&ofn);
-#endif
-
+TomoError TomoRecon::init(const char * gainFile, const char * darkFile, const char * mainFile) {
 	//Seperate base path from the example file path
-	char * GetFilePath;
+	char GetFilePath[MAX_PATH];
 	std::string BasePath;
 	std::string FilePath;
 	std::string FileName;
-	savefilename = filename;
-	GetFilePath = filename;
+	savefilename = mainFile;
+	strcpy(GetFilePath, mainFile);
 	PathRemoveFileSpec(GetFilePath);
 	FileName = PathFindFileName(GetFilePath);
 	FilePath = GetFilePath;
@@ -103,6 +83,10 @@ TomoError TomoRecon::init(const char * gainFile, const char * darkFile) {
 	std::cout << "GPU Ready" << std::endl;
 
 	initialized = true;
+
+	zoom = 0;
+	xOff = 0;
+	yOff = 0;
 }
 
 TomoError TomoRecon::TomoSave() {
