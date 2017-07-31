@@ -118,9 +118,65 @@ __device__ __constant__ size_t d_errorPitch;
 __device__ __constant__ size_t d_imagePitch;
 __device__ __constant__ size_t d_sinoPitch;
 
+__device__ __constant__ float gauss[KERNELSIZE];
+__device__ __constant__ float gaussDer[KERNELSIZE];
+
 /********************************************************************************************/
 /* GPU Function specific functions															*/
 /********************************************************************************************/
+
+//Loop unrolling templates, device functions are mapped to inlines 99% of the time
+template<int i> __device__ float convolutionRow(float x, float y, float * kernel){
+	return
+		tex2D(textImage, x + (float)(KERNELRADIUS - i), y) * kernel[i]
+		+ convolutionRow<i - 1>(x, y, kernel);
+}
+
+template<> __device__ float convolutionRow<-1>(float x, float y, float * kernel){
+	return 0;
+}
+
+template<int i> __device__ float convolutionColumn(float x, float y, float * kernel){
+	return
+		tex2D(textImage, x, y + (float)(KERNELRADIUS - i)) * kernel[i]
+		+ convolutionColumn<i - 1>(x, y, kernel);
+}
+
+template<> __device__ float convolutionColumn<-1>(float x, float y, float * kernel){
+	return 0;
+}
+
+__global__ void convolutionRowsKernel(float *d_Dst, float * kernel) {
+	const   int ix = MUL_ADD(blockDim.x, blockIdx.x, threadIdx.x);
+	const   int iy = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
+	const float  x = (float)ix + 0.5f;
+	const float  y = (float)iy + 0.5f;
+
+	if (ix >= d_Nx || iy >= d_Py)
+		return;
+
+	float sum = 0;
+	//sum = convolutionRow<KERNELSIZE>(x, y, kernel);
+	sum = convolutionRow<KERNELSIZE>(x, y, gaussDer);
+
+	d_Dst[MUL_ADD(iy, d_errorPitch, ix)] = sum;
+}
+
+__global__ void convolutionColumnsKernel(float *d_Dst, float * kernel){
+	const   int ix = MUL_ADD(blockDim.x, blockIdx.x, threadIdx.x);
+	const   int iy = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
+	const float  x = (float)ix + 0.5f;
+	const float  y = (float)iy + 0.5f;
+
+	if (ix >= d_Nx || iy >= d_Py)
+		return;
+
+	float sum = 0;
+	//sum = convolutionColumn<KERNELSIZE>(x, y, kernel);
+	sum = convolutionColumn<KERNELSIZE>(x, y, gauss);
+
+	d_Dst[MUL_ADD(iy, d_imagePitch, ix)] = sum;
+}
 
 template<typename T>
 __global__ void resizeKernel(T* input, int wIn, int hIn, int wOut, int hOut, float scale, int xOff, int yOff, int maxVal, int lightOff) {
@@ -156,11 +212,12 @@ __global__ void resizeKernel(T* input, int wIn, int hIn, int wOut, int hOut, flo
 		cudaBoundaryModeZero); // squelches out-of-bound writes
 }
 
-__global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, int index, float scale, int xOff, int yOff, int maxVal, int lightOff) {//float * maxVar, 
+__global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, int index, float scale, int xOff, int yOff, int maxVal, int lightOff, bool log) {//float * maxVar, 
 	// pixel coordinates
 	const int idx = (blockDim.x * blockIdx.x) + threadIdx.x;
 	const int x = idx % wOut;
 	const int y = idx / wOut;
+	bool negative = false;
 
 	float sum = 0;
 	int i = (x - (wOut - wIn / scale) / 2)*scale + xOff;
@@ -168,14 +225,25 @@ __global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, int index,
 	if (i > 0 && j > 0 && i < wIn && j < hIn)
 		sum = tex2D(textImage, (float)i + 0.5f, (float)j + 0.5f + (float)(index * hIn));;
 
-	//sum = sum / *maxVar * 255;
-	//sum = sum / USHRT_MAX * 255;
-	if(sum > 0)
-		sum = (logf((float)USHRT_MAX) - logf(sum)) / (logf((float)USHRT_MAX) - 1) * UCHAR_MAX;
-	if (sum > 0) sum += lightOff;
-	if (sum < 0) sum = 0;
-	if (sum > maxVal) sum = UCHAR_MAX;
-	else sum = sum / maxVal * UCHAR_MAX;
+	if (log) {
+		if(sum > 0)
+			sum = (logf((float)USHRT_MAX) - logf(sum)) / (logf((float)USHRT_MAX) - 1) * UCHAR_MAX;
+		if (sum > 0) sum += lightOff;
+		if (sum < 0) {
+			negative = true;
+			sum = abs(sum);
+		}
+		if (sum > maxVal) sum = UCHAR_MAX;
+		else sum = sum / maxVal * UCHAR_MAX;
+	}
+	else {
+		sum = sum / maxVal * UCHAR_MAX;
+		if (sum < 0) {
+			negative = true;
+			sum = abs(sum);
+		}
+	}
+	
 
 	union pxl_rgbx_24 rgbx;
 	if (sum > 255) {
@@ -186,8 +254,14 @@ __global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, int index,
 	}
 	else {
 		rgbx.na = 0xFF;
-		rgbx.r = sum;
-		rgbx.g = sum;
+		if (negative) {
+			rgbx.r = 0;
+			rgbx.g = 0;
+		}
+		else {
+			rgbx.r = sum;
+			rgbx.g = sum;
+		}
 		rgbx.b = sum;
 	}
 
@@ -226,8 +300,8 @@ __global__ void drawSelectionBar(int X, int Y, int wOut, bool vertical) {
 	const int x = idx % wOut;
 	const int y = idx / wOut;
 
-	if (vertical && (x >= X && x < X + LINEWIDTH && y >= Y && y < Y + BARHEIGHT) ||
-		!vertical && (y >= Y && y < Y + LINEWIDTH && x >= X - BARHEIGHT && x < X)) {
+	if (!vertical && (x >= X && x < X + LINEWIDTH && y >= Y && y < Y + BARHEIGHT) ||
+		vertical && (y >= Y && y < Y + LINEWIDTH && x >= X - BARHEIGHT && x < X)) {
 		union pxl_rgbx_24 rgbx;
 		rgbx.na = 0xFF;
 		rgbx.r = 255;//flag errors with big red spots
@@ -1063,9 +1137,9 @@ TomoError TomoRecon::resizeImage(T* in, int wIn, int hIn, cudaArray_t out, int w
 		if (baseX >= 0 && currX >= 0)
 			KERNELCALL4(drawSelectionBox, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, max(baseX, currX), max(baseY, currY), min(baseX, currX), min(baseY, currY), width);
 		if(lowX >= 0)
-			KERNELCALL4(drawSelectionBar, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, lowX, lowY, width, true);
+			KERNELCALL4(drawSelectionBar, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, lowX, lowY, width, vertical);
 		if (upX >= 0)
-			KERNELCALL4(drawSelectionBar, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, upX, upY, width, true);
+			KERNELCALL4(drawSelectionBar, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, upX, upY, width, vertical);
 	}
 
 	return Tomo_OK;
@@ -1146,6 +1220,8 @@ TomoError TomoRecon::SetUpGPUMemory(){
 	if (continuousMode) {
 		cuda(MallocPitch((void**)&d_Image, &imagePitch, MemR_Nx * sizeof(float), MemR_Ny));
 		cuda(Memset2DAsync(d_Image, imagePitch, 0, MemR_Nx * sizeof(float), MemR_Ny));
+		cuda(MallocPitch((void**)&d_Error, &errorPitch, MemP_Nx * sizeof(float), MemP_Ny));
+		cuda(Memset2DAsync(d_Error, errorPitch, 0, MemP_Nx * sizeof(float), MemP_Ny));
 	}
 	else {
 		cuda(MallocPitch((void**)&d_Image, &imagePitch, MemR_Nx * sizeof(float), MemR_Ny * Sys->Recon->Nz));
@@ -1226,6 +1302,13 @@ TomoError TomoRecon::SetUpGPUMemory(){
 	cuda(MemcpyToSymbolAsync(d_imagePitch, &pitch, sizeof(size_t)));
 	pitch = sinoPitch / sizeof(float);
 	cuda(MemcpyToSymbolAsync(d_sinoPitch, &pitch, sizeof(size_t)));
+
+	float tempKernel[KERNELSIZE];
+	setGauss(tempKernel);
+	cudaMemcpyToSymbol(gauss, tempKernel, KERNELSIZE * sizeof(float));
+
+	setGaussDer(tempKernel);
+	cudaMemcpyToSymbol(gaussDer, tempKernel, KERNELSIZE * sizeof(float));
 
 	return Tomo_OK;
 }
@@ -1508,7 +1591,7 @@ TomoError TomoRecon::test(int index) {
 
 			if (blocks > 0) {
 				KERNELCALL4(resizeKernelTex, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, 
-					Sys->Proj->Nx, Sys->Proj->Ny, width, height, index, scale, xOff, yOff, UCHAR_MAX/pow(LIGHTFACTOR, light), LIGHTOFFFACTOR*lightOff);
+					Sys->Proj->Nx, Sys->Proj->Ny, width, height, index, scale, xOff, yOff, UCHAR_MAX/pow(LIGHTFACTOR, light), LIGHTOFFFACTOR*lightOff, derDisplay == no_der);
 				
 			}
 		}
@@ -1533,7 +1616,7 @@ TomoError TomoRecon::test(int index) {
 			const int blocks = (width * height + PXL_KERNEL_THREADS_PER_BLOCK - 1) / PXL_KERNEL_THREADS_PER_BLOCK;
 
 			if (blocks > 0)
-				KERNELCALL4(resizeKernelTex, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, Sys->Proj->Nx, Sys->Proj->Ny, width, height, index, scale, xOff, yOff, USHRT_MAX, LIGHTOFFFACTOR*lightOff);
+				KERNELCALL4(resizeKernelTex, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, Sys->Proj->Nx, Sys->Proj->Ny, width, height, index, scale, xOff, yOff, USHRT_MAX, LIGHTOFFFACTOR*lightOff, true);
 		}
 	break;
 	}
@@ -1618,6 +1701,30 @@ TomoError TomoRecon::singleFrame() {
 	cuda(BindTexture2D(NULL, textError, d_Sino, cudaCreateChannelDesc<float>(), MemP_Nx, MemP_Ny*Sys->Proj->NumViews, sinoPitch));
 
 	KERNELCALL2(projectSlice, dimGridIm, dimBlockIm, d_Image, sliceIndex);
+
+	switch (derDisplay) {
+	case no_der:
+		return Tomo_OK;
+		break;
+	case der_x:
+		cuda(BindTexture2D(NULL, textImage, d_Image, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, imagePitch));
+		KERNELCALL2(convolutionRowsKernel, dimGridIm, dimBlockIm, d_Error, gaussDer);
+		cuda(BindTexture2D(NULL, textImage, d_Error, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, errorPitch));
+		KERNELCALL2(convolutionColumnsKernel, dimGridIm, dimBlockIm, d_Image, gauss);
+		break;
+	case der_y:
+		break;
+	case der2_x:
+		break;
+	case der2_y:
+		break;
+	case der3_x:
+		break;
+	case der3_y:
+		break;
+	}
+
+	return Tomo_OK;
 }
 
 float TomoRecon::getDistance() {

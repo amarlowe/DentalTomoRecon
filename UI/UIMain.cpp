@@ -179,46 +179,73 @@ void DTRMainWindow::onStep(wxCommandEvent& WXUNUSED(event)) {
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
-	switch (recon->currentDisplay) {
-	case raw_images:
-		recon->correctProjections();
-		recon->currentDisplay = sino_images;
-		break;
-	case sino_images:
-		recon->currentDisplay = raw_images2;
-		break;
-	case raw_images2:
-		recon->reconInit();
-		//recon->currentDisplay = norm_images;
-		recon->currentDisplay = recon_images;
+	if (recon->continuousMode) {
+		switch (recon->derDisplay) {
+		case no_der:
+			recon->derDisplay = der_x;
+			break;
+		case der_x:
+			recon->derDisplay = der_y;
+			break;
+		case der_y:
+			recon->derDisplay = der2_x;
+			break;
+		case der2_x:
+			recon->derDisplay = der2_y;
+			break;
+		case der2_y:
+			recon->derDisplay = der3_x;
+			break;
+		case der3_x:
+			recon->derDisplay = der3_y;
+			break;
+		case der3_y:
+			recon->derDisplay = no_der;
+			break;
+		}
+	}
+	else {
+		switch (recon->currentDisplay) {
+		case raw_images:
+			recon->correctProjections();
+			recon->currentDisplay = sino_images;
+			break;
+		case sino_images:
+			recon->currentDisplay = raw_images2;
+			break;
+		case raw_images2:
+			recon->reconInit();
+			//recon->currentDisplay = norm_images;
+			recon->currentDisplay = recon_images;
+			{
+				int pos = ((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_scrollBar->GetThumbPosition();
+				if (pos > recon->Sys->Recon->Nz) pos = recon->Sys->Recon->Nz - 1;
+				currentFrame->m_scrollBar->SetScrollbar(pos, 1, recon->Sys->Recon->Nz, 1);
+				currentFrame->m_canvas->OnScroll(pos);
+			}
+			break;
+		case norm_images:
+			//recon->currentDisplay = recon_images;//intentionally skipped break
+		case recon_images:
 		{
+			recon->currentDisplay = error_images;
+			int pos = ((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_scrollBar->GetThumbPosition();
+			if (pos > recon->Sys->Proj->NumViews) pos = recon->Sys->Proj->NumViews - 1;
+			currentFrame->m_scrollBar->SetScrollbar(pos, 1, recon->Sys->Proj->NumViews, 1);
+			recon->reconStep();
+			currentFrame->m_canvas->OnScroll(pos);
+		}
+		break;
+		case error_images:
+		{
+			recon->currentDisplay = recon_images;
 			int pos = ((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_scrollBar->GetThumbPosition();
 			if (pos > recon->Sys->Recon->Nz) pos = recon->Sys->Recon->Nz - 1;
 			currentFrame->m_scrollBar->SetScrollbar(pos, 1, recon->Sys->Recon->Nz, 1);
 			currentFrame->m_canvas->OnScroll(pos);
 		}
 		break;
-	case norm_images:
-		//recon->currentDisplay = recon_images;//intentionally skipped break
-	case recon_images:
-	{
-		recon->currentDisplay = error_images;
-		int pos = ((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_scrollBar->GetThumbPosition();
-		if (pos > recon->Sys->Proj->NumViews) pos = recon->Sys->Proj->NumViews - 1;
-		currentFrame->m_scrollBar->SetScrollbar(pos, 1, recon->Sys->Proj->NumViews, 1);
-		recon->reconStep();
-		currentFrame->m_canvas->OnScroll(pos);
-	}
-		break;
-	case error_images:
-	{
-		recon->currentDisplay = recon_images;
-		int pos = ((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_scrollBar->GetThumbPosition();
-		if (pos > recon->Sys->Recon->Nz) pos = recon->Sys->Recon->Nz - 1;
-		currentFrame->m_scrollBar->SetScrollbar(pos, 1, recon->Sys->Recon->Nz, 1);		
-		currentFrame->m_canvas->OnScroll(pos);
-	}
-		break;
+		}
 	}
 
 	currentFrame->m_canvas->paint();
@@ -885,6 +912,12 @@ DTRResDialog::DTRResDialog(wxWindow* parent) : resDialog(parent) {
 	col8.SetWidth(50);
 	m_listCtrl->InsertColumn(8, col8);
 
+	wxListItem col9;
+	col9.SetId(9);
+	col9.SetText(_("Vert?"));
+	col9.SetWidth(50);
+	m_listCtrl->InsertColumn(9, col9);
+
 	for (int i = 0; i < pConfig->Read(wxT("/resPhanItems"), 0l); i++) {
 		m_listCtrl->InsertItem(i, pConfig->Read(wxString::Format(wxT("/resPhanFile%d"), i), wxT("")));
 		m_listCtrl->SetItem(i, 1, wxString::Format(wxT("%d"),pConfig->Read(wxString::Format(wxT("/resPhanBoxUx%d"), i), 0l)));
@@ -895,6 +928,7 @@ DTRResDialog::DTRResDialog(wxWindow* parent) : resDialog(parent) {
 		m_listCtrl->SetItem(i, 6, wxString::Format(wxT("%d"), pConfig->Read(wxString::Format(wxT("/resPhanLowy%d"), i), 0l)));
 		m_listCtrl->SetItem(i, 7, wxString::Format(wxT("%d"), pConfig->Read(wxString::Format(wxT("/resPhanUpx%d"), i), 0l)));
 		m_listCtrl->SetItem(i, 8, wxString::Format(wxT("%d"), pConfig->Read(wxString::Format(wxT("/resPhanUpy%d"), i), 0l)));
+		m_listCtrl->SetItem(i, 9, pConfig->Read(wxString::Format(wxT("/resPhanVert%d"), i), 0l) == 1 ? wxT("Yes") : wxT("No"));
 	}
 }
 
@@ -905,9 +939,13 @@ void DTRResDialog::onAddNew(wxCommandEvent& event) {
 	if (openFileDialog.ShowModal() == wxID_CANCEL)
 		return;
 
+	int vertical = wxMessageBox(wxT("Is the selected input vertical? (no=horizontal)"), 
+		wxT("Input orientation"),
+		wxICON_INFORMATION | wxYES | wxNO);
+
 	struct SystemControl * Sys = new SystemControl;
 	((DTRMainWindow*)GetParent())->genSys(Sys);
-	frame = new GLWindow(this, Sys, ((DTRMainWindow*)GetParent())->gainFilepath, ((DTRMainWindow*)GetParent())->darkFilepath, openFileDialog.GetPath());
+	frame = new GLWindow(this, vertical == wxYES, Sys, ((DTRMainWindow*)GetParent())->gainFilepath, ((DTRMainWindow*)GetParent())->darkFilepath, openFileDialog.GetPath());
 	int res = frame->ShowModal();
 
 	if (res == wxID_OK) {
@@ -921,14 +959,17 @@ void DTRResDialog::onAddNew(wxCommandEvent& event) {
 		float scale = frame->m_canvas->recon->scale;
 		float xOff = frame->m_canvas->recon->xOff;
 		float yOff = frame->m_canvas->recon->yOff;
-		m_listCtrl->SetItem(index, 1, wxString::Format(wxT("%d"), (int)(frame->m_canvas->recon->baseX * scale + xOff)));
-		m_listCtrl->SetItem(index, 2, wxString::Format(wxT("%d"), (int)(frame->m_canvas->recon->baseY * scale + yOff)));
-		m_listCtrl->SetItem(index, 3, wxString::Format(wxT("%d"), (int)(frame->m_canvas->recon->currX * scale + xOff)));
-		m_listCtrl->SetItem(index, 4, wxString::Format(wxT("%d"), (int)(frame->m_canvas->recon->currY * scale + yOff)));
-		m_listCtrl->SetItem(index, 5, wxString::Format(wxT("%d"), (int)(frame->m_canvas->recon->lowX * scale + xOff)));
-		m_listCtrl->SetItem(index, 6, wxString::Format(wxT("%d"), (int)(frame->m_canvas->recon->lowY * scale + yOff)));
-		m_listCtrl->SetItem(index, 7, wxString::Format(wxT("%d"), (int)(frame->m_canvas->recon->upX * scale + xOff)));
-		m_listCtrl->SetItem(index, 8, wxString::Format(wxT("%d"), (int)(frame->m_canvas->recon->upY * scale + yOff)));
+		float innerOffx = (frame->m_canvas->recon->width - Sys->Proj->Nx / scale) / 2;
+		float innerOffy = (frame->m_canvas->recon->height - Sys->Proj->Ny / scale) / 2;
+		m_listCtrl->SetItem(index, 1, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->baseX - innerOffx) * scale + xOff)));
+		m_listCtrl->SetItem(index, 2, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->baseY - innerOffy) * scale + yOff)));
+		m_listCtrl->SetItem(index, 3, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->currX - innerOffx) * scale + xOff)));
+		m_listCtrl->SetItem(index, 4, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->currY - innerOffy) * scale + yOff)));
+		m_listCtrl->SetItem(index, 5, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->lowX - innerOffx) * scale + xOff)));
+		m_listCtrl->SetItem(index, 6, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->lowY - innerOffy) * scale + yOff)));
+		m_listCtrl->SetItem(index, 7, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->upX - innerOffx) * scale + xOff)));
+		m_listCtrl->SetItem(index, 8, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->upY - innerOffy) * scale + yOff)));
+		m_listCtrl->SetItem(index, 9, vertical == wxYES ? wxT("Yes") : wxT("No"));
 	}
 }
 
@@ -1003,6 +1044,13 @@ void DTRResDialog::onOk(wxCommandEvent& event) {
 		m_listCtrl->GetItem(item);
 		item.m_text.ToLong(&value);
 		pConfig->Write(wxString::Format(wxT("/resPhanUpy%d"), selection), value);
+
+		item.m_col = 9;
+		m_listCtrl->GetItem(item);
+		if(item.m_text == wxT("Yes"))
+			pConfig->Write(wxString::Format(wxT("/resPhanVert%d"), selection), 1l);
+		else
+			pConfig->Write(wxString::Format(wxT("/resPhanVert%d"), selection), 0l);
 	}
 
 	((DTRMainWindow*)GetParent())->resDialog = NULL;
@@ -1104,7 +1152,7 @@ EVT_MOUSEWHEEL(GLWindow::OnMousewheel)
 EVT_CLOSE(GLWindow::onClose)
 wxEND_EVENT_TABLE()
 
-GLWindow::GLWindow(wxWindow *parent, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
+GLWindow::GLWindow(wxWindow *parent, bool vertical, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
 	const wxPoint& pos, const wxSize& size, long style)
 	: wxDialog(parent, wxID_ANY, wxT("Select area of interest in the phantom with ctrl+mouse drag. Hit space once selected."), pos, size, style), m_canvas(NULL) {
 	//Set up sizer to make the canvas take up the entire panel (wxWidgets handles garbage collection)
@@ -1112,7 +1160,7 @@ GLWindow::GLWindow(wxWindow *parent, struct SystemControl * Sys, wxString gainFi
 	bSizer = new wxBoxSizer(wxVERTICAL);
 
 	//initialize the canvas to this object
-	m_canvas = new CudaGLInCanvas(this, Sys, gainFile, darkFile, filename, wxID_ANY, NULL, GetClientSize());
+	m_canvas = new CudaGLInCanvas(this, vertical, Sys, gainFile, darkFile, filename, wxID_ANY, NULL, GetClientSize());
 	bSizer->Add(m_canvas, 1, wxEXPAND | wxALL, 5);
 
 	this->SetSizer(bSizer);
@@ -1209,6 +1257,14 @@ void CudaGLCanvas::paint() {
 	recon->display(width, height);
 	recon->map();
 
+	if (recon->continuousMode) {
+		recon->singleFrame();
+		m_status->SetStatusText(wxString::Format(wxT("Zoom: %.2fx"), pow(ZOOMFACTOR, recon->zoom)), scaleNum);
+		m_status->SetStatusText(wxString::Format(wxT("X offset: %d px."), recon->xOff), xOffset);
+		m_status->SetStatusText(wxString::Format(wxT("Y offset: %d px."), recon->yOff), yOffset);
+		m_status->SetStatusText(wxString::Format(wxT("Detector distance: %.2f mm."), recon->getDistance()), zPosition);
+	}
+
 	recon->test(imageIndex);
 
 	recon->unmap();
@@ -1217,13 +1273,6 @@ void CudaGLCanvas::paint() {
 	recon->swap();
 
 	SwapBuffers();
-
-	if (recon->continuousMode) {
-		m_status->SetStatusText(wxString::Format(wxT("Zoom: %.2fx"), pow(ZOOMFACTOR, recon->zoom)), scaleNum);
-		m_status->SetStatusText(wxString::Format(wxT("X offset: %d px."), recon->xOff), xOffset);
-		m_status->SetStatusText(wxString::Format(wxT("Y offset: %d px."), recon->yOff), yOffset);
-		m_status->SetStatusText(wxString::Format(wxT("Detector distance: %.2f mm."), recon->getDistance()), zPosition);
-	}
 }
 
 void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
@@ -1268,7 +1317,7 @@ EVT_CHAR(CudaGLInCanvas::OnChar)
 EVT_COMMAND(wxID_ANY, PAINT_IT, CudaGLInCanvas::OnEvent)
 wxEND_EVENT_TABLE()
 
-CudaGLInCanvas::CudaGLInCanvas(wxWindow *parent, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
+CudaGLInCanvas::CudaGLInCanvas(wxWindow *parent, bool vertical, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
 	wxWindowID id, int* gl_attrib, wxSize size)
 	: wxGLCanvas(parent, id, gl_attrib, wxDefaultPosition, size, wxFULL_REPAINT_ON_RESIZE) {
 	// Explicitly create a new rendering context instance for this canvas.
@@ -1278,6 +1327,7 @@ CudaGLInCanvas::CudaGLInCanvas(wxWindow *parent, struct SystemControl * Sys, wxS
 
 	recon = new TomoRecon(GetSize().x, GetSize().y, Sys);
 	recon->init((const char*)gainFile.mb_str(), (const char*)darkFile.mb_str(), (const char*)filename.mb_str());
+	recon->vertical = vertical;
 }
 
 CudaGLInCanvas::~CudaGLInCanvas() {

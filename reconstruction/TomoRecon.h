@@ -16,6 +16,7 @@
 #include <sstream>
 #include <string.h>
 #include <iomanip>
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <ctime>
 #include <crtdbg.h>
@@ -39,9 +40,16 @@
 #define LINEWIDTH 3
 #define BARHEIGHT 40
 
+#define SIGMA 2
+#define KERNELRADIUS 5
+#define KERNELSIZE (2*KERNELRADIUS + 1)
+
+//Maps to single instruction in cuda
+#define MUL_ADD(a, b, c) ( __mul24((a), (b)) + (c) )
+
 //Macro for checking cuda errors following a cuda launch or api call
-#define voidChkErr(...) {											\
-	(__VA_ARGS__);														\
+#define voidChkErr(...) {										\
+	(__VA_ARGS__);												\
 	cudaError_t e=cudaGetLastError();							\
 	if(e!=cudaSuccess) {										\
 		std::cout << "Cuda failure " << __FILE__ << ":" << __LINE__ << ": " << cudaGetErrorString(e) << "\n";	\
@@ -68,6 +76,17 @@ typedef enum {
 	recon_images,
 	error_images
 } display_t;
+
+typedef enum {
+	no_der,
+	der_x,
+	der_y,
+	der2_x,
+	der2_y,
+	der3_x,
+	der3_y,
+	orientation
+} derivative_t;
 
 #define tomo_err_throw(x) {TomoError err = x; if(err != Tomo_OK) return err;}
 
@@ -236,6 +255,10 @@ public:
 	TomoError reconStep();
 	TomoError singleFrame();
 	float getDistance();
+	TomoError setGauss(float kernel[KERNELSIZE]);
+	TomoError setGaussDer(float kernel[KERNELSIZE]);
+	TomoError setGaussDer2(float kernel[KERNELSIZE]);
+	TomoError setGaussDer3(float kernel[KERNELSIZE]);
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//interop extensions
@@ -282,6 +305,9 @@ public:
 	//upper tick
 	int upX = -1;
 	int upY = -1;
+
+	bool vertical;
+	derivative_t derDisplay = no_der;
 
 private:
 	/********************************************************************************************/
@@ -337,6 +363,10 @@ private:
 	float * beamz;
 	float * d_MaxVal;
 	float * d_MinVal;
+
+	//Kernel memory
+	float * d_gauss;
+	float * d_gaussDer;
 
 	//Decay constant for recon
 	float Beta = 1.0f;

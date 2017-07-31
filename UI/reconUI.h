@@ -131,7 +131,7 @@ class resDialog : public wxDialog
 	
 	public:
 		
-		resDialog( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Resolution Pantoms"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 821,438 ), long style = wxDEFAULT_DIALOG_STYLE ); 
+		resDialog( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Resolution Pantoms"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 870,438 ), long style = wxDEFAULT_DIALOG_STYLE ); 
 		~resDialog();
 	
 };

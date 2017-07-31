@@ -125,7 +125,7 @@ public:
 // The OpenGL-enabled canvas
 class CudaGLInCanvas : public wxGLCanvas {
 public:
-	CudaGLInCanvas(wxWindow *parent, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
+	CudaGLInCanvas(wxWindow *parent, bool vertical, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
 		wxWindowID id = wxID_ANY, int *gl_attrib = NULL, wxSize size = wxDefaultSize);
 
 	virtual ~CudaGLInCanvas();
@@ -152,7 +152,7 @@ private:
 
 class GLWindow : public wxDialog {
 public:
-	GLWindow(wxWindow *parent, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
+	GLWindow(wxWindow *parent, bool vertical, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = wxDEFAULT_FRAME_STYLE);

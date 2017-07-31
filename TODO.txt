@@ -33,6 +33,8 @@ TomoRecon
 - Add a display and save filter for log values
 - Use autofocus to generate relative geometries
 - Move autodetect geometry to config menu, grey out geo list when this is selected
+- Add popup for vertial or horizontal phantom orientation
+- Make input selections a wizard
 
 --------------Bugs---------------------
 - AutoDetection breaks reconstruction badly
@@ -50,6 +52,7 @@ TomoRecon
 - offset maximums are not calculated correctly, have overshoot
 - If left untouched for some time, becomes completely unresponsive
 - Zooming out then changing z distance causes a jump in offsets
+- GPU memory leaks abound
 
 -------------Completed------------------
 -------------Features------------------

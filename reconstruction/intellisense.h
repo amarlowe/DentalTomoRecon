@@ -28,3 +28,4 @@ int atomicCAS(int*, int, int);
 float __shfl_down(float, int);
 cudaError_t cudaBindTexture2D(size_t*, const textureReference*, const void*, cudaChannelFormatDesc, size_t, size_t, size_t);
 cudaError_t cudaBindSurfaceToArray(const surfaceReference, cudaArray_const_t);
+int __mul24(int, int);

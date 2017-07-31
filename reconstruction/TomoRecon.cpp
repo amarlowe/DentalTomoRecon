@@ -103,3 +103,85 @@ TomoError TomoRecon::TomoSave() {
 	//Save Images
 	tomo_err_throw(SaveDataAsDICOM(str2));
 }
+
+TomoError TomoRecon::setGauss(float kernel[KERNELSIZE]) {
+	float factor = 1 / (sqrt(2 * M_PI) * SIGMA);
+	float denom = 2 * pow(SIGMA, 2);
+	float sum = 0;
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
+		float temp = factor * exp(-pow(i, 2) / denom);
+		kernel[i + KERNELRADIUS] = temp;
+		sum += temp;
+	}
+
+	//must make sum = 0
+	sum /= KERNELSIZE;
+
+	//subtracting sum/variables is constrained optimization of gaussian
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++)
+		kernel[i + KERNELRADIUS] -= sum;
+
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setGaussDer(float kernel[KERNELSIZE]) {
+	float factor = 1 / (sqrt(2 * M_PI) * pow(SIGMA,3));
+	float denom = 2 * pow(SIGMA, 2);
+	float sum = 0;
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
+		float temp = -i * factor * exp(-pow(i, 2) / denom);
+		kernel[i + KERNELRADIUS] = temp;
+		sum += temp;
+	}
+
+	//must make sum = 0
+	sum /= KERNELSIZE;
+
+	//subtracting sum/variables is constrained optimization of gaussian
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++)
+		kernel[i + KERNELRADIUS] -= sum;
+
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setGaussDer2(float kernel[KERNELSIZE]) {
+	float factor1 = 1 / (sqrt(2 * M_PI) * pow(SIGMA, 3));
+	float factor2 = 1 / (sqrt(2 * M_PI) * pow(SIGMA, 5));
+	float denom = 2 * pow(SIGMA, 2);
+	float sum = 0;
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
+		float temp = (pow(i,2) * factor2 - factor1) * exp(-pow(i, 2) / denom);
+		kernel[i + KERNELRADIUS] = temp;
+		sum += temp;
+	}
+
+	//must make sum = 0
+	sum /= KERNELSIZE;
+
+	//subtracting sum/variables is constrained optimization of gaussian
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++)
+		kernel[i + KERNELRADIUS] -= sum;
+
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setGaussDer3(float kernel[KERNELSIZE]) {
+	float factor1 = 1 / pow(SIGMA, 2);
+	float factor2 = 1 / (sqrt(2 * M_PI) * pow(SIGMA, 5));
+	float denom = 2 * pow(SIGMA, 2);
+	float sum = 0;
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
+		float temp = i * factor2*(3 - pow(i, 2)*factor1) * exp(-pow(i, 2) / denom);
+		kernel[i + KERNELRADIUS] = temp;
+		sum += temp;
+	}
+
+	//must make sum = 0
+	sum /= KERNELSIZE;
+
+	//subtracting sum/variables is constrained optimization of gaussian
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++)
+		kernel[i + KERNELRADIUS] -= sum;
+
+	return Tomo_OK;
+}
