@@ -32,13 +32,19 @@
 #define NUMVIEWS 7
 //#define PROFILER
 #define ITERATIONS 7
-#define DECAY 1.0f
+#define DECAY 0.8f
 #define MAXZOOM 30
 #define ZOOMFACTOR 1.1
 #define LIGHTFACTOR 1.1
 #define LIGHTOFFFACTOR 3
 #define LINEWIDTH 3
 #define BARHEIGHT 40
+
+//Autofocus parameters
+#define STARTSTEP 1.0
+#define LASTSTEP 0.01
+#define MINDIS -20
+#define MAXDIS 20
 
 #define SIGMA 1
 #define KERNELRADIUS 2
@@ -65,7 +71,8 @@ typedef enum {
 	Tomo_input_err,
 	Tomo_file_err,
 	Tomo_DICOM_err,
-	Tomo_CUDA_err
+	Tomo_CUDA_err,
+	Tomo_Done
 } TomoError;
 
 typedef enum {
@@ -85,6 +92,7 @@ typedef enum {
 	der2_y,
 	der3_x,
 	der3_y,
+	square_mag,
 	orientation,
 	der,
 	der2,
@@ -260,11 +268,9 @@ public:
 	TomoError reconStep();
 	TomoError singleFrame();
 	float getDistance();
-	TomoError setNOOP(float kernel[KERNELSIZE]);
-	TomoError setGauss(float kernel[KERNELSIZE]);
-	TomoError setGaussDer(float kernel[KERNELSIZE]);
-	TomoError setGaussDer2(float kernel[KERNELSIZE]);
-	TomoError setGaussDer3(float kernel[KERNELSIZE]);
+	TomoError autoFocus(bool firstRun);
+	TomoError readPhantom(float * resolution);
+	float focusHelper();
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//interop extensions
@@ -296,6 +302,8 @@ public:
 	int xOff = 0;
 	int yOff = 0;
 	float scale = 1.5;
+	float distance = 0.0;
+	float bestDist = 0;
 
 	//Selection variables
 
@@ -325,6 +333,15 @@ private:
 	//Functions to Initialize the GPU and set up the reconstruction normalization
 	void DefineReconstructSpace();
 	TomoError SetUpGPUMemory();
+	TomoError setNOOP(float kernel[KERNELSIZE]);
+	TomoError setGauss(float kernel[KERNELSIZE]);
+	TomoError setGaussDer(float kernel[KERNELSIZE]);
+	TomoError setGaussDer2(float kernel[KERNELSIZE]);
+	TomoError setGaussDer3(float kernel[KERNELSIZE]);
+
+	//Helper funcitons
+	TomoError projectionToRecon(int* rX, int* rY, int pX, int pY, int view);
+	TomoError reconToProjection(int* pX, int* pY, int rX, int rY, int view);
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Functions called to control the stages of reconstruction
@@ -378,6 +395,15 @@ private:
 	float * d_gaussDer2;
 	float * d_gaussDer3;
 
+	//Derivative buffers
+	float * xDer;
+	float * yDer;
+	float * xDer2;
+	float * yDer2;
+	float * xDer3;
+	float * yDer3;
+	float * mag;
+
 	//Kernel call parameters
 	int Cx;
 	int Cy;
@@ -389,6 +415,9 @@ private:
 	size_t sizeProj;
 	size_t sizeSino;
 	size_t sizeError;
+
+	dim3 contThreads;
+	dim3 contBlocks;
 
 	//Decay constant for recon
 	float Beta = 1.0f;
@@ -402,6 +431,20 @@ private:
 	size_t imagePitch;
 	size_t sinoPitch;
 	size_t errorPitch;
+
+	//box
+	int baseXr = -1;
+	int baseYr = -1;
+	int currXr = -1;
+	int currYr = -1;
+
+	//lower tick
+	int lowXr = -1;
+	int lowYr = -1;
+
+	//upper tick
+	int upXr = -1;
+	int upYr = -1;
 
 	std::string savefilename;
 };

@@ -191,6 +191,9 @@ void DTRMainWindow::onStep(wxCommandEvent& WXUNUSED(event)) {
 			recon->derDisplay = der_y;
 			break;
 		case der_y:
+			recon->derDisplay = square_mag;
+			break;
+		case square_mag:
 			recon->derDisplay = der2_x;
 			break;
 		case der2_x:
@@ -422,9 +425,28 @@ void DTRMainWindow::onRunTest(wxCommandEvent& event) {
 }
 
 void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
-	wxMessageBox(wxT("TODO"),
-		wxT("TODO"),
-		wxICON_INFORMATION | wxOK);
+	wxConfigBase *pConfig = wxConfigBase::Get();
+	//for (int i = 0; i < pConfig->Read(wxT("/resPhanItems"), 0l); i++)
+	if(pConfig->Read(wxT("/resPhanItems"), 0l) > 0)
+	{
+		int i = 0;
+		m_auinotebook6->AddPage(CreateNewPage(wxString::Format(wxT("%s\\AcquiredImage2_0.raw"), pConfig->Read(wxString::Format(wxT("/resPhanFile%d"), i)))), wxString::Format(wxT("Geo Test %u"), i), true);
+		GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+		TomoRecon* recon = currentFrame->m_canvas->recon;
+		onContinuous(event);
+		recon->baseX = pConfig->Read(wxString::Format(wxT("/resPhanBoxLx%d"), i), 0l);
+		recon->baseY = pConfig->Read(wxString::Format(wxT("/resPhanBoxLy%d"), i), 0l);
+		recon->currX = pConfig->Read(wxString::Format(wxT("/resPhanBoxUx%d"), i), 0l);
+		recon->currY = pConfig->Read(wxString::Format(wxT("/resPhanBoxUy%d"), i), 0l);
+		recon->lowX = pConfig->Read(wxString::Format(wxT("/resPhanLowx%d"), i), 0l);
+		recon->lowY = pConfig->Read(wxString::Format(wxT("/resPhanLowy%d"), i), 0l);
+		recon->upX = pConfig->Read(wxString::Format(wxT("/resPhanUpx%d"), i), 0l);
+		recon->upY = pConfig->Read(wxString::Format(wxT("/resPhanUpy%d"), i), 0l);
+		recon->vertical = pConfig->Read(wxString::Format(wxT("/resPhanVert%d"), i), 0l) == 1;
+		recon->autoFocus(true);
+		while (recon->autoFocus(false) == Tomo_OK) currentFrame->m_canvas->paint();
+		currentFrame->m_canvas->paint();
+	}
 }
 
 void DTRMainWindow::onAutoGeo(wxCommandEvent& event) {
@@ -1138,7 +1160,8 @@ void GLFrame::OnMousewheel(wxMouseEvent& event) {
 	}
 	else {
 		if (m_canvas->recon->continuousMode) {
-			m_canvas->recon->sliceIndex += newScrollPos;
+			//m_canvas->recon->sliceIndex += newScrollPos;
+			m_canvas->recon->distance += newScrollPos*m_canvas->recon->Sys->Recon->Pitch_z;
 			m_canvas->recon->singleFrame();
 			m_canvas->paint();
 		}
@@ -1271,7 +1294,7 @@ void CudaGLCanvas::paint() {
 		m_status->SetStatusText(wxString::Format(wxT("Zoom: %.2fx"), pow(ZOOMFACTOR, recon->zoom)), scaleNum);
 		m_status->SetStatusText(wxString::Format(wxT("X offset: %d px."), recon->xOff), xOffset);
 		m_status->SetStatusText(wxString::Format(wxT("Y offset: %d px."), recon->yOff), yOffset);
-		m_status->SetStatusText(wxString::Format(wxT("Detector distance: %.2f mm."), recon->getDistance()), zPosition);
+		m_status->SetStatusText(wxString::Format(wxT("Detector distance: %.2f mm."), recon->distance), zPosition);
 	}
 
 	recon->test(imageIndex);
