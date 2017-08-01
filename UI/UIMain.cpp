@@ -176,8 +176,11 @@ void DTRMainWindow::onStep(wxCommandEvent& WXUNUSED(event)) {
 		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
 		return;
 	}
+
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	if (!recon->reconMemSet) recon->mallocSlices();
 
 	if (recon->continuousMode) {
 		switch (recon->derDisplay) {
@@ -261,6 +264,8 @@ void DTRMainWindow::onContinue(wxCommandEvent& WXUNUSED(event)) {
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
+	if (!recon->reconMemSet) recon->mallocSlices();
+
 	ReconThread* thd = new ReconThread(currentFrame->m_canvas, recon, currentFrame, m_statusBar1, m_textCtrl8);
 	thd->Create();
 	thd->Run();
@@ -274,6 +279,8 @@ void DTRMainWindow::onContinuous(wxCommandEvent& WXUNUSED(event)) {
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 	int statusWidths[] = { -4, -1, -1, -1, -1 };
+
+	if (!recon->reconMemSet) recon->mallocContinuous();
 
 	m_statusBar1->SetFieldsCount(5, statusWidths);
 	recon->continuousMode = true;
@@ -297,6 +304,8 @@ void DTRMainWindow::onContRun(wxCommandEvent& WXUNUSED(event)) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 	RunBox* progress = new RunBox(this);
 	wxStreamToTextRedirector redirect(m_textCtrl8);
+
+	if (!recon->reconMemSet) recon->mallocSlices();
 
 	FILETIME filetime, filetime2, filetime3;
 	LONGLONG time1, time2;

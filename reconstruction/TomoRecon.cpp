@@ -104,6 +104,15 @@ TomoError TomoRecon::TomoSave() {
 	tomo_err_throw(SaveDataAsDICOM(str2));
 }
 
+TomoError TomoRecon::setNOOP(float kernel[KERNELSIZE]) {
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
+		kernel[i + KERNELRADIUS] = 0.0;
+	}
+	kernel[KERNELRADIUS] = 1.0;
+
+	return Tomo_OK;
+}
+
 TomoError TomoRecon::setGauss(float kernel[KERNELSIZE]) {
 	float factor = 1 / (sqrt(2 * M_PI) * SIGMA);
 	float denom = 2 * pow(SIGMA, 2);
@@ -113,6 +122,7 @@ TomoError TomoRecon::setGauss(float kernel[KERNELSIZE]) {
 		kernel[i + KERNELRADIUS] = temp;
 		sum += temp;
 	}
+	sum--;//Make it sum to 1, not 0
 
 	//must make sum = 0
 	sum /= KERNELSIZE;

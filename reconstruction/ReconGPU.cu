@@ -116,66 +116,55 @@ __device__ __constant__ float* d_beamy;
 __device__ __constant__ float* d_beamz;
 __device__ __constant__ size_t d_errorPitch;
 __device__ __constant__ size_t d_imagePitch;
-__device__ __constant__ size_t d_sinoPitch;
-
-__device__ __constant__ float gauss[KERNELSIZE];
-__device__ __constant__ float gaussDer[KERNELSIZE];
+__device__ __constant__ size_t d_sinoPitch;
 
 /********************************************************************************************/
 /* GPU Function specific functions															*/
 /********************************************************************************************/
 
 //Loop unrolling templates, device functions are mapped to inlines 99% of the time
-template<int i> __device__ float convolutionRow(float x, float y, float * kernel){
+template<int i> __device__ float convolutionRow(float x, float y, float kernel[KERNELSIZE]){
 	return
 		tex2D(textImage, x + (float)(KERNELRADIUS - i), y) * kernel[i]
 		+ convolutionRow<i - 1>(x, y, kernel);
 }
 
-template<> __device__ float convolutionRow<-1>(float x, float y, float * kernel){
+template<> __device__ float convolutionRow<-1>(float x, float y, float kernel[KERNELSIZE]){
 	return 0;
 }
 
-template<int i> __device__ float convolutionColumn(float x, float y, float * kernel){
+template<int i> __device__ float convolutionColumn(float x, float y, float kernel[KERNELSIZE]){
 	return
 		tex2D(textImage, x, y + (float)(KERNELRADIUS - i)) * kernel[i]
 		+ convolutionColumn<i - 1>(x, y, kernel);
 }
 
-template<> __device__ float convolutionColumn<-1>(float x, float y, float * kernel){
+template<> __device__ float convolutionColumn<-1>(float x, float y, float kernel[KERNELSIZE]){
 	return 0;
 }
 
-__global__ void convolutionRowsKernel(float *d_Dst, float * kernel) {
+__global__ void convolutionRowsKernel(float *d_Dst, float kernel[KERNELSIZE]) {
 	const   int ix = MUL_ADD(blockDim.x, blockIdx.x, threadIdx.x);
 	const   int iy = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
 	const float  x = (float)ix + 0.5f;
 	const float  y = (float)iy + 0.5f;
 
-	if (ix >= d_Nx || iy >= d_Py)
+	if (ix >= d_Nx - KERNELRADIUS || iy >= d_Py - KERNELRADIUS || ix < KERNELRADIUS || iy < KERNELRADIUS)
 		return;
 
-	float sum = 0;
-	//sum = convolutionRow<KERNELSIZE>(x, y, kernel);
-	sum = convolutionRow<KERNELSIZE>(x, y, gaussDer);
-
-	d_Dst[MUL_ADD(iy, d_errorPitch, ix)] = sum;
+	d_Dst[MUL_ADD(iy, d_imagePitch, ix)] = convolutionRow<KERNELSIZE>(x, y, kernel);
 }
 
-__global__ void convolutionColumnsKernel(float *d_Dst, float * kernel){
+__global__ void convolutionColumnsKernel(float *d_Dst, float kernel[KERNELSIZE]){
 	const   int ix = MUL_ADD(blockDim.x, blockIdx.x, threadIdx.x);
 	const   int iy = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
 	const float  x = (float)ix + 0.5f;
 	const float  y = (float)iy + 0.5f;
 
-	if (ix >= d_Nx || iy >= d_Py)
+	if (ix >= d_Nx - KERNELRADIUS || iy >= d_Py - KERNELRADIUS || ix < KERNELRADIUS || iy < KERNELRADIUS)
 		return;
 
-	float sum = 0;
-	//sum = convolutionColumn<KERNELSIZE>(x, y, kernel);
-	sum = convolutionColumn<KERNELSIZE>(x, y, gauss);
-
-	d_Dst[MUL_ADD(iy, d_imagePitch, ix)] = sum;
+	d_Dst[MUL_ADD(iy, d_imagePitch, ix)] = convolutionColumn<KERNELSIZE>(x, y, kernel);
 }
 
 template<typename T>
@@ -1197,38 +1186,21 @@ TomoError TomoRecon::SetUpGPUMemory(){
 
 	cuda(StreamCreateWithFlags(&stream, cudaStreamDefault));
 
-	int Cx = 1;
-	int Cy = 1;
+	Cx = 1;
+	Cy = 1;
 	if (Sys->Proj->Nx % 16 == 0) Cx = 0;
 	if (Sys->Proj->Ny % 16 == 0) Cy = 0;
 
 	//Set the memory size as slightly larger to make even multiple of 16
-	int MemP_Nx = (Sys->Proj->Nx / 16 + Cx) * 16;
-	int MemP_Ny = (Sys->Proj->Ny / 16 + Cy) * 16;
+	MemP_Nx = (Sys->Proj->Nx / 16 + Cx) * 16;
+	MemP_Ny = (Sys->Proj->Ny / 16 + Cy) * 16;
 
-	int MemR_Nx = (Sys->Recon->Nx / 16 + Cx) * 16;
-	int MemR_Ny = (Sys->Recon->Ny / 16 + Cy) * 16;
+	MemR_Nx = (Sys->Recon->Nx / 16 + Cx) * 16;
+	MemR_Ny = (Sys->Recon->Ny / 16 + Cy) * 16;
 
 	//Define the size of each of the memory spaces on the gpu in number of bytes
-	size_t sizeIM = MemR_Nx * MemR_Ny * Sys->Recon->Nz * sizeof(float);
-	size_t sizeProj = Sys->Proj->Nx * Sys->Proj->Ny * sizeof(unsigned short);
-	size_t sizeSino = MemP_Nx * MemP_Ny * Sys->Proj->NumViews * sizeof(float);
-	size_t sizeError = MemP_Nx * MemP_Ny * sizeof(float);
-	size_t sizeSlice = Sys->Recon->Nz * sizeof(float);
-
-	//Allocate memory on GPU
-	if (continuousMode) {
-		cuda(MallocPitch((void**)&d_Image, &imagePitch, MemR_Nx * sizeof(float), MemR_Ny));
-		cuda(Memset2DAsync(d_Image, imagePitch, 0, MemR_Nx * sizeof(float), MemR_Ny));
-		cuda(MallocPitch((void**)&d_Error, &errorPitch, MemP_Nx * sizeof(float), MemP_Ny));
-		cuda(Memset2DAsync(d_Error, errorPitch, 0, MemP_Nx * sizeof(float), MemP_Ny));
-	}
-	else {
-		cuda(MallocPitch((void**)&d_Image, &imagePitch, MemR_Nx * sizeof(float), MemR_Ny * Sys->Recon->Nz));
-		cuda(Memset2DAsync(d_Image, imagePitch, 0, MemR_Nx * sizeof(float), MemR_Ny * Sys->Recon->Nz));
-		cuda(MallocPitch((void**)&d_Error, &errorPitch, MemP_Nx * sizeof(float), MemP_Ny * Sys->Proj->NumViews));
-		cuda(Memset2DAsync(d_Error, errorPitch, 0, MemP_Nx * sizeof(float), MemP_Ny * Sys->Proj->NumViews));
-	}
+	sizeProj = Sys->Proj->Nx * Sys->Proj->Ny * sizeof(unsigned short);
+	sizeSino = MemP_Nx * MemP_Ny * Sys->Proj->NumViews * sizeof(float);
 	
 	cuda(Malloc((void**)&d_Proj, sizeProj));
 	cuda(MallocPitch((void**)&d_Sino, &sinoPitch, MemP_Nx * sizeof(float), MemP_Ny * Sys->Proj->NumViews));
@@ -1296,6 +1268,19 @@ TomoError TomoRecon::SetUpGPUMemory(){
 	cuda(MemcpyToSymbolAsync(d_beamy, &beamy, sizeof(float*)));
 	cuda(MemcpyToSymbolAsync(d_beamz, &beamz, sizeof(float*)));
 
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::mallocSlices() {
+	sizeIM = MemR_Nx * MemR_Ny * Sys->Recon->Nz * sizeof(float);
+	sizeError = MemP_Nx * MemP_Ny * Sys->Proj->NumViews * sizeof(float);
+
+	//Set up slice memory and error memory
+	cuda(MallocPitch((void**)&d_Image, &imagePitch, MemR_Nx * sizeof(float), MemR_Ny));
+	cuda(Memset2DAsync(d_Image, imagePitch, 0, MemR_Nx * sizeof(float), MemR_Ny));
+	cuda(MallocPitch((void**)&d_Error, &errorPitch, MemP_Nx * sizeof(float), MemP_Ny));
+	cuda(Memset2DAsync(d_Error, errorPitch, 0, MemP_Nx * sizeof(float), MemP_Ny));
+
 	size_t pitch = errorPitch / sizeof(float);
 	cuda(MemcpyToSymbolAsync(d_errorPitch, &pitch, sizeof(size_t)));
 	pitch = imagePitch / sizeof(float);
@@ -1303,12 +1288,54 @@ TomoError TomoRecon::SetUpGPUMemory(){
 	pitch = sinoPitch / sizeof(float);
 	cuda(MemcpyToSymbolAsync(d_sinoPitch, &pitch, sizeof(size_t)));
 
+	reconMemSet = true;
+
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::mallocContinuous() {
+	sizeIM = MemR_Nx * MemR_Ny * sizeof(float);
+	sizeError = MemP_Nx * MemP_Ny * sizeof(float);
+
+	//Set up dispaly and buffer (error) regions
+	cuda(MallocPitch((void**)&d_Image, &imagePitch, MemR_Nx * sizeof(float), MemR_Ny * Sys->Recon->Nz));
+	cuda(MallocPitch((void**)&d_Error, &errorPitch, MemP_Nx * sizeof(float), MemP_Ny * Sys->Proj->NumViews));
+
+	size_t pitch = errorPitch / sizeof(float);
+	cuda(MemcpyToSymbolAsync(d_errorPitch, &pitch, sizeof(size_t)));
+	pitch = imagePitch / sizeof(float);
+	cuda(MemcpyToSymbolAsync(d_imagePitch, &pitch, sizeof(size_t)));
+	pitch = sinoPitch / sizeof(float);
+	cuda(MemcpyToSymbolAsync(d_sinoPitch, &pitch, sizeof(size_t)));
+
+	//Set up all kernels
+	cuda(Malloc(&d_noop, KERNELSIZE * sizeof(float)));
+	cuda(Malloc(&d_gauss, KERNELSIZE * sizeof(float)));
+	cuda(Malloc(&d_gaussDer, KERNELSIZE * sizeof(float)));
+	cuda(Malloc(&d_gaussDer2, KERNELSIZE * sizeof(float)));
+	cuda(Malloc(&d_gaussDer3, KERNELSIZE * sizeof(float)));
+
+	float tempNoop[KERNELSIZE];
+	setNOOP(tempNoop);
+	cuda(Memcpy(d_noop, tempNoop, KERNELSIZE * sizeof(float), cudaMemcpyHostToDevice));
+
 	float tempKernel[KERNELSIZE];
 	setGauss(tempKernel);
-	cudaMemcpyToSymbol(gauss, tempKernel, KERNELSIZE * sizeof(float));
+	cuda(Memcpy(d_gauss, tempKernel, KERNELSIZE * sizeof(float), cudaMemcpyHostToDevice));
 
-	setGaussDer(tempKernel);
-	cudaMemcpyToSymbol(gaussDer, tempKernel, KERNELSIZE * sizeof(float));
+	float tempKernelDer[KERNELSIZE];
+	setGaussDer(tempKernelDer);
+	cuda(Memcpy(d_gaussDer, tempKernelDer, KERNELSIZE * sizeof(float), cudaMemcpyHostToDevice));
+
+	float tempKernelDer2[KERNELSIZE];
+	setGaussDer2(tempKernelDer2);
+	cuda(Memcpy(d_gaussDer2, tempKernelDer2, KERNELSIZE * sizeof(float), cudaMemcpyHostToDevice));
+
+	float tempKernelDer3[KERNELSIZE];
+	setGaussDer3(tempKernelDer3);
+	cuda(Memcpy(d_gaussDer3, tempKernelDer3, KERNELSIZE * sizeof(float), cudaMemcpyHostToDevice));
+
+	reconMemSet = true;
 
 	return Tomo_OK;
 }
@@ -1316,17 +1343,6 @@ TomoError TomoRecon::SetUpGPUMemory(){
 //////////////////////////////////////////////////////////////////////////////////////////////
 //Functions to control the SART and TV reconstruction
 TomoError TomoRecon::FindSliceOffset(){
-	int Cx = 1;
-	int Cy = 1;
-	if (Sys->Proj->Nx % 16 == 0) Cx = 0;
-	if (Sys->Proj->Ny % 16 == 0) Cy = 0;
-
-	//Define the size of the Image space
-	int MemR_Nx = (Sys->Recon->Nx / 16 + Cx) * 16;
-	int MemR_Ny = (Sys->Recon->Ny / 16 + Cy) * 16;
-	int MemP_Nx = (Sys->Proj->Nx / 16 + Cx) * 16;
-	int MemP_Ny = (Sys->Proj->Ny / 16 + Cy) * 16;
-
 	//Set up GPU kernel thread and block sizes based on image size
 	dim3 dimBlockIm(16, 8);
 	dim3 dimGridIm(Sys->Recon->Nx / 16 + Cx, Sys->Recon->Ny / 8 + Cy, Sys->Recon->Nz);
@@ -1401,17 +1417,6 @@ TomoError TomoRecon::FindSliceOffset(){
 //////////////////////////////////////////////////////////////////////////////////////////////
 //Functions to save the images
 TomoError TomoRecon::CopyAndSaveImages(){
-	int Cx = 1;
-	int Cy = 1;
-	if (Sys->Proj->Nx % 16 == 0) Cx = 0;
-	if (Sys->Proj->Ny % 16 == 0) Cy = 0;
-
-	//Define the size of the real image
-	//Set up cuda streams to read in projection data
-	size_t sizeIM = Sys->Recon->Nx * Sys->Recon->Ny * Sys->Recon->Nz * sizeof(unsigned short);
-	int MemR_Nx = (Sys->Recon->Nx / 16 + Cx) * 16;
-	int MemR_Ny = (Sys->Recon->Ny / 16 + Cy) * 16;
-
 	unsigned short * d_ImCpy;
 	cuda(Malloc((void**)&d_ImCpy, sizeIM));
 	cuda(Memset(d_ImCpy, 0, sizeIM));
@@ -1469,6 +1474,12 @@ TomoError TomoRecon::FreeGPUMemory(void){
 	cuda(Free(beamy));
 	cuda(Free(beamz));
 
+	cuda(Free(d_noop));
+	cuda(Free(d_gauss));
+	cuda(Free(d_gaussDer));
+	cuda(Free(d_gaussDer2));
+	cuda(Free(d_gaussDer3));
+
 	//Unbind the texture array and free the cuda array 
 	cuda(FreeArray(d_Sinogram));
 	cuda(UnbindTexture(textSino));
@@ -1489,17 +1500,6 @@ TomoError TomoRecon::LoadProjections(int index) {
 }
 
 TomoError TomoRecon::correctProjections() {
-	int Cx = 1;
-	int Cy = 1;
-	if (Sys->Proj->Nx % 16 == 0) Cx = 0;
-	if (Sys->Proj->Ny % 16 == 0) Cy = 0;
-
-	//Define the size of the Image space
-	int MemR_Nx = (Sys->Recon->Nx / 16 + Cx) * 16;
-	int MemR_Ny = (Sys->Recon->Ny / 16 + Cy) * 16;
-	int MemP_Nx = (Sys->Proj->Nx / 16 + Cx) * 16;
-	int MemP_Ny = (Sys->Proj->Ny / 16 + Cy) * 16;
-
 	//Define memory size of the raw data as unsigned short
 	int size_proj = Sys->Proj->Nx * Sys->Proj->Ny;
 	size_t sizeProj = size_proj * sizeof(unsigned short);
@@ -1574,15 +1574,6 @@ TomoError TomoRecon::test(int index) {
 		//break;
 	case recon_images:
 		{
-			int Cx = 1;
-			int Cy = 1;
-			if (Sys->Proj->Nx % 16 == 0) Cx = 0;
-			if (Sys->Proj->Ny % 16 == 0) Cy = 0;
-
-			//Define the size of the Image space
-			int MemR_Nx = (Sys->Recon->Nx / 16 + Cx) * 16;
-			int MemR_Ny = (Sys->Recon->Ny / 16 + Cy) * 16;
-
 			size_proj = Sys->Proj->Nx * Sys->Proj->Ny;
 			cuda(BindTexture2D(NULL, textImage, d_Image, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny*Sys->Recon->Nz, imagePitch));
 			cuda(BindSurfaceToArray(displaySurface, *ca));
@@ -1598,17 +1589,6 @@ TomoError TomoRecon::test(int index) {
 		break;
 	case error_images:
 		{
-			int Cx = 1;
-			int Cy = 1;
-			if (Sys->Proj->Nx % 16 == 0) Cx = 0;
-			if (Sys->Proj->Ny % 16 == 0) Cy = 0;
-
-			//Define the size of the Image space
-			int MemR_Nx = (Sys->Recon->Nx / 16 + Cx) * 16;
-			int MemR_Ny = (Sys->Recon->Ny / 16 + Cy) * 16;
-			int MemP_Nx = (Sys->Proj->Nx / 16 + Cx) * 16;
-			int MemP_Ny = (Sys->Proj->Ny / 16 + Cy) * 16;
-
 			size_proj = Sys->Proj->Nx * Sys->Proj->Ny;
 			cuda(BindTexture2D(NULL, textImage, d_Error, cudaCreateChannelDesc<float>(), MemP_Nx, MemP_Ny*Sys->Proj->NumViews, errorPitch));
 			cuda(BindSurfaceToArray(displaySurface, *ca));
@@ -1635,17 +1615,6 @@ TomoError TomoRecon::reconInit() {
 }
 
 TomoError TomoRecon::reconStep() {
-	int Cx = 1;
-	int Cy = 1;
-	if (Sys->Proj->Nx % 16 == 0) Cx = 0;
-	if (Sys->Proj->Ny % 16 == 0) Cy = 0;
-
-	//Define the size of the Image space
-	int MemR_Nx = (Sys->Recon->Nx / 16 + Cx) * 16;
-	int MemR_Ny = (Sys->Recon->Ny / 16 + Cy) * 16;
-	int MemP_Nx = (Sys->Proj->Nx / 16 + Cx) * 16;
-	int MemP_Ny = (Sys->Proj->Ny / 16 + Cy) * 16;
-
 	//Set up GPU kernel thread and block sizes based on image size
 	dim3 dimBlockIm(16, 8);
 	dim3 dimGridIm(Sys->Recon->Nx / 16 + Cx, Sys->Recon->Ny / 8 + Cy, Sys->Recon->Nz);
@@ -1682,17 +1651,6 @@ TomoError TomoRecon::reconStep() {
 }
 
 TomoError TomoRecon::singleFrame() {
-	int Cx = 1;
-	int Cy = 1;
-	if (Sys->Proj->Nx % 16 == 0) Cx = 0;
-	if (Sys->Proj->Ny % 16 == 0) Cy = 0;
-
-	//Define the size of the Image space
-	int MemP_Nx = (Sys->Proj->Nx / 16 + Cx) * 16;
-	int MemP_Ny = (Sys->Proj->Ny / 16 + Cy) * 16;
-	int MemR_Nx = (Sys->Recon->Nx / 16 + Cx) * 16;
-	int MemR_Ny = (Sys->Recon->Ny / 16 + Cy) * 16;
-
 	dim3 dimBlockIm(32, 8);
 	dim3 dimGridIm(Sys->Recon->Nx / 32 + Cx, Sys->Recon->Ny / 8 + Cy, 1);
 
@@ -1708,19 +1666,39 @@ TomoError TomoRecon::singleFrame() {
 		break;
 	case der_x:
 		cuda(BindTexture2D(NULL, textImage, d_Image, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, imagePitch));
-		KERNELCALL2(convolutionRowsKernel, dimGridIm, dimBlockIm, d_Error, gaussDer);
+		KERNELCALL2(convolutionRowsKernel, dimGridIm, dimBlockIm, d_Error, d_gaussDer);
 		cuda(BindTexture2D(NULL, textImage, d_Error, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, errorPitch));
-		KERNELCALL2(convolutionColumnsKernel, dimGridIm, dimBlockIm, d_Image, gauss);
+		KERNELCALL2(convolutionColumnsKernel, dimGridIm, dimBlockIm, d_Image, d_gauss);
 		break;
 	case der_y:
+		cuda(BindTexture2D(NULL, textImage, d_Image, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, imagePitch));
+		KERNELCALL2(convolutionColumnsKernel, dimGridIm, dimBlockIm, d_Error, d_gaussDer);
+		cuda(BindTexture2D(NULL, textImage, d_Error, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, errorPitch));
+		KERNELCALL2(convolutionRowsKernel, dimGridIm, dimBlockIm, d_Image, d_gauss);
 		break;
 	case der2_x:
+		cuda(BindTexture2D(NULL, textImage, d_Image, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, imagePitch));
+		KERNELCALL2(convolutionRowsKernel, dimGridIm, dimBlockIm, d_Error, d_gaussDer2);
+		cuda(BindTexture2D(NULL, textImage, d_Error, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, errorPitch));
+		KERNELCALL2(convolutionColumnsKernel, dimGridIm, dimBlockIm, d_Image, d_gauss);
 		break;
 	case der2_y:
+		cuda(BindTexture2D(NULL, textImage, d_Image, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, imagePitch));
+		KERNELCALL2(convolutionColumnsKernel, dimGridIm, dimBlockIm, d_Error, d_gaussDer2);
+		cuda(BindTexture2D(NULL, textImage, d_Error, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, errorPitch));
+		KERNELCALL2(convolutionRowsKernel, dimGridIm, dimBlockIm, d_Image, d_gauss);
 		break;
 	case der3_x:
+		cuda(BindTexture2D(NULL, textImage, d_Image, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, imagePitch));
+		KERNELCALL2(convolutionRowsKernel, dimGridIm, dimBlockIm, d_Error, d_gaussDer2);
+		cuda(BindTexture2D(NULL, textImage, d_Error, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, errorPitch));
+		KERNELCALL2(convolutionColumnsKernel, dimGridIm, dimBlockIm, d_Image, d_gauss);
 		break;
 	case der3_y:
+		cuda(BindTexture2D(NULL, textImage, d_Image, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, imagePitch));
+		KERNELCALL2(convolutionColumnsKernel, dimGridIm, dimBlockIm, d_Error, d_gaussDer3);
+		cuda(BindTexture2D(NULL, textImage, d_Error, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, errorPitch));
+		KERNELCALL2(convolutionRowsKernel, dimGridIm, dimBlockIm, d_Image, d_gauss);
 		break;
 	}
 

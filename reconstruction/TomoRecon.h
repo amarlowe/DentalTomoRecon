@@ -40,8 +40,8 @@
 #define LINEWIDTH 3
 #define BARHEIGHT 40
 
-#define SIGMA 2
-#define KERNELRADIUS 5
+#define SIGMA 1
+#define KERNELRADIUS 2
 #define KERNELSIZE (2*KERNELRADIUS + 1)
 
 //Maps to single instruction in cuda
@@ -85,7 +85,10 @@ typedef enum {
 	der2_y,
 	der3_x,
 	der3_y,
-	orientation
+	orientation,
+	der,
+	der2,
+	der3
 } derivative_t;
 
 #define tomo_err_throw(x) {TomoError err = x; if(err != Tomo_OK) return err;}
@@ -240,6 +243,8 @@ public:
 	~TomoRecon();
 
 	TomoError init(const char * gainFile, const char * darkFile, const char * mainFile);
+	TomoError mallocSlices();
+	TomoError mallocContinuous();
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//High level functions for command line call
@@ -255,6 +260,7 @@ public:
 	TomoError reconStep();
 	TomoError singleFrame();
 	float getDistance();
+	TomoError setNOOP(float kernel[KERNELSIZE]);
 	TomoError setGauss(float kernel[KERNELSIZE]);
 	TomoError setGaussDer(float kernel[KERNELSIZE]);
 	TomoError setGaussDer2(float kernel[KERNELSIZE]);
@@ -270,6 +276,7 @@ public:
 	/* Variables																				*/
 	/********************************************************************************************/
 	bool initialized = false;
+	bool reconMemSet = false;
 
 #ifdef PROFILER
 	display_t currentDisplay = recon_images;
@@ -365,8 +372,23 @@ private:
 	float * d_MinVal;
 
 	//Kernel memory
+	float * d_noop;
 	float * d_gauss;
 	float * d_gaussDer;
+	float * d_gaussDer2;
+	float * d_gaussDer3;
+
+	//Kernel call parameters
+	int Cx;
+	int Cy;
+	int MemP_Nx;
+	int MemP_Ny;
+	int MemR_Nx;
+	int MemR_Ny;
+	size_t sizeIM;
+	size_t sizeProj;
+	size_t sizeSino;
+	size_t sizeError;
 
 	//Decay constant for recon
 	float Beta = 1.0f;
