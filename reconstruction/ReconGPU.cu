@@ -1744,20 +1744,20 @@ TomoError TomoRecon::singleFrame() {
 	cuda(BindTexture2D(NULL, textImage, d_Error, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, errorPitch));
 	KERNELCALL2(convolutionRowsKernel, contBlocks, contThreads, yDer, d_gauss);
 
+	cuda(BindTexture2D(NULL, textImage, d_Image, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, imagePitch));
+	KERNELCALL2(convolutionRowsKernel, contBlocks, contThreads, d_Error, d_gaussDer2);
+	cuda(BindTexture2D(NULL, textImage, d_Error, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, errorPitch));
+	KERNELCALL2(convolutionColumnsKernel, contBlocks, contThreads, xDer2, d_gauss);
+
+	cuda(BindTexture2D(NULL, textImage, d_Image, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, imagePitch));
+	KERNELCALL2(convolutionColumnsKernel, contBlocks, contThreads, d_Error, d_gaussDer2);
+	cuda(BindTexture2D(NULL, textImage, d_Error, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, errorPitch));
+	KERNELCALL2(convolutionRowsKernel, contBlocks, contThreads, yDer2, d_gauss);
+
 	//KERNELCALL2(squareMag, contBlocks, contThreads, d_Image, xDer, yDer, MemR_Nx, imagePitch / sizeof(float));
 
 	switch (derDisplay) {
 	case no_der:
-		cuda(BindTexture2D(NULL, textImage, d_Image, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, imagePitch));
-		KERNELCALL2(convolutionRowsKernel, contBlocks, contThreads, d_Error, d_gaussDer2);
-		cuda(BindTexture2D(NULL, textImage, d_Error, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, errorPitch));
-		KERNELCALL2(convolutionColumnsKernel, contBlocks, contThreads, xDer2, d_gauss);
-
-		cuda(BindTexture2D(NULL, textImage, d_Image, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, imagePitch));
-		KERNELCALL2(convolutionColumnsKernel, contBlocks, contThreads, d_Error, d_gaussDer2);
-		cuda(BindTexture2D(NULL, textImage, d_Error, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, errorPitch));
-		KERNELCALL2(convolutionRowsKernel, contBlocks, contThreads, yDer2, d_gauss);
-
 		cuda(BindTexture2D(NULL, textImage, d_Image, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, imagePitch));
 		KERNELCALL2(convolutionRowsKernel, contBlocks, contThreads, d_Error, d_gaussDer2);
 		cuda(BindTexture2D(NULL, textImage, d_Error, cudaCreateChannelDesc<float>(), MemR_Nx, MemR_Ny, errorPitch));
@@ -1940,6 +1940,33 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 }
 
 TomoError TomoRecon::readPhantom(float * resolution) {
+	/*if (vertical) {
+		//Get beginning y val from tick mark
+		int startY;
+		int endY;
+		//Get x range from the bouding box
+		int startX;
+		int endX;
+		int currY = startY;
+		while (currY <= endY) {
+			int currX = startX;
+			int negCross = 0;
+			bool negativeSpace = false;
+			while (currX < endX) {
+				float target = negativeSpace ? INTENSITYTHRESH : -INTENSITYTHRESH;
+				xDer2[currY * ]
+			}
+			if (negCross < LINEPAIRS) {
+				currY--;
+				break;
+			}
+			currY++;
+		}
+	}
+	else {
+
+	}
+	*/
 	return Tomo_OK;
 }
 

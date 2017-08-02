@@ -42,9 +42,13 @@
 
 //Autofocus parameters
 #define STARTSTEP 1.0
-#define LASTSTEP 0.01
+#define LASTSTEP 0.001
 #define MINDIS -20
 #define MAXDIS 20
+
+//Phantom reader parameters
+#define LINEPAIRS 5
+#define INTENSITYTHRESH 10
 
 #define SIGMA 1
 #define KERNELRADIUS 2
