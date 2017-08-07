@@ -282,6 +282,17 @@ public:
 	TomoError SetUpGPUForRecon();
 	TomoError FreeGPUMemory(void);
 
+	//Coordinate conversions
+	TomoError P2R(int* rX, int* rY, int pX, int pY, int view);
+	TomoError R2P(int* pX, int* pY, int rX, int rY, int view);
+	TomoError I2D(int* dX, int* dY, int iX, int iY);
+
+	//Convertion helpers for single directions
+	int P2R(int p, int view, bool xDir);
+	int R2P(int r, int view, bool xDir);
+	int I2D(int i, bool xDir);
+	int D2I(int d, bool xDir);
+
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Lower level functions for user interactive debugging
 	TomoError LoadProjections(int index);
@@ -363,11 +374,6 @@ private:
 	TomoError setGaussDer(float kernel[KERNELSIZE]);
 	TomoError setGaussDer2(float kernel[KERNELSIZE]);
 	TomoError setGaussDer3(float kernel[KERNELSIZE]);
-
-	//Helper funcitons
-	TomoError projectionToRecon(int* rX, int* rY, int pX, int pY, int view);
-	TomoError reconToProjection(int* pX, int* pY, int rX, int rY, int view);
-	TomoError imageToDisplay(int* dX, int* dY, int iX, int iY);
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Functions called to control the stages of reconstruction

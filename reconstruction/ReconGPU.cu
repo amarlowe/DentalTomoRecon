@@ -1656,11 +1656,12 @@ TomoError TomoRecon::test(int index) {
 				KERNELCALL4(resizeKernelTex, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, 
 					Sys->Proj->Nx, Sys->Proj->Ny, width, height, index, scale, xOff, yOff, UCHAR_MAX/pow(LIGHTFACTOR, light), LIGHTOFFFACTOR*lightOff, derDisplay == no_der);
 				if (baseXr >= 0 && currXr >= 0)
-					KERNELCALL4(drawSelectionBox, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, max(baseXr, currXr), max(baseYr, currYr), min(baseXr, currXr), min(baseYr, currYr), width);
+					KERNELCALL4(drawSelectionBox, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, I2D(max(baseXr, currXr),true), 
+						I2D(max(baseYr, currYr),false), I2D(min(baseXr, currXr),true), I2D(min(baseYr, currYr),false), width);
 				if (lowXr >= 0)
-					KERNELCALL4(drawSelectionBar, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, lowXr, lowYr, width, vertical);
+					KERNELCALL4(drawSelectionBar, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, I2D(lowXr,true), I2D(lowYr,false), width, vertical);
 				if (upXr >= 0)
-					KERNELCALL4(drawSelectionBar, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, upXr, upYr, width, vertical);
+					KERNELCALL4(drawSelectionBar, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, I2D(upXr,true), I2D(upYr,false), width, vertical);
 			}
 		}
 		break;
@@ -1837,7 +1838,8 @@ inline float TomoRecon::focusHelper() {
 	return currentBest;
 }
 
-TomoError TomoRecon::projectionToRecon(int* rX, int* rY, int pX, int pY, int view){
+//Projection space to recon space
+TomoError TomoRecon::P2R(int* rX, int* rY, int pX, int pY, int view){
 	float ex = Sys->SysGeo.EmitX[view] / Sys->Recon->Pitch_x;
 	float ey = Sys->SysGeo.EmitY[view] / Sys->Recon->Pitch_y;
 
@@ -1851,7 +1853,8 @@ TomoError TomoRecon::projectionToRecon(int* rX, int* rY, int pX, int pY, int vie
 	return Tomo_OK;
 }
 
-TomoError TomoRecon::reconToProjection(int* pX, int* pY, int rX, int rY, int view) {
+//Recon space to projection space
+TomoError TomoRecon::R2P(int* pX, int* pY, int rX, int rY, int view) {
 	float ex = Sys->SysGeo.EmitX[view] / Sys->Recon->Pitch_x;
 	float ey = Sys->SysGeo.EmitY[view] / Sys->Recon->Pitch_y;
 
@@ -1865,7 +1868,8 @@ TomoError TomoRecon::reconToProjection(int* pX, int* pY, int rX, int rY, int vie
 	return Tomo_OK;
 }
 
-TomoError TomoRecon::imageToDisplay(int* dX, int* dY, int iX, int iY) {
+//Image space to on-screen display
+TomoError TomoRecon::I2D(int* dX, int* dY, int iX, int iY) {
 	float innerOffx = (width - Sys->Proj->Nx / scale) / 2;
 	float innerOffy = (height - Sys->Proj->Ny / scale) / 2;
 
@@ -1873,6 +1877,68 @@ TomoError TomoRecon::imageToDisplay(int* dX, int* dY, int iX, int iY) {
 	*dY = (iY - yOff) / scale + innerOffy;
 
 	return Tomo_OK;
+}
+
+//Projection space to recon space
+int TomoRecon::P2R(int p, int view, bool xDir) {
+	float dz = distance / Sys->SysGeo.EmitZ[view];
+	if (xDir) {
+		float ex = Sys->SysGeo.EmitX[view] / Sys->Recon->Pitch_x;
+
+		float NtoPx = Sys->Recon->Pitch_x / Sys->Proj->Pitch_x;
+
+		return (p + 0.5 - Sys->Proj->Nx / 2) * (1 + dz) / NtoPx - ex * dz - 0.5 + Sys->Recon->Nx / 2;
+	}
+	//else
+	float ey = Sys->SysGeo.EmitY[view] / Sys->Recon->Pitch_y;
+
+	float NtoPy = Sys->Recon->Pitch_y / Sys->Proj->Pitch_y;
+
+	return (p + 0.5 - Sys->Proj->Ny / 2) * (1 + dz) / NtoPy - ey * dz - 0.5 + Sys->Recon->Ny / 2;
+}
+
+//Recon space to projection space
+int TomoRecon::R2P(int r, int view, bool xDir) {
+	float dz = distance / Sys->SysGeo.EmitZ[view];
+	if (xDir) {
+		float ex = Sys->SysGeo.EmitX[view] / Sys->Recon->Pitch_x;
+
+		float NtoPx = Sys->Recon->Pitch_x / Sys->Proj->Pitch_x;
+
+		return (r + 0.5 - Sys->Recon->Nx / 2 + ex * dz) / (1 + dz) * NtoPx - 0.5 + Sys->Proj->Nx / 2;
+	}
+	//else
+	float ey = Sys->SysGeo.EmitY[view] / Sys->Recon->Pitch_y;
+
+	float NtoPy = Sys->Recon->Pitch_y / Sys->Proj->Pitch_y;
+
+	return (r + 0.5 - Sys->Recon->Ny / 2 + ey * dz) / (1 + dz) * NtoPy - 0.5 + Sys->Proj->Ny / 2;
+}
+
+//Image space to on-screen display
+int TomoRecon::I2D(int i, bool xDir) {
+	if (xDir) {
+		float innerOffx = (width - Sys->Proj->Nx / scale) / 2;
+
+		return (i - xOff) / scale + innerOffx;
+	}
+	//else
+	float innerOffy = (height - Sys->Proj->Ny / scale) / 2;
+
+	return (i - yOff) / scale + innerOffy;
+}
+
+//On-screen coordinates to image space
+int TomoRecon::D2I(int d, bool xDir) {
+	if (xDir) {
+		float innerOffx = (width - Sys->Proj->Nx / scale) / 2;
+
+		return (d - innerOffx) * scale + xOff;
+	}
+	//else
+	float innerOffy = (height - Sys->Proj->Ny / scale) / 2;
+
+	return (d - innerOffy) * scale + yOff;
 }
 
 TomoError TomoRecon::autoFocus(bool firstRun) {
@@ -1931,10 +1997,10 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 			}
 		}
 
-		projectionToRecon(&upXr, &upYr, upX, upY, 0);
-		projectionToRecon(&lowXr, &lowYr, lowX, lowY,  0);
-		projectionToRecon(&currXr, &currYr, currX, currY, 0);
-		projectionToRecon(&baseXr, &baseYr, baseX, baseY, 0);
+		P2R(&upXr, &upYr, upX, upY, 0);
+		P2R(&lowXr, &lowYr, lowX, lowY,  0);
+		P2R(&currXr, &currYr, currX, currY, 0);
+		P2R(&baseXr, &baseYr, baseX, baseY, 0);
 
 		
 		return Tomo_OK;

@@ -451,10 +451,7 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 		recon->derDisplay = der2_x;
 		recon->light = -30;
 		currentFrame->m_canvas->paint();
-		/*float answer;
-		recon->readPhantom(&answer);
-		currentFrame->m_canvas->paint();
-		*m_textCtrl8 << "Phatom max resolution: " << answer << " line pairs\n";*/
+
 		int output = 0;
 		std::ofstream FILE;
 		FILE.open(wxString::Format(wxT("%s\\testResults.txt"), pConfig->Read(wxString::Format(wxT("/resPhanFile%d"), i))).mb_str());
