@@ -1838,10 +1838,6 @@ inline float TomoRecon::focusHelper() {
 }
 
 TomoError TomoRecon::projectionToRecon(int* rX, int* rY, int pX, int pY, int view){
-	float innerOffx = (width - Sys->Proj->Nx / scale) / 2;
-	float innerOffy = (height - Sys->Proj->Ny / scale) / 2;
-	(baseX - innerOffx) * scale + xOff;
-
 	float ex = Sys->SysGeo.EmitX[view] / Sys->Recon->Pitch_x;
 	float ey = Sys->SysGeo.EmitY[view] / Sys->Recon->Pitch_y;
 
@@ -1851,9 +1847,6 @@ TomoError TomoRecon::projectionToRecon(int* rX, int* rY, int pX, int pY, int vie
 	float dz = distance / Sys->SysGeo.EmitZ[view];
 	*rX = (pX + 0.5 - Sys->Proj->Nx/2) * (1 + dz) / NtoPx - ex * dz - 0.5 + Sys->Recon->Nx / 2;
 	*rY = (pY + 0.5 - Sys->Proj->Ny/2) * (1 + dz) / NtoPy - ey * dz - 0.5 + Sys->Recon->Ny / 2;
-
-	*rX = (*rX - xOff) / scale + innerOffx;
-	*rY = (*rY - yOff) / scale + innerOffy;
 
 	return Tomo_OK;
 }
@@ -1872,6 +1865,16 @@ TomoError TomoRecon::reconToProjection(int* pX, int* pY, int rX, int rY, int vie
 	return Tomo_OK;
 }
 
+TomoError TomoRecon::imageToDisplay(int* dX, int* dY, int iX, int iY) {
+	float innerOffx = (width - Sys->Proj->Nx / scale) / 2;
+	float innerOffy = (height - Sys->Proj->Ny / scale) / 2;
+
+	*dX = (iX - xOff) / scale + innerOffx;
+	*dY = (iY - yOff) / scale + innerOffy;
+
+	return Tomo_OK;
+}
+
 TomoError TomoRecon::autoFocus(bool firstRun) {
 	static float step;
 	static float best;
@@ -1883,6 +1886,7 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 		linearRegion = false;
 		derDisplay = square_mag;
 		light = -30;
+		distance = MINDIS;
 	}
 
 	if (continuousMode) {
@@ -1916,10 +1920,10 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 				distance += step;
 			}
 			if (abs(step) < LASTSTEP) {
-				baseXr = -1;
+				/*baseXr = -1;
 				currXr = -1;
 				lowXr = -1;
-				upXr = -1;
+				upXr = -1;*/
 				light = 0;
 				distance = bestDist;
 				derDisplay = no_der;
@@ -1940,36 +1944,226 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 }
 
 TomoError TomoRecon::readPhantom(float * resolution) {
-	/*if (vertical) {
-		//Get beginning y val from tick mark
-		int startY;
-		int endY;
+	if (vertical) {
+		float phanScale = (lowYr - upYr) / (1/LOWERBOUND - 1/UPPERBOUND);
+		float * h_xDer2 = (float*)malloc(MemR_Nx*MemR_Ny * sizeof(float));
+		cuda(Memcpy(h_xDer2, xDer2, MemR_Nx*MemR_Ny*sizeof(float), cudaMemcpyDeviceToHost));
 		//Get x range from the bouding box
-		int startX;
-		int endX;
-		int currY = startY;
-		while (currY <= endY) {
-			int currX = startX;
+		int startX = min(baseXr, currXr);
+		int endX = max(baseXr, currXr);
+		int thisY = lowYr;//Get beginning y val from tick mark
+		while (thisY >= upYr) {//y counts down
+			int thisX = startX;
 			int negCross = 0;
 			bool negativeSpace = false;
-			while (currX < endX) {
-				float target = negativeSpace ? INTENSITYTHRESH : -INTENSITYTHRESH;
-				xDer2[currY * ]
+			float negAcc = 0;
+			while (thisX < endX) {
+				if (negativeSpace) {
+					float val = h_xDer2[thisY * MemR_Nx + thisX];
+					if (val > 0) {
+						negativeSpace = false;
+						if (negAcc < -INTENSITYTHRESH) {
+							negCross++;
+						}
+					}
+					else {
+						negAcc += val;
+					}
+				}
+				else {
+					float val = h_xDer2[thisY * MemR_Nx + thisX];
+					if (val < 0) {
+						negativeSpace = true;
+						negAcc = val;
+					}
+				}
+				thisX++;
 			}
 			if (negCross < LINEPAIRS) {
-				currY--;
+				thisY++;
 				break;
 			}
-			currY++;
+			thisY--;
 		}
+		*resolution = phanScale / (thisY - lowYr + phanScale / LOWERBOUND);
+		free(h_xDer2);
+		
 	}
 	else {
-
+		float phanScale = (lowXr - upXr) * 20;// 1/ (1/10 - 1/20)
+		float * h_yDer2 = (float*)malloc(MemR_Nx*MemR_Ny * sizeof(float));
+		cuda(Memcpy(h_yDer2, yDer2, MemR_Nx*MemR_Ny * sizeof(float), cudaMemcpyDeviceToHost));
+		//Get x range from the bouding box
+		int startY = min(baseYr, currYr);
+		int endY = max(baseYr, currYr);
+		int thisX = lowXr;//Get beginning y val from tick mark
+		while (thisX >= upXr) {//y counts down
+			int thisY = startY;
+			int negCross = 0;
+			bool negativeSpace = false;
+			float negAcc = 0;
+			while (thisY < endY) {
+				if (negativeSpace) {
+					float val = h_yDer2[thisY * MemR_Nx + thisX];
+					if (val > 0) {
+						negativeSpace = false;
+						if (negAcc < -INTENSITYTHRESH) {
+							negCross++;
+						}
+					}
+					else {
+						negAcc += val;
+					}
+				}
+				else {
+					float val = h_yDer2[thisY * MemR_Nx + thisX];
+					if (val < 0) {
+						negativeSpace = true;
+						negAcc = val;
+					}
+				}
+				thisY++;
+			}
+			if (negCross < LINEPAIRS) {
+				thisX++;
+				break;
+			}
+			thisX--;
+		}
+		*resolution = phanScale / (thisX - lowXr + phanScale / LOWERBOUND);
+		free(h_yDer2);
 	}
-	*/
+
 	return Tomo_OK;
 }
 
-float TomoRecon::getDistance() {
-	return Sys->SysGeo.ZDist + Sys->SysGeo.ZPitch*sliceIndex;
+inline float TomoRecon::getDistance() {
+	return distance;
+}
+
+TomoError TomoRecon::initTolerances(std::vector<toleranceData> &data, int numTests, std::vector<float> offsets) {
+	//start set as just the combinations
+	for (int i = 0; i < NUMVIEWS; i++) {
+		int resultsLen = data.size();//size will change every iteration, pre-record it
+		int binRep = 1 << i;
+		for (int j = 0; j < resultsLen; j++) {
+			toleranceData newData = data[j];
+			newData.name += "+";
+			newData.name += std::to_string(i);
+			newData.numViewsChanged++;
+			newData.viewsChanged |= binRep;
+			data.push_back(newData);
+		}
+
+		//add the base
+		toleranceData newData;
+		newData.name += std::to_string(i);
+		newData.numViewsChanged = 1;
+		newData.viewsChanged = binRep;
+		data.push_back(newData);
+	}
+
+	//blow up with the diffent directions
+	int combinations = data.size();//again, changing sizes later on
+	for (int i = 0; i < combinations; i++) {
+		toleranceData baseline = data[i];
+
+		baseline.thisDir = dir_y;
+		data.push_back(baseline);
+
+		baseline.thisDir = dir_z;
+		data.push_back(baseline);
+	}
+
+	//then fill in the set with all the view changes
+	combinations = data.size();//again, changing sizes later on
+	for (int i = 0; i < combinations; i++) {
+		toleranceData baseline = data[i];
+		for (int j = 0; j < offsets.size() - 1; j++) {//skip the last
+			toleranceData newData = baseline;
+			newData.offset = offsets[j];
+			newData.phantomData = (float*)malloc(numTests * sizeof(float));
+			data.push_back(newData);
+		}
+
+		//the last one is done in place
+		data[i].offset = offsets[offsets.size() - 1];
+		data[i].phantomData = (float*)malloc(numTests * sizeof(float));
+	}
+
+	//finally, put in a control
+	toleranceData control;
+	control.name += " none";
+	control.numViewsChanged = 0;
+	control.viewsChanged = 0;
+	control.offset = 0;
+	control.phantomData = (float*)malloc(numTests * sizeof(float));
+	data.push_back(control);
+
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::freeTolerances(std::vector<toleranceData> &data) {
+	for (auto iter = data.begin(); iter != data.end(); ++iter)
+		free(iter->phantomData);
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::testTolerances(std::vector<toleranceData> &data, int testNum) {
+	static bool firstRun = true;
+	if (firstRun) {
+		firstRun = false;
+		derDisplay = der2_x;
+		light = -30;
+	}
+	static auto iter = data.begin();
+	//for (auto iter = data.begin(); iter != data.end(); ++iter) {
+	if (iter == data.end()) return Tomo_Done;
+		float geo[NUMVIEWS];
+		switch (iter->thisDir) {
+		case dir_x:
+			memcpy(geo, Sys->SysGeo.EmitX, sizeof(float)*NUMVIEWS);
+			break;
+		case dir_y:
+			memcpy(geo, Sys->SysGeo.EmitY, sizeof(float)*NUMVIEWS);
+			break;
+		case dir_z:
+			memcpy(geo, Sys->SysGeo.EmitZ, sizeof(float)*NUMVIEWS);
+			break;
+		}
+
+		for (int i = 0; i < NUMVIEWS; i++) {
+			bool active = ((iter->viewsChanged >> i) & 1) > 0;//Shift, mask and check
+			if (!active) continue;
+			if (i < NUMVIEWS / 2) geo[i] -= iter->offset;
+			else geo[i] += iter->offset;
+		}
+
+		//be safe, recopy values to overwrite previous iterations
+		switch (iter->thisDir) {
+		case dir_x:
+			cuda(MemcpyAsync(beamx, geo, Sys->Proj->NumViews * sizeof(float), cudaMemcpyHostToDevice));
+			cuda(MemcpyAsync(beamy, Sys->SysGeo.EmitY, Sys->Proj->NumViews * sizeof(float), cudaMemcpyHostToDevice));
+			cuda(MemcpyAsync(beamz, Sys->SysGeo.EmitZ, Sys->Proj->NumViews * sizeof(float), cudaMemcpyHostToDevice));
+			break;
+		case dir_y:
+			cuda(MemcpyAsync(beamx, Sys->SysGeo.EmitX, Sys->Proj->NumViews * sizeof(float), cudaMemcpyHostToDevice));
+			cuda(MemcpyAsync(beamy, geo, Sys->Proj->NumViews * sizeof(float), cudaMemcpyHostToDevice));
+			cuda(MemcpyAsync(beamz, Sys->SysGeo.EmitZ, Sys->Proj->NumViews * sizeof(float), cudaMemcpyHostToDevice));
+			break;
+		case dir_z:
+			cuda(MemcpyAsync(beamx, Sys->SysGeo.EmitX, Sys->Proj->NumViews * sizeof(float), cudaMemcpyHostToDevice));
+			cuda(MemcpyAsync(beamy, Sys->SysGeo.EmitY, Sys->Proj->NumViews * sizeof(float), cudaMemcpyHostToDevice));
+			cuda(MemcpyAsync(beamz, geo, Sys->Proj->NumViews * sizeof(float), cudaMemcpyHostToDevice));
+			break;
+		}
+
+		singleFrame();
+
+		float readVal;
+		readPhantom(&readVal);
+		iter->phantomData[testNum] = readVal;
+	//}
+		++iter;
+	return Tomo_OK;
 }

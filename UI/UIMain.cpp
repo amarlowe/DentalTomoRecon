@@ -426,6 +426,8 @@ void DTRMainWindow::onRunTest(wxCommandEvent& event) {
 
 void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 	wxConfigBase *pConfig = wxConfigBase::Get();
+	std::vector<float> offsets = { 0.1f, 0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 5.0f };
+	std::vector<toleranceData> data;
 	//for (int i = 0; i < pConfig->Read(wxT("/resPhanItems"), 0l); i++)
 	if(pConfig->Read(wxT("/resPhanItems"), 0l) > 0)
 	{
@@ -433,6 +435,7 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 		m_auinotebook6->AddPage(CreateNewPage(wxString::Format(wxT("%s\\AcquiredImage2_0.raw"), pConfig->Read(wxString::Format(wxT("/resPhanFile%d"), i)))), wxString::Format(wxT("Geo Test %u"), i), true);
 		GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 		TomoRecon* recon = currentFrame->m_canvas->recon;
+		if (data.empty()) recon->initTolerances(data, 1, offsets);
 		onContinuous(event);
 		recon->baseX = pConfig->Read(wxString::Format(wxT("/resPhanBoxLx%d"), i), 0l);
 		recon->baseY = pConfig->Read(wxString::Format(wxT("/resPhanBoxLy%d"), i), 0l);
@@ -445,8 +448,29 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 		recon->vertical = pConfig->Read(wxString::Format(wxT("/resPhanVert%d"), i), 0l) == 1;
 		recon->autoFocus(true);
 		while (recon->autoFocus(false) == Tomo_OK) currentFrame->m_canvas->paint();
+		recon->derDisplay = der2_x;
+		recon->light = -30;
 		currentFrame->m_canvas->paint();
+		/*float answer;
+		recon->readPhantom(&answer);
+		currentFrame->m_canvas->paint();
+		*m_textCtrl8 << "Phatom max resolution: " << answer << " line pairs\n";*/
+		int output = 0;
+		std::ofstream FILE;
+		FILE.open(wxString::Format(wxT("%s\\testResults.txt"), pConfig->Read(wxString::Format(wxT("/resPhanFile%d"), i))).mb_str());
+		while (recon->testTolerances(data, i) == Tomo_OK) {
+			currentFrame->m_canvas->paint();
+			//*m_textCtrl8 << "Phatom max resolution: " << data[output++].phantomData[i] << " line pairs\n";
+			FILE << data[output].name << ", " << data[output].numViewsChanged << ", " << data[output].viewsChanged << ", " 
+				<< data[output].offset << ", " << data[output].thisDir << ", " << data[output].phantomData[i] << "\n";
+			output++;
+		}
+		FILE.close();
 	}
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+	recon->freeTolerances(data);
 }
 
 void DTRMainWindow::onAutoGeo(wxCommandEvent& event) {

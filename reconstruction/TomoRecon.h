@@ -16,6 +16,7 @@
 #include <sstream>
 #include <string.h>
 #include <iomanip>
+#include <vector>
 #define _USE_MATH_DEFINES
 #include <math.h>
 #include <ctime>
@@ -43,15 +44,17 @@
 //Autofocus parameters
 #define STARTSTEP 1.0
 #define LASTSTEP 0.001
-#define MINDIS -20
+#define MINDIS 0
 #define MAXDIS 20
 
 //Phantom reader parameters
 #define LINEPAIRS 5
-#define INTENSITYTHRESH 10
+#define INTENSITYTHRESH 300
+#define UPPERBOUND 20.0
+#define LOWERBOUND 4.0
 
 #define SIGMA 1
-#define KERNELRADIUS 2
+#define KERNELRADIUS 5
 #define KERNELSIZE (2*KERNELRADIUS + 1)
 
 //Maps to single instruction in cuda
@@ -102,6 +105,12 @@ typedef enum {
 	der2,
 	der3
 } derivative_t;
+
+typedef enum {
+	dir_x,
+	dir_y,
+	dir_z
+} direction;
 
 #define tomo_err_throw(x) {TomoError err = x; if(err != Tomo_OK) return err;}
 
@@ -246,6 +255,15 @@ struct params {
 	int Z_Offset;
 };
 
+struct toleranceData {
+	std::string name = "views ";
+	int numViewsChanged;
+	int viewsChanged;
+	direction thisDir = dir_x;
+	float offset;
+	float * phantomData;
+};
+
 class TomoRecon : public interop {
 public:
 	//Functions
@@ -274,6 +292,9 @@ public:
 	float getDistance();
 	TomoError autoFocus(bool firstRun);
 	TomoError readPhantom(float * resolution);
+	TomoError initTolerances(std::vector<toleranceData> &data, int numTests, std::vector<float> offsets);
+	TomoError freeTolerances(std::vector<toleranceData> &data);
+	TomoError testTolerances(std::vector<toleranceData> &data, int testNum);
 	float focusHelper();
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
@@ -346,6 +367,7 @@ private:
 	//Helper funcitons
 	TomoError projectionToRecon(int* rX, int* rY, int pX, int pY, int view);
 	TomoError reconToProjection(int* pX, int* pY, int rX, int rY, int view);
+	TomoError imageToDisplay(int* dX, int* dY, int iX, int iY);
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Functions called to control the stages of reconstruction
