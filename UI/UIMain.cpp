@@ -191,6 +191,9 @@ void DTRMainWindow::onStep(wxCommandEvent& WXUNUSED(event)) {
 			recon->derDisplay = der_y;
 			break;
 		case der_y:
+			recon->derDisplay = slice_diff;
+			break;
+		case slice_diff:
 			recon->derDisplay = square_mag;
 			break;
 		case square_mag:
@@ -209,6 +212,8 @@ void DTRMainWindow::onStep(wxCommandEvent& WXUNUSED(event)) {
 			recon->derDisplay = no_der;
 			break;
 		}
+
+		recon->singleFrame();
 	}
 	else {
 		switch (recon->currentDisplay) {
@@ -446,10 +451,15 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 		recon->upX = pConfig->Read(wxString::Format(wxT("/resPhanUpx%d"), i), 0l);
 		recon->upY = pConfig->Read(wxString::Format(wxT("/resPhanUpy%d"), i), 0l);
 		recon->vertical = pConfig->Read(wxString::Format(wxT("/resPhanVert%d"), i), 0l) == 1;
+
 		recon->autoFocus(true);
-		while (recon->autoFocus(false) == Tomo_OK) currentFrame->m_canvas->paint();
+		while (recon->autoFocus(false) == Tomo_OK) {
+			recon->setReconBox(0);
+			currentFrame->m_canvas->paint();
+		}
 		recon->derDisplay = der2_x;
 		recon->light = -30;
+		recon->singleFrame();
 		currentFrame->m_canvas->paint();
 
 		int output = 0;
@@ -1165,26 +1175,20 @@ void GLFrame::OnMousewheel(wxMouseEvent& event) {
 	int newScrollPos = event.GetWheelRotation() / 120;
 	if (event.m_controlDown && event.m_altDown) {
 		m_canvas->recon->lightOff += newScrollPos;
-		m_canvas->paint();
 	}
 	else if (event.m_controlDown) {
 		m_canvas->recon->zoom += newScrollPos;
 		if (m_canvas->recon->zoom < 0) m_canvas->recon->zoom = 0;
-		m_canvas->paint();
 		m_canvas->recon->xOff += (event.GetX() - GetSize().x / 2)*m_canvas->recon->scale / 10 * newScrollPos;//- GetScreenPosition().x
 		m_canvas->recon->yOff += (event.GetY() - GetSize().y / 2)*m_canvas->recon->scale / 10 * newScrollPos;// - GetScreenPosition().y
 	}
 	else if (event.m_altDown) {
 		m_canvas->recon->light += newScrollPos;
-		//if (m_canvas->recon->light < 0) m_canvas->recon->light = 0;
-		m_canvas->paint();
 	}
 	else {
 		if (m_canvas->recon->continuousMode) {
-			//m_canvas->recon->sliceIndex += newScrollPos;
 			m_canvas->recon->distance += newScrollPos*m_canvas->recon->Sys->Recon->Pitch_z;
 			m_canvas->recon->singleFrame();
-			m_canvas->paint();
 		}
 		else {
 			newScrollPos += m_scrollBar->GetThumbPosition();
@@ -1194,6 +1198,7 @@ void GLFrame::OnMousewheel(wxMouseEvent& event) {
 			m_canvas->OnScroll(newScrollPos);
 		}
 	}
+	m_canvas->paint();
 }
 
 //---------------------------------------------------------------------------
@@ -1311,7 +1316,6 @@ void CudaGLCanvas::paint() {
 	recon->map();
 
 	if (recon->continuousMode) {
-		recon->singleFrame();
 		m_status->SetStatusText(wxString::Format(wxT("Zoom: %.2fx"), pow(ZOOMFACTOR, recon->zoom)), scaleNum);
 		m_status->SetStatusText(wxString::Format(wxT("X offset: %d px."), recon->xOff), xOffset);
 		m_status->SetStatusText(wxString::Format(wxT("Y offset: %d px."), recon->yOff), yOffset);
@@ -1340,8 +1344,15 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
 	if (event.LeftDown()) {
 		last_x = this_x;
 		last_y = this_y;
+		
 		last_x_off = recon->xOff;
 		last_y_off = recon->yOff;
+		if (event.m_controlDown) {
+			recon->baseXr = recon->D2I(this_x, true);
+			recon->baseYr = recon->D2I(this_y, false);
+			recon->currXr = -1;
+			recon->currYr = -1;
+		}
 	}
 
 	if (event.LeftIsDown())	{
@@ -1350,9 +1361,27 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
 				recon->xOff = last_x_off - (this_x - last_x)*recon->scale;
 				recon->yOff = last_y_off - (this_y - last_y)*recon->scale;
 			}
-			paint();
+			else {
+				recon->currXr = recon->D2I(this_x, true);
+				recon->currYr = recon->D2I(this_y, false);
+			}
 		}
 	}
+
+	if (event.LeftUp()) {
+		if (recon->baseXr >= 0 && recon->currXr >= 0) {
+			//if they're greater than 0, the box was clicked and dragged successfully
+			recon->autoFocus(true);
+			while (recon->autoFocus(false) == Tomo_OK) paint();
+			recon->baseXr = -1;
+			recon->currXr = -1;
+			recon->lowXr = -1;
+			recon->upXr = -1;
+			recon->singleFrame();
+		}
+	}
+
+	paint();
 }
 
 void CudaGLCanvas::OnChar(wxKeyEvent& event){

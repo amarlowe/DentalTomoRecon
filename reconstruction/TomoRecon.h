@@ -100,10 +100,12 @@ typedef enum {
 	der3_x,
 	der3_y,
 	square_mag,
+	slice_diff,
 	orientation,
 	der,
 	der2,
-	der3
+	der3,
+	der_all
 } derivative_t;
 
 typedef enum {
@@ -286,6 +288,7 @@ public:
 	TomoError P2R(int* rX, int* rY, int pX, int pY, int view);
 	TomoError R2P(int* pX, int* pY, int rX, int rY, int view);
 	TomoError I2D(int* dX, int* dY, int iX, int iY);
+	TomoError setReconBox(int index);
 
 	//Convertion helpers for single directions
 	int P2R(int p, int view, bool xDir);
@@ -302,6 +305,7 @@ public:
 	TomoError singleFrame();
 	float getDistance();
 	TomoError autoFocus(bool firstRun);
+	TomoError autoGeo(bool firstRun);
 	TomoError readPhantom(float * resolution);
 	TomoError initTolerances(std::vector<toleranceData> &data, int numTests, std::vector<float> offsets);
 	TomoError freeTolerances(std::vector<toleranceData> &data);
@@ -357,6 +361,21 @@ public:
 	int upX = -1;
 	int upY = -1;
 
+	//coordinates w.r.t. recon
+	//box
+	int baseXr = -1;
+	int baseYr = -1;
+	int currXr = -1;
+	int currYr = -1;
+
+	//lower tick
+	int lowXr = -1;
+	int lowYr = -1;
+
+	//upper tick
+	int upXr = -1;
+	int upYr = -1;
+
 	bool vertical;
 	derivative_t derDisplay = no_der;
 
@@ -382,6 +401,16 @@ private:
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Functions to control the SART and TV reconstruction
 	TomoError FindSliceOffset();
+
+	//Conversion helpers
+	float xP2MM(int p);
+	float yP2MM(int p);
+	float xR2MM(int r);
+	float yR2MM(int r);
+	int xMM2P(float m);
+	int yMM2P(float m);
+	int xMM2R(float m);
+	int yMM2R(float m);
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Functions to save the images
@@ -464,19 +493,8 @@ private:
 	size_t sinoPitch;
 	size_t errorPitch;
 
-	//box
-	int baseXr = -1;
-	int baseYr = -1;
-	int currXr = -1;
-	int currYr = -1;
-
-	//lower tick
-	int lowXr = -1;
-	int lowYr = -1;
-
-	//upper tick
-	int upXr = -1;
-	int upYr = -1;
+	//Parameters for 2d geometry search
+	int diffSlice = 0;
 
 	std::string savefilename;
 };
