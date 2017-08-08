@@ -570,30 +570,56 @@ __global__ void projectSlice(float * IM, float distance) {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
 
+	float values[NUMVIEWS];
+
 	//Set a normalization and pixel value to 0
 	float error = 0.0f;
 	float count = 0.0f;
 
 	//Check image boundaries
-	if ((i < d_Nx) && (j < d_Ny)) {
-		for (int view = 0; view < NUMVIEWS; view++) {
-			float dz = distance / d_beamz[view];
-			float x = xMM2P_d((xR2MM_d(i) + d_beamx[view] * dz) / (1 + dz));
-			float y = yMM2P_d((yR2MM_d(j) + d_beamy[view] * dz) / (1 + dz));
+	if ((i >= d_Nx) || (j >= d_Ny)) return;
 
-			//Update the value based on the error scaled and save the scale
-			if (y > 0 && y < d_MPy && x > 0 && x < d_MPx) {
-				float val = tex2D(textError, x, y + view*d_MPy);
-				if (val != 0) {
-					error += val;
-					count++;
-				}
+	for (int view = 0; view < NUMVIEWS; view++) {
+		float dz = distance / d_beamz[view];
+
+#ifdef USESCALE
+		float x = xMM2P_d((xR2MM_d(i) + d_beamx[view] * dz) / (1 + dz));
+		float y = yMM2P_d((yR2MM_d(j) + d_beamy[view] * dz) / (1 + dz));
+#else
+		float x = xMM2P_d((xR2MM_d(i) + d_beamx[view] * dz));
+		float y = yMM2P_d((yR2MM_d(j) + d_beamy[view] * dz));
+#endif // USESCALE
+
+		//Update the value based on the error scaled and save the scale
+		if (y > 0 && y < d_MPy && x > 0 && x < d_MPx) {
+			values[view] = tex2D(textError, x, y + view*d_MPy);
+			if (values[view] != 0) {
+				error += values[view];
+				count++;
 			}
 		}
 	}
 
+	//Get the standard deviation
+	error /= count;//error is now average
+	float stdDev = 0;
+	for (int view = 0; view < NUMVIEWS; view++) if (values[view] != 0) stdDev += pow(values[view] - error, 2);
+	stdDev /= count;
+	stdDev = sqrt(stdDev);
+
+	//Remove outliers
+	count = 0;
+	float newAvg = 0;
+	for (int view = 0; view < NUMVIEWS; view++) {
+		if (abs(values[view] - error) > stdDev) values[view] = 0.0;
+		else {
+			count++;
+			newAvg += values[view];
+		}
+	}
+
 	if (count > 0)
-		IM[j*d_MNx + i] = error / count;
+		IM[j*d_MNx + i] = newAvg / count;
 }
 
 __global__ void BackProjectSliceOff(float * IM, float beta) {
