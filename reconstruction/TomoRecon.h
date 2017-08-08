@@ -41,6 +41,9 @@
 #define LINEWIDTH 3
 #define BARHEIGHT 40
 
+//Scale the Image based on how far away it is from the detector
+//#define USESCALE
+
 //Autofocus parameters
 #define STARTSTEP 1.0
 #define LASTSTEP 0.001
