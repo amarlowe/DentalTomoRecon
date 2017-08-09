@@ -41,12 +41,11 @@
 #define LINEWIDTH 3
 #define BARHEIGHT 40
 
-//Scale the Image based on how far away it is from the detector
-//#define USESCALE
-
 //Autofocus parameters
 #define STARTSTEP 1.0
 #define LASTSTEP 0.001
+#define GEOSTART 5.0
+#define GEOLAST 0.01
 #define MINDIS 0
 #define MAXDIS 20
 
@@ -283,6 +282,7 @@ public:
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//High level functions for command line call
+	TomoError TomoLoad(const char* file);
 	TomoError TomoSave();
 	TomoError SetUpGPUForRecon();
 	TomoError FreeGPUMemory(void);
@@ -346,7 +346,6 @@ public:
 	int yOff = 0;
 	float scale = 1.5;
 	float distance = 0.0;
-	float bestDist = 0;
 
 	//Selection variables
 

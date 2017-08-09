@@ -212,7 +212,7 @@ __global__ void squareMag(float *d_Dst, float *src1, float *src2, int pitchIn, i
 	d_Dst[MUL_ADD(y, pitchOut, x)] = pow(src1[MUL_ADD(y, pitchIn, x)],2) + pow(src2[MUL_ADD(y, pitchIn, x)],2);
 }
 
-__global__ void squareDiff(float *d_Dst, int view, int xOff, int yOff, int pitchOut) {
+__global__ void squareDiff(float *d_Dst, int view, float xOff, float yOff, int pitchOut) {
 	const int x = MUL_ADD(blockDim.x, blockIdx.x, threadIdx.x);
 	const int y = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
 
@@ -581,14 +581,8 @@ __global__ void projectSlice(float * IM, float distance) {
 
 	for (int view = 0; view < NUMVIEWS; view++) {
 		float dz = distance / d_beamz[view];
-
-#ifdef USESCALE
 		float x = xMM2P_d((xR2MM_d(i) + d_beamx[view] * dz) / (1 + dz));
 		float y = yMM2P_d((yR2MM_d(j) + d_beamy[view] * dz) / (1 + dz));
-#else
-		float x = xMM2P_d((xR2MM_d(i) + d_beamx[view] * dz));
-		float y = yMM2P_d((yR2MM_d(j) + d_beamy[view] * dz));
-#endif // USESCALE
 
 		//Update the value based on the error scaled and save the scale
 		if (y > 0 && y < d_MPy && x > 0 && x < d_MPx) {
@@ -600,26 +594,8 @@ __global__ void projectSlice(float * IM, float distance) {
 		}
 	}
 
-	//Get the standard deviation
-	error /= count;//error is now average
-	float stdDev = 0;
-	for (int view = 0; view < NUMVIEWS; view++) if (values[view] != 0) stdDev += pow(values[view] - error, 2);
-	stdDev /= count;
-	stdDev = sqrt(stdDev);
-
-	//Remove outliers
-	count = 0;
-	float newAvg = 0;
-	for (int view = 0; view < NUMVIEWS; view++) {
-		if (abs(values[view] - error) > stdDev) values[view] = 0.0;
-		else {
-			count++;
-			newAvg += values[view];
-		}
-	}
-
 	if (count > 0)
-		IM[j*d_MNx + i] = newAvg / count;
+		IM[j*d_MNx + i] = error / count;
 }
 
 __global__ void BackProjectSliceOff(float * IM, float beta) {
@@ -1843,8 +1819,9 @@ TomoError TomoRecon::singleFrame() {
 		break;
 	case slice_diff:
 	{
-		float test = Sys->SysGeo.EmitX[diffSlice] / Sys->Recon->Pitch_x;
-		KERNELCALL2(squareDiff, contBlocks, contThreads, d_Image, diffSlice, test, 0, imagePitch / sizeof(float));
+		float xOff = -Sys->SysGeo.EmitX[diffSlice] * distance / Sys->SysGeo.EmitZ[diffSlice] / Sys->Recon->Pitch_x;
+		float yOff = -Sys->SysGeo.EmitY[diffSlice] * distance / Sys->SysGeo.EmitZ[diffSlice] / Sys->Recon->Pitch_y;
+		KERNELCALL2(squareDiff, contBlocks, contThreads, d_Image, diffSlice, xOff, yOff, imagePitch / sizeof(float));
 	}
 		break;
 	case der2_x:
@@ -1923,7 +1900,7 @@ inline float TomoRecon::focusHelper() {
 	float currentBest;
 	cuda(MemsetAsync(d_MaxVal, 0, sizeof(float)));
 	//TODO: check boundary conditions
-		KERNELCALL3(sumReduction, dimGridSum, dimBlockSum, sumSize, d_Image, MemR_Nx, d_MaxVal, min(baseXr, currXr), max(baseXr, currXr), min(baseYr, currYr), max(baseYr, currYr));
+	KERNELCALL3(sumReduction, dimGridSum, dimBlockSum, sumSize, d_Image, MemR_Nx, d_MaxVal, min(baseXr, currXr), max(baseXr, currXr), min(baseYr, currYr), max(baseYr, currYr));
 	cuda(Memcpy(&currentBest, d_MaxVal, sizeof(float), cudaMemcpyDeviceToHost));
 	return currentBest;
 }
@@ -2006,12 +1983,15 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 	static float best;
 	static bool linearRegion;
 	static bool firstLin = true;
+	static float bestDist;
+	static int oldLight;
 
 	if (firstRun) {
 		step = STARTSTEP;
 		best = 0;
 		linearRegion = false;
 		derDisplay = square_mag;
+		oldLight = light;
 		light = -100;
 		distance = MINDIS;
 		bestDist = MINDIS;
@@ -2046,18 +2026,15 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 
 				//find next step
 				step = -step / 2;
-				distance += step;
+
+				if (abs(step) < LASTSTEP) {
+					light = oldLight;
+					derDisplay = no_der;
+					return Tomo_Done;
+				}
+				else distance += step;
 			}
-			if (abs(step) < LASTSTEP) {
-				/*baseXr = -1;
-				currXr = -1;
-				lowXr = -1;
-				upXr = -1;*/
-				light = 0;
-				distance = bestDist;
-				derDisplay = no_der;
-				return Tomo_Done;
-			}
+			
 			firstLin = false;
 		}
 
@@ -2071,59 +2048,57 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 TomoError TomoRecon::autoGeo(bool firstRun) {
 	static float step;
 	static float best;
-	static bool linearRegion;
-	static float xGeo[NUMVIEWS];
-	static float yGeo[NUMVIEWS];
+	static bool xDir;
+	static int view;
+	static int oldLight;
 
 	if (firstRun) {
-		step = STARTSTEP;
-		best = 0;
-		linearRegion = false;
-		derDisplay = square_mag;
-		light = -30;
-		distance = MINDIS;
-		memcpy(xGeo, Sys->SysGeo.EmitX, sizeof(float)*NUMVIEWS);
-		memcpy(yGeo, Sys->SysGeo.EmitY, sizeof(float)*NUMVIEWS);
+		step = GEOSTART;
+		best = FLT_MAX;
+		diffSlice = 0;
+		xDir = true;
+		derDisplay = slice_diff;
+		oldLight = light;
+		light = -150;
 	}
 
 	if (continuousMode) {
 		float newVal = focusHelper();
+		float newOffset = xDir ? Sys->SysGeo.EmitX[diffSlice] : Sys->SysGeo.EmitY[diffSlice];
 
-		if (!linearRegion) {
-			if (newVal > best) {
-				best = newVal;
-				bestDist = distance;
-			}
-
-			distance += step;
-
-			if (distance > MAXDIS) {
-				linearRegion = true;
-				distance = bestDist;
-			}
+		//compare to current
+		if (newVal < best) {
+			best = newVal;
+			newOffset += step;
 		}
 		else {
-			//compare to current
-			if (newVal > best) {
-				best = newVal;
-				bestDist = distance;
-				distance += step;
-			}
-			else {
-				distance -= step;//revert last move
+			newOffset -= step;//revert last move
 
-								 //find next step
-				step = -step / 2;
-				distance += step;
+			//find next step
+			step = -step / 2;
+			if (abs(step) < GEOLAST) {
+				step = GEOSTART;
+				best = FLT_MAX;
+				if (xDir) Sys->SysGeo.EmitX[diffSlice] = newOffset;
+				else Sys->SysGeo.EmitY[diffSlice] = newOffset;
+				xDir = !xDir;
+				if (xDir) diffSlice++;//if we're back on xDir, we've made the next step
+				if (diffSlice == (NUMVIEWS / 2)) diffSlice++;//skip center, it's what we're comparing
+				if (diffSlice >= NUMVIEWS) {
+					light = oldLight;
+					derDisplay = no_der;
+					cuda(MemcpyAsync(beamx, Sys->SysGeo.EmitX, Sys->Proj->NumViews * sizeof(float), cudaMemcpyHostToDevice));
+					cuda(MemcpyAsync(beamy, Sys->SysGeo.EmitY, Sys->Proj->NumViews * sizeof(float), cudaMemcpyHostToDevice));
+					return Tomo_Done;
+				}
+				return Tomo_OK;//skip the rest so values don't bleed into one another
 			}
-			if (abs(step) < LASTSTEP) {
-				light = 0;
-				derDisplay = no_der;
-				return Tomo_Done;
-			}
+
+			newOffset += step;
 		}
 
-		setReconBox(0);
+		if (xDir) Sys->SysGeo.EmitX[diffSlice] = newOffset;
+		else Sys->SysGeo.EmitY[diffSlice] = newOffset;
 
 		return Tomo_OK;
 	}

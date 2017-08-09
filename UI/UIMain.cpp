@@ -154,9 +154,31 @@ wxPanel *DTRMainWindow::CreateNewPage(wxString filename) {
 }
 
 void DTRMainWindow::onOpen(wxCommandEvent& WXUNUSED(event)) {
-	wxMessageBox(wxT("TODO"),
-		wxT("TODO"),
-		wxICON_INFORMATION | wxOK);
+	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
+		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
+		return;
+	}
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	if (!recon->continuousMode) {
+		(*m_textCtrl8) << "Open currently only works with reconstructions created with new, then run in continuous mode.\n";
+		return;
+	}
+
+	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
+		"Raw File (*.raw)|*.raw", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+
+	if (openFileDialog.ShowModal() == wxID_CANCEL)
+		return;
+
+	wxString filename(openFileDialog.GetPath());
+	
+	wxStreamToTextRedirector redirect(m_textCtrl8);
+	recon->TomoLoad(filename.mb_str());
+	recon->currentDisplay = recon_images;
+	currentFrame->m_canvas->paint();
 }
 
 void DTRMainWindow::onSave(wxCommandEvent& WXUNUSED(event)) {
@@ -452,11 +474,21 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 		recon->upY = pConfig->Read(wxString::Format(wxT("/resPhanUpy%d"), i), 0l);
 		recon->vertical = pConfig->Read(wxString::Format(wxT("/resPhanVert%d"), i), 0l) == 1;
 
+		recon->setReconBox(0);
 		recon->autoFocus(true);
+		currentFrame->m_canvas->paint();
+		recon->setReconBox(0);
 		while (recon->autoFocus(false) == Tomo_OK) {
 			recon->setReconBox(0);
 			currentFrame->m_canvas->paint();
 		}
+		/*recon->autoGeo(true);
+		currentFrame->m_canvas->paint();
+		recon->setReconBox(0);
+		while (recon->autoGeo(false) == Tomo_OK) {
+			recon->setReconBox(0);
+			currentFrame->m_canvas->paint();
+		}*/
 		recon->derDisplay = der2_x;
 		recon->light = -30;
 		recon->singleFrame();
@@ -1372,7 +1404,16 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
 		if (recon->baseXr >= 0 && recon->currXr >= 0) {
 			//if they're greater than 0, the box was clicked and dragged successfully
 			recon->autoFocus(true);
+			paint();
 			while (recon->autoFocus(false) == Tomo_OK) paint();
+			if (event.m_altDown) {
+				//dependent on a focused image
+				recon->autoGeo(true);
+				paint();
+				while (recon->autoGeo(false) == Tomo_OK) paint();
+			}
+			
+			//cleanup
 			recon->baseXr = -1;
 			recon->currXr = -1;
 			recon->lowXr = -1;

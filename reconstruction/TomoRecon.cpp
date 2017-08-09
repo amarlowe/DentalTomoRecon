@@ -89,6 +89,32 @@ TomoError TomoRecon::init(const char * gainFile, const char * darkFile, const ch
 	yOff = 0;
 }
 
+TomoError TomoRecon::TomoLoad(const char* file) {
+	char GetFilePath[MAX_PATH];
+	std::string BasePath;
+	std::string FilePath;
+	std::string FileName;
+	savefilename = file;
+	strcpy(GetFilePath, file);
+	PathRemoveFileSpec(GetFilePath);
+	FileName = PathFindFileName(GetFilePath);
+	FilePath = GetFilePath;
+	PathRemoveFileSpec(GetFilePath);
+
+	//Define Base Path
+	BasePath = GetFilePath;
+	if (CheckFilePathForRepeatScans(BasePath)) {
+		FileName = PathFindFileName(GetFilePath);
+		FilePath = GetFilePath;
+		PathRemoveFileSpec(GetFilePath);
+		BasePath = GetFilePath;
+	}
+
+	tomo_err_throw(ReadRawProjectionData(FilePath, savefilename));
+	correctProjections();
+	singleFrame();
+}
+
 TomoError TomoRecon::TomoSave() {
 	std::string whichsubstr = "AcquiredImage";
 
