@@ -45,7 +45,8 @@ typedef enum {
 } status_t;
 
 typedef enum {
-	box,
+	box1,
+	box2,
 	lower,
 	upper
 } input_t;
@@ -138,7 +139,7 @@ public:
 	void paint();
 
 	TomoRecon* recon;
-	input_t state = box;
+	input_t state = box1;
 
 private:
 	int imageIndex = 0;

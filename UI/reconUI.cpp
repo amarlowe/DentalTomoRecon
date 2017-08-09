@@ -208,7 +208,7 @@ resDialog::resDialog( wxWindow* parent, wxWindowID id, const wxString& title, co
 	fgSizer3->SetFlexibleDirection( wxVERTICAL );
 	fgSizer3->SetNonFlexibleGrowMode( wxFLEX_GROWMODE_SPECIFIED );
 	
-	m_listCtrl = new wxListCtrl( this, wxID_ANY, wxDefaultPosition, wxSize( 850,300 ), wxLC_REPORT );
+	m_listCtrl = new wxListCtrl( this, wxID_ANY, wxDefaultPosition, wxSize( 1050,300 ), wxLC_REPORT );
 	fgSizer3->Add( m_listCtrl, 0, wxALL|wxALIGN_CENTER_HORIZONTAL, 5 );
 	
 	wxGridSizer* gSizer2;

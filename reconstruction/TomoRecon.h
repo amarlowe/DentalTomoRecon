@@ -265,7 +265,7 @@ struct toleranceData {
 	int viewsChanged;
 	direction thisDir = dir_x;
 	float offset;
-	float * phantomData;
+	float phantomData;
 };
 
 class TomoRecon : public interop {
@@ -311,8 +311,7 @@ public:
 	TomoError autoGeo(bool firstRun);
 	TomoError readPhantom(float * resolution);
 	TomoError initTolerances(std::vector<toleranceData> &data, int numTests, std::vector<float> offsets);
-	TomoError freeTolerances(std::vector<toleranceData> &data);
-	TomoError testTolerances(std::vector<toleranceData> &data, int testNum);
+	TomoError testTolerances(std::vector<toleranceData> &data, bool firstRun);
 	float focusHelper();
 
 	//////////////////////////////////////////////////////////////////////////////////////////////

@@ -455,19 +455,26 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 	wxConfigBase *pConfig = wxConfigBase::Get();
 	std::vector<float> offsets = { 0.1f, 0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 5.0f };
 	std::vector<toleranceData> data;
-	//for (int i = 0; i < pConfig->Read(wxT("/resPhanItems"), 0l); i++)
-	if(pConfig->Read(wxT("/resPhanItems"), 0l) > 0)
+	for (int i = 0; i < pConfig->Read(wxT("/resPhanItems"), 0l); i++)
+	//if(pConfig->Read(wxT("/resPhanItems"), 0l) > 0)
 	{
-		int i = 0;
-		m_auinotebook6->AddPage(CreateNewPage(wxString::Format(wxT("%s\\AcquiredImage2_0.raw"), pConfig->Read(wxString::Format(wxT("/resPhanFile%d"), i)))), wxString::Format(wxT("Geo Test %u"), i), true);
+		//int i = 0;
+		wxFileName filename = pConfig->Read(wxString::Format(wxT("/resPhanFile%d"), i));
+		if (i == 0) {
+			m_auinotebook6->AddPage(CreateNewPage(filename.GetFullPath()), wxString::Format(wxT("Geo Test %u"), i), true);
+			onContinuous(event);
+		}
 		GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 		TomoRecon* recon = currentFrame->m_canvas->recon;
+
+		if (i != 0) recon->TomoLoad(filename.GetFullPath().mb_str());
+
 		if (data.empty()) recon->initTolerances(data, 1, offsets);
-		onContinuous(event);
-		recon->baseX = pConfig->Read(wxString::Format(wxT("/resPhanBoxLx%d"), i), 0l);
-		recon->baseY = pConfig->Read(wxString::Format(wxT("/resPhanBoxLy%d"), i), 0l);
-		recon->currX = pConfig->Read(wxString::Format(wxT("/resPhanBoxUx%d"), i), 0l);
-		recon->currY = pConfig->Read(wxString::Format(wxT("/resPhanBoxUy%d"), i), 0l);
+		
+		recon->baseX = pConfig->Read(wxString::Format(wxT("/resPhanBoxLxF%d"), i), 0l);
+		recon->baseY = pConfig->Read(wxString::Format(wxT("/resPhanBoxLyF%d"), i), 0l);
+		recon->currX = pConfig->Read(wxString::Format(wxT("/resPhanBoxUxF%d"), i), 0l);
+		recon->currY = pConfig->Read(wxString::Format(wxT("/resPhanBoxUyF%d"), i), 0l);
 		recon->lowX = pConfig->Read(wxString::Format(wxT("/resPhanLowx%d"), i), 0l);
 		recon->lowY = pConfig->Read(wxString::Format(wxT("/resPhanLowy%d"), i), 0l);
 		recon->upX = pConfig->Read(wxString::Format(wxT("/resPhanUpx%d"), i), 0l);
@@ -489,27 +496,31 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 			recon->setReconBox(0);
 			currentFrame->m_canvas->paint();
 		}*/
-		recon->derDisplay = der2_x;
-		recon->light = -30;
+
+		//switch from autofocus box to area of interest
+		recon->baseX = pConfig->Read(wxString::Format(wxT("/resPhanBoxLx%d"), i), 0l);
+		recon->baseY = pConfig->Read(wxString::Format(wxT("/resPhanBoxLy%d"), i), 0l);
+		recon->currX = pConfig->Read(wxString::Format(wxT("/resPhanBoxUx%d"), i), 0l);
+		recon->currY = pConfig->Read(wxString::Format(wxT("/resPhanBoxUy%d"), i), 0l);
+		recon->setReconBox(0);
+
 		recon->singleFrame();
 		currentFrame->m_canvas->paint();
 
 		int output = 0;
 		std::ofstream FILE;
-		FILE.open(wxString::Format(wxT("%s\\testResults.txt"), pConfig->Read(wxString::Format(wxT("/resPhanFile%d"), i))).mb_str());
-		while (recon->testTolerances(data, i) == Tomo_OK) {
+		m_statusBar1->SetStatusText(filename.GetFullPath());
+		FILE.open(wxString::Format(wxT("%s\\testResults.txt"), filename.GetPath()).mb_str());
+		recon->testTolerances(data, true);
+		while (recon->testTolerances(data, false) == Tomo_OK) {
 			currentFrame->m_canvas->paint();
 			//*m_textCtrl8 << "Phatom max resolution: " << data[output++].phantomData[i] << " line pairs\n";
 			FILE << data[output].name << ", " << data[output].numViewsChanged << ", " << data[output].viewsChanged << ", " 
-				<< data[output].offset << ", " << data[output].thisDir << ", " << data[output].phantomData[i] << "\n";
+				<< data[output].offset << ", " << data[output].thisDir << ", " << data[output].phantomData << "\n";
 			output++;
 		}
 		FILE.close();
 	}
-
-	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
-	TomoRecon* recon = currentFrame->m_canvas->recon;
-	recon->freeTolerances(data);
 }
 
 void DTRMainWindow::onAutoGeo(wxCommandEvent& event) {
@@ -1012,6 +1023,30 @@ DTRResDialog::DTRResDialog(wxWindow* parent) : resDialog(parent) {
 	col9.SetWidth(50);
 	m_listCtrl->InsertColumn(9, col9);
 
+	wxListItem col10;
+	col10.SetId(10);
+	col10.SetText(_("BoxUxF"));
+	col10.SetWidth(50);
+	m_listCtrl->InsertColumn(10, col10);
+
+	wxListItem col11;
+	col11.SetId(11);
+	col11.SetText(_("BoxUyF"));
+	col11.SetWidth(50);
+	m_listCtrl->InsertColumn(11, col11);
+
+	wxListItem col12;
+	col12.SetId(12);
+	col12.SetText(_("BoxLxF"));
+	col12.SetWidth(50);
+	m_listCtrl->InsertColumn(12, col12);
+
+	wxListItem col13;
+	col13.SetId(13);
+	col13.SetText(_("BoxLyF"));
+	col13.SetWidth(50);
+	m_listCtrl->InsertColumn(13, col13);
+
 	for (int i = 0; i < pConfig->Read(wxT("/resPhanItems"), 0l); i++) {
 		m_listCtrl->InsertItem(i, pConfig->Read(wxString::Format(wxT("/resPhanFile%d"), i), wxT("")));
 		m_listCtrl->SetItem(i, 1, wxString::Format(wxT("%d"),pConfig->Read(wxString::Format(wxT("/resPhanBoxUx%d"), i), 0l)));
@@ -1023,6 +1058,10 @@ DTRResDialog::DTRResDialog(wxWindow* parent) : resDialog(parent) {
 		m_listCtrl->SetItem(i, 7, wxString::Format(wxT("%d"), pConfig->Read(wxString::Format(wxT("/resPhanUpx%d"), i), 0l)));
 		m_listCtrl->SetItem(i, 8, wxString::Format(wxT("%d"), pConfig->Read(wxString::Format(wxT("/resPhanUpy%d"), i), 0l)));
 		m_listCtrl->SetItem(i, 9, pConfig->Read(wxString::Format(wxT("/resPhanVert%d"), i), 0l) == 1 ? wxT("Yes") : wxT("No"));
+		m_listCtrl->SetItem(i, 10, wxString::Format(wxT("%d"), pConfig->Read(wxString::Format(wxT("/resPhanBoxUxF%d"), i), 0l)));
+		m_listCtrl->SetItem(i, 11, wxString::Format(wxT("%d"), pConfig->Read(wxString::Format(wxT("/resPhanBoxUyF%d"), i), 0l)));
+		m_listCtrl->SetItem(i, 12, wxString::Format(wxT("%d"), pConfig->Read(wxString::Format(wxT("/resPhanBoxLxF%d"), i), 0l)));
+		m_listCtrl->SetItem(i, 13, wxString::Format(wxT("%d"), pConfig->Read(wxString::Format(wxT("/resPhanBoxLyF%d"), i), 0l)));
 	}
 }
 
@@ -1044,8 +1083,7 @@ void DTRResDialog::onAddNew(wxCommandEvent& event) {
 
 	if (res == wxID_OK) {
 		//User successfully completed the dialog interaction
-		wxFileName fname(openFileDialog.GetPath());
-		wxString file = fname.GetPath();
+		wxString file = openFileDialog.GetPath();
 		int index = m_listCtrl->FindItem(-1, file);
 		if (index == wxNOT_FOUND)
 			index = m_listCtrl->InsertItem(0, file);
@@ -1064,6 +1102,10 @@ void DTRResDialog::onAddNew(wxCommandEvent& event) {
 		m_listCtrl->SetItem(index, 7, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->upX - innerOffx) * scale + xOff)));
 		m_listCtrl->SetItem(index, 8, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->upY - innerOffy) * scale + yOff)));
 		m_listCtrl->SetItem(index, 9, vertical == wxYES ? wxT("Yes") : wxT("No"));
+		m_listCtrl->SetItem(index, 10, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->baseXr - innerOffx) * scale + xOff)));
+		m_listCtrl->SetItem(index, 11, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->baseYr - innerOffy) * scale + yOff)));
+		m_listCtrl->SetItem(index, 12, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->currXr - innerOffx) * scale + xOff)));
+		m_listCtrl->SetItem(index, 13, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->currYr - innerOffy) * scale + yOff)));
 	}
 }
 
@@ -1145,6 +1187,26 @@ void DTRResDialog::onOk(wxCommandEvent& event) {
 			pConfig->Write(wxString::Format(wxT("/resPhanVert%d"), selection), 1l);
 		else
 			pConfig->Write(wxString::Format(wxT("/resPhanVert%d"), selection), 0l);
+
+		item.m_col = 10;
+		m_listCtrl->GetItem(item);
+		item.m_text.ToLong(&value);
+		pConfig->Write(wxString::Format(wxT("/resPhanBoxUxF%d"), selection), value);
+
+		item.m_col = 11;
+		m_listCtrl->GetItem(item);
+		item.m_text.ToLong(&value);
+		pConfig->Write(wxString::Format(wxT("/resPhanBoxUyF%d"), selection), value);
+
+		item.m_col = 12;
+		m_listCtrl->GetItem(item);
+		item.m_text.ToLong(&value);
+		pConfig->Write(wxString::Format(wxT("/resPhanBoxLxF%d"), selection), value);
+
+		item.m_col = 13;
+		m_listCtrl->GetItem(item);
+		item.m_text.ToLong(&value);
+		pConfig->Write(wxString::Format(wxT("/resPhanBoxLyF%d"), selection), value);
 	}
 
 	((DTRMainWindow*)GetParent())->resDialog = NULL;
@@ -1244,7 +1306,7 @@ wxEND_EVENT_TABLE()
 
 GLWindow::GLWindow(wxWindow *parent, bool vertical, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
 	const wxPoint& pos, const wxSize& size, long style)
-	: wxDialog(parent, wxID_ANY, wxT("Select area of interest in the phantom with ctrl+mouse drag. Hit space once selected."), pos, size, style), m_canvas(NULL) {
+	: wxDialog(parent, wxID_ANY, wxT("Select autofocus area with ctrl+mouse drag. Hit space once selected."), pos, size, style), m_canvas(NULL) {
 	//Set up sizer to make the canvas take up the entire panel (wxWidgets handles garbage collection)
 	wxBoxSizer* bSizer;
 	bSizer = new wxBoxSizer(wxVERTICAL);
@@ -1503,7 +1565,8 @@ void CudaGLInCanvas::OnMouseEvent(wxMouseEvent& event) {
 	if (event.LeftDown()) {
 		if (event.m_controlDown) {
 			switch (state) {
-			case box:
+			case box1:
+			case box2:
 				recon->baseX = this_x;
 				recon->baseY = this_y;
 				break;
@@ -1528,7 +1591,8 @@ void CudaGLInCanvas::OnMouseEvent(wxMouseEvent& event) {
 		if (event.Dragging()) {
 			if (event.m_controlDown) {
 				switch (state) {
-				case box:
+				case box1:
+				case box2:
 					recon->currX = this_x;
 					recon->currY = this_y;
 					break;
@@ -1555,7 +1619,22 @@ void CudaGLInCanvas::OnChar(wxKeyEvent& event) {
 	//pressing space advances state to next input
 	if (event.GetKeyCode() == 32) {//32=space, enter is a system dialog reserved key
 		switch (state) {
-		case box:
+		case box1:
+			if (recon->baseX >= 0 && recon->currX >= 0) {
+				state = box2;
+				((GLWindow*)GetParent())->SetTitle(wxT("Select area of interest in the phantom with ctrl + mouse drag.Hit space once selected."));
+
+				//transfer box data to temporary storage internal to recon
+				recon->baseXr = recon->baseX;
+				recon->baseYr = recon->baseY;
+				recon->currXr = recon->currX;
+				recon->currYr = recon->currY;
+				recon->baseX = -1;
+				recon->baseY = -1;
+				recon->currX = -1;
+				recon->currY = -1;
+			}
+		case box2:
 			if (recon->baseX >= 0 && recon->currX >= 0) {
 				state = lower;
 				((GLWindow*)GetParent())->SetTitle(wxT("Choose the lower bound on line pairs with ctrl+click. Hit space when done."));

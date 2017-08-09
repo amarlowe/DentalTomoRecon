@@ -2044,7 +2044,6 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 	return Tomo_Done;
 }
 
-//TODO
 TomoError TomoRecon::autoGeo(bool firstRun) {
 	static float step;
 	static float best;
@@ -2153,7 +2152,7 @@ TomoError TomoRecon::readPhantom(float * resolution) {
 		
 	}
 	else {
-		float phanScale = (lowXr - upXr) * 20;// 1/ (1/10 - 1/20)
+		float phanScale = (lowXr - upXr) / (1 / LOWERBOUND - 1 / UPPERBOUND);
 		float * h_yDer2 = (float*)malloc(MemR_Nx*MemR_Ny * sizeof(float));
 		cuda(Memcpy(h_yDer2, d_Image, MemR_Nx*MemR_Ny * sizeof(float), cudaMemcpyDeviceToHost));
 		//Get x range from the bouding box
@@ -2245,13 +2244,11 @@ TomoError TomoRecon::initTolerances(std::vector<toleranceData> &data, int numTes
 		for (int j = 0; j < offsets.size() - 1; j++) {//skip the last
 			toleranceData newData = baseline;
 			newData.offset = offsets[j];
-			newData.phantomData = (float*)malloc(numTests * sizeof(float));
 			data.push_back(newData);
 		}
 
 		//the last one is done in place
 		data[i].offset = offsets[offsets.size() - 1];
-		data[i].phantomData = (float*)malloc(numTests * sizeof(float));
 	}
 
 	//finally, put in a control
@@ -2260,28 +2257,28 @@ TomoError TomoRecon::initTolerances(std::vector<toleranceData> &data, int numTes
 	control.numViewsChanged = 0;
 	control.viewsChanged = 0;
 	control.offset = 0;
-	control.phantomData = (float*)malloc(numTests * sizeof(float));
 	data.push_back(control);
 
 	return Tomo_OK;
 }
 
-TomoError TomoRecon::freeTolerances(std::vector<toleranceData> &data) {
-	for (auto iter = data.begin(); iter != data.end(); ++iter)
-		free(iter->phantomData);
-	return Tomo_OK;
-}
-
-TomoError TomoRecon::testTolerances(std::vector<toleranceData> &data, int testNum) {
-	static bool firstRun = true;
-	if (firstRun) {
-		firstRun = false;
-		derDisplay = der2_x;
-		light = -30;
-	}
+TomoError TomoRecon::testTolerances(std::vector<toleranceData> &data, bool firstRun) {
 	static auto iter = data.begin();
+	static int oldLight = light;
+	if (firstRun) {
+		if(vertical) derDisplay = der2_x;
+		else derDisplay = der2_y;
+		light = -30;
+		iter = data.begin();
+		return Tomo_OK;
+	}
+	
 	//for (auto iter = data.begin(); iter != data.end(); ++iter) {
-	if (iter == data.end()) return Tomo_Done;
+	if (iter == data.end()) {
+		light = oldLight;
+		derDisplay = no_der;
+		return Tomo_Done;
+	}
 		float geo[NUMVIEWS];
 		switch (iter->thisDir) {
 		case dir_x:
@@ -2325,7 +2322,7 @@ TomoError TomoRecon::testTolerances(std::vector<toleranceData> &data, int testNu
 
 		float readVal;
 		readPhantom(&readVal);
-		iter->phantomData[testNum] = readVal;
+		iter->phantomData = readVal;
 	//}
 		++iter;
 	return Tomo_OK;
