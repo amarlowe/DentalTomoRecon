@@ -50,7 +50,7 @@ class mainWindow : public wxFrame
 		wxMenuBar* m_menubar1;
 		wxMenu* file;
 		wxMenu* config;
-		wxMenu* reconstruction;
+		wxMenu* view;
 		wxMenu* calibration;
 		wxMenu* help;
 		wxPanel* m_panel10;
@@ -61,15 +61,12 @@ class mainWindow : public wxFrame
 		virtual void onKeyUp( wxKeyEvent& event ) { event.Skip(); }
 		virtual void onNew( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onOpen( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onSave( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onQuit( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onConfig( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onGainSelect( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onDarkSelect( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onContinue( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onContRun( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onStep( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onContinuous( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onReconstructionView( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onProjectionView( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onResList( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onContList( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onRunTest( wxCommandEvent& event ) { event.Skip(); }

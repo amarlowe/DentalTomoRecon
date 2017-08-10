@@ -25,10 +25,6 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	open = new wxMenuItem( file, wxID_OPEN, wxString( wxT("Open\tCtrl+O") ) , wxEmptyString, wxITEM_NORMAL );
 	file->Append( open );
 	
-	wxMenuItem* Save;
-	Save = new wxMenuItem( file, wxID_SAVE, wxString( wxT("Save\tCtrl+S") ) , wxEmptyString, wxITEM_NORMAL );
-	file->Append( Save );
-	
 	wxMenuItem* quit;
 	quit = new wxMenuItem( file, wxID_ANY, wxString( wxT("Exit\tAlt-X") ) , wxEmptyString, wxITEM_NORMAL );
 	file->Append( quit );
@@ -50,24 +46,16 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	
 	m_menubar1->Append( config, wxT("Config") ); 
 	
-	reconstruction = new wxMenu();
-	wxMenuItem* cont;
-	cont = new wxMenuItem( reconstruction, wxID_ANY, wxString( wxT("Run (Interactive)") ) + wxT('\t') + wxT("F5"), wxEmptyString, wxITEM_NORMAL );
-	reconstruction->Append( cont );
+	view = new wxMenu();
+	wxMenuItem* recontructionView;
+	recontructionView = new wxMenuItem( view, wxID_ANY, wxString( wxT("Reconstruction") ) + wxT('\t') + wxT("Ctrl+R"), wxEmptyString, wxITEM_NORMAL );
+	view->Append( recontructionView );
 	
-	wxMenuItem* contRun;
-	contRun = new wxMenuItem( reconstruction, wxID_ANY, wxString( wxT("Run (Continuous)") ) + wxT('\t') + wxT("Enter"), wxEmptyString, wxITEM_NORMAL );
-	reconstruction->Append( contRun );
+	wxMenuItem* projectionView;
+	projectionView = new wxMenuItem( view, wxID_ANY, wxString( wxT("Projections") ) + wxT('\t') + wxT("Ctrl+P"), wxEmptyString, wxITEM_NORMAL );
+	view->Append( projectionView );
 	
-	wxMenuItem* step;
-	step = new wxMenuItem( reconstruction, wxID_ANY, wxString( wxT("Step\t") ) + wxT('\t') + wxT("Space"), wxEmptyString, wxITEM_NORMAL );
-	reconstruction->Append( step );
-	
-	wxMenuItem* continous;
-	continous = new wxMenuItem( reconstruction, wxID_ANY, wxString( wxT("Continuous") ) + wxT('\t') + wxT("F6"), wxEmptyString, wxITEM_NORMAL );
-	reconstruction->Append( continous );
-	
-	m_menubar1->Append( reconstruction, wxT("Reconstruction") ); 
+	m_menubar1->Append( view, wxT("View") ); 
 	
 	calibration = new wxMenu();
 	wxMenuItem* resList;
@@ -129,15 +117,12 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	this->Connect( wxEVT_KEY_UP, wxKeyEventHandler( mainWindow::onKeyUp ) );
 	this->Connect( newPage->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onNew ) );
 	this->Connect( open->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onOpen ) );
-	this->Connect( Save->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onSave ) );
 	this->Connect( quit->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onQuit ) );
 	this->Connect( configDialog->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onConfig ) );
 	this->Connect( gainSelect->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onGainSelect ) );
 	this->Connect( darkSelect->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onDarkSelect ) );
-	this->Connect( cont->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContinue ) );
-	this->Connect( contRun->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContRun ) );
-	this->Connect( step->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onStep ) );
-	this->Connect( continous->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContinuous ) );
+	this->Connect( recontructionView->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onReconstructionView ) );
+	this->Connect( projectionView->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onProjectionView ) );
 	this->Connect( resList->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onResList ) );
 	this->Connect( contList->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContList ) );
 	this->Connect( runTest->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onRunTest ) );
@@ -154,15 +139,12 @@ mainWindow::~mainWindow()
 	this->Disconnect( wxEVT_KEY_UP, wxKeyEventHandler( mainWindow::onKeyUp ) );
 	this->Disconnect( wxID_NEW, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onNew ) );
 	this->Disconnect( wxID_OPEN, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onOpen ) );
-	this->Disconnect( wxID_SAVE, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onSave ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onQuit ) );
 	this->Disconnect( wxID_PREFERENCES, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onConfig ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onGainSelect ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onDarkSelect ) );
-	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContinue ) );
-	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContRun ) );
-	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onStep ) );
-	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContinuous ) );
+	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onReconstructionView ) );
+	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onProjectionView ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onResList ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContList ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onRunTest ) );

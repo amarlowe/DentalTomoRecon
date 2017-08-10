@@ -91,6 +91,7 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 #endif
 
 	m_auinotebook6->AddPage(CreateNewPage(filename), wxString::Format(wxT("%u"), s_pageAdded++), true);
+	onContinuous();
 }
 
 TomoError DTRMainWindow::genSys(struct SystemControl * Sys) {
@@ -181,140 +182,34 @@ void DTRMainWindow::onOpen(wxCommandEvent& WXUNUSED(event)) {
 	currentFrame->m_canvas->paint();
 }
 
-void DTRMainWindow::onSave(wxCommandEvent& WXUNUSED(event)) {
-	//TODO: add error checking
-	saveThread* thd = new saveThread(((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_canvas->recon, m_statusBar1);
-	thd->Create();
-	thd->Run();
-}
-
 void DTRMainWindow::onQuit(wxCommandEvent& WXUNUSED(event)){
 	// true is to force the frame to close
 	Close();
 }
 
-void DTRMainWindow::onStep(wxCommandEvent& WXUNUSED(event)) {
-	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
-		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
-		return;
-	}
-
-	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
-	TomoRecon* recon = currentFrame->m_canvas->recon;
-
-	if (!recon->reconMemSet) recon->mallocSlices();
-
-	if (recon->continuousMode) {
-		switch (recon->derDisplay) {
-		case no_der:
-			recon->derDisplay = der_x;
-			break;
-		case der_x:
-			recon->derDisplay = der_y;
-			break;
-		case der_y:
-			recon->derDisplay = slice_diff;
-			break;
-		case slice_diff:
-			recon->derDisplay = square_mag;
-			break;
-		case square_mag:
-			recon->derDisplay = der2_x;
-			break;
-		case der2_x:
-			recon->derDisplay = der2_y;
-			break;
-		case der2_y:
-			recon->derDisplay = der3_x;
-			break;
-		case der3_x:
-			recon->derDisplay = der3_y;
-			break;
-		case der3_y:
-			recon->derDisplay = no_der;
-			break;
-		}
-
-		recon->singleFrame();
-	}
-	else {
-		switch (recon->currentDisplay) {
-		case raw_images:
-			recon->correctProjections();
-			recon->currentDisplay = sino_images;
-			break;
-		case sino_images:
-			recon->currentDisplay = raw_images2;
-			break;
-		case raw_images2:
-			recon->reconInit();
-			//recon->currentDisplay = norm_images;
-			recon->currentDisplay = recon_images;
-			{
-				int pos = ((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_scrollBar->GetThumbPosition();
-				if (pos > recon->Sys->Recon->Nz) pos = recon->Sys->Recon->Nz - 1;
-				currentFrame->m_scrollBar->SetScrollbar(pos, 1, recon->Sys->Recon->Nz, 1);
-				currentFrame->m_canvas->OnScroll(pos);
-			}
-			break;
-		case norm_images:
-			//recon->currentDisplay = recon_images;//intentionally skipped break
-		case recon_images:
-		{
-			recon->currentDisplay = error_images;
-			int pos = ((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_scrollBar->GetThumbPosition();
-			if (pos > recon->Sys->Proj->NumViews) pos = recon->Sys->Proj->NumViews - 1;
-			currentFrame->m_scrollBar->SetScrollbar(pos, 1, recon->Sys->Proj->NumViews, 1);
-			recon->reconStep();
-			currentFrame->m_canvas->OnScroll(pos);
-		}
-		break;
-		case error_images:
-		{
-			recon->currentDisplay = recon_images;
-			int pos = ((GLFrame*)(m_auinotebook6->GetCurrentPage()))->m_scrollBar->GetThumbPosition();
-			if (pos > recon->Sys->Recon->Nz) pos = recon->Sys->Recon->Nz - 1;
-			currentFrame->m_scrollBar->SetScrollbar(pos, 1, recon->Sys->Recon->Nz, 1);
-			currentFrame->m_canvas->OnScroll(pos);
-		}
-		break;
-		}
-	}
-
-	currentFrame->m_canvas->paint();
+void DTRMainWindow::onProjectionView(wxCommandEvent& WXUNUSED(event)) {
+	wxMessageBox(wxT("TODO"),
+		wxT("TODO"),
+		wxICON_INFORMATION | wxOK);
 }
 
-void DTRMainWindow::onContinue(wxCommandEvent& WXUNUSED(event)) {
-	//Run the entire reconstruction
-	//Swtich statement is to make it state aware, but otherwise finishes out whatever is left
-	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
-		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
-		return;
-	}
-	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
-	TomoRecon* recon = currentFrame->m_canvas->recon;
-
-	if (!recon->reconMemSet) recon->mallocSlices();
-
-	ReconThread* thd = new ReconThread(currentFrame->m_canvas, recon, currentFrame, m_statusBar1, m_textCtrl8);
-	thd->Create();
-	thd->Run();
+void DTRMainWindow::onReconstructionVeiw(wxCommandEvent& WXUNUSED(event)) {
+	wxMessageBox(wxT("TODO"),
+		wxT("TODO"),
+		wxICON_INFORMATION | wxOK);
 }
 
-void DTRMainWindow::onContinuous(wxCommandEvent& WXUNUSED(event)) {
-	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
-		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
-		return;
-	}
+void DTRMainWindow::onContinuous() {
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 	int statusWidths[] = { -4, -1, -1, -1, -1 };
+
+	wxStreamToTextRedirector redirect(m_textCtrl8);
 
 	if (!recon->reconMemSet) recon->mallocContinuous();
 
 	m_statusBar1->SetFieldsCount(5, statusWidths);
 	recon->continuousMode = true;
-	wxStreamToTextRedirector redirect(m_textCtrl8);
 	recon->correctProjections();
 	recon->reconInit();
 	recon->singleFrame();
@@ -323,62 +218,6 @@ void DTRMainWindow::onContinuous(wxCommandEvent& WXUNUSED(event)) {
 	currentFrame->m_canvas->OnScroll(0);
 	currentFrame->m_scrollBar->Show(false);
 	currentFrame->m_canvas->paint();
-}
-
-void DTRMainWindow::onContRun(wxCommandEvent& WXUNUSED(event)) {
-	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
-		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
-		return;
-	}
-	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
-	TomoRecon* recon = currentFrame->m_canvas->recon;
-	RunBox* progress = new RunBox(this);
-	wxStreamToTextRedirector redirect(m_textCtrl8);
-
-	if (!recon->reconMemSet) recon->mallocSlices();
-
-	FILETIME filetime, filetime2, filetime3;
-	LONGLONG time1, time2;
-	GetSystemTimeAsFileTime(&filetime);
-
-	progress->m_gauge2->SetRange(ITERATIONS);
-	progress->m_gauge2->SetValue(0);
-	progress->Show(true);
-
-	switch (recon->currentDisplay) {
-	case raw_images:
-		recon->correctProjections();
-		GetSystemTimeAsFileTime(&filetime3);
-		time1 = (((ULONGLONG)filetime.dwHighDateTime) << 32) + filetime.dwLowDateTime;
-		time2 = (((ULONGLONG)filetime3.dwHighDateTime) << 32) + filetime3.dwLowDateTime;
-		std::cout << "Total LoadAndCorrectProjections time: " << (double)(time2 - time1) / 10000000 << " seconds";
-		std::cout << std::endl;
-	case sino_images:
-	case raw_images2:
-		recon->reconInit();
-		currentFrame->m_scrollBar->SetScrollbar(0, 1, recon->Sys->Recon->Nz, 1);
-	case norm_images:
-		recon->currentDisplay = recon_images;
-	case recon_images:
-		while (recon->iteration < ITERATIONS) {
-			recon->reconStep();
-			progress->m_gauge2->SetValue(recon->iteration + 1);
-			currentFrame->m_canvas->paint();
-		}
-	}
-	delete progress;
-
-	GetSystemTimeAsFileTime(&filetime2);
-	time1 = (((ULONGLONG)filetime.dwHighDateTime) << 32) + filetime.dwLowDateTime;
-	time2 = (((ULONGLONG)filetime2.dwHighDateTime) << 32) + filetime2.dwLowDateTime;
-	std::cout << "Total Recon time: " << (double)(time2 - time1) / 10000000 << " seconds";
-	std::cout << std::endl;
-
-	std::cout << "Reconstruction finished successfully." << std::endl;
-
-	saveThread* thd = new saveThread(recon, m_statusBar1);
-	thd->Create();
-	thd->Run();
 }
 
 void DTRMainWindow::onConfig(wxCommandEvent& WXUNUSED(event)) {
@@ -462,7 +301,7 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 		wxFileName filename = pConfig->Read(wxString::Format(wxT("/resPhanFile%d"), i));
 		if (i == 0) {
 			m_auinotebook6->AddPage(CreateNewPage(filename.GetFullPath()), wxString::Format(wxT("Geo Test %u"), i), true);
-			onContinuous(event);
+			onContinuous();
 		}
 		GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 		TomoRecon* recon = currentFrame->m_canvas->recon;
@@ -514,7 +353,6 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 		recon->testTolerances(data, true);
 		while (recon->testTolerances(data, false) == Tomo_OK) {
 			currentFrame->m_canvas->paint();
-			//*m_textCtrl8 << "Phatom max resolution: " << data[output++].phantomData[i] << " line pairs\n";
 			FILE << data[output].name << ", " << data[output].numViewsChanged << ", " << data[output].viewsChanged << ", " 
 				<< data[output].offset << ", " << data[output].thisDir << ", " << data[output].phantomData << "\n";
 			output++;
@@ -1358,7 +1196,6 @@ wxBEGIN_EVENT_TABLE(CudaGLCanvas, wxGLCanvas)
 EVT_PAINT(CudaGLCanvas::OnPaint)
 EVT_CHAR(CudaGLCanvas::OnChar)
 EVT_MOUSE_EVENTS(CudaGLCanvas::OnMouseEvent)
-EVT_COMMAND(wxID_ANY, PAINT_IT, CudaGLCanvas::OnEvent)
 wxEND_EVENT_TABLE()
 
 CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename, 
@@ -1488,7 +1325,41 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
 }
 
 void CudaGLCanvas::OnChar(wxKeyEvent& event){
-	//Moved to main window, can delete
+	//Switch the derivative display
+	if (event.GetKeyCode() == 32) {
+		switch (recon->derDisplay) {
+		case no_der:
+			recon->derDisplay = der_x;
+			break;
+		case der_x:
+			recon->derDisplay = der_y;
+			break;
+		case der_y:
+			recon->derDisplay = slice_diff;
+			break;
+		case slice_diff:
+			recon->derDisplay = square_mag;
+			break;
+		case square_mag:
+			recon->derDisplay = der2_x;
+			break;
+		case der2_x:
+			recon->derDisplay = der2_y;
+			break;
+		case der2_y:
+			recon->derDisplay = der3_x;
+			break;
+		case der3_x:
+			recon->derDisplay = der3_y;
+			break;
+		case der3_y:
+			recon->derDisplay = no_der;
+			break;
+		}
+
+		recon->singleFrame();
+		paint();
+	}
 }
 
 //---------------------------------------------------------------------------
@@ -1499,7 +1370,6 @@ wxBEGIN_EVENT_TABLE(CudaGLInCanvas, wxGLCanvas)
 EVT_PAINT(CudaGLInCanvas::OnPaint)
 EVT_MOUSE_EVENTS(CudaGLInCanvas::OnMouseEvent)
 EVT_CHAR(CudaGLInCanvas::OnChar)
-EVT_COMMAND(wxID_ANY, PAINT_IT, CudaGLInCanvas::OnEvent)
 wxEND_EVENT_TABLE()
 
 CudaGLInCanvas::CudaGLInCanvas(wxWindow *parent, bool vertical, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
@@ -1654,83 +1524,4 @@ void CudaGLInCanvas::OnChar(wxKeyEvent& event) {
 			break;
 		}
 	}
-}
-
-//---------------------------------------------------------------------------
-// ReconThread
-//---------------------------------------------------------------------------
-
-DEFINE_EVENT_TYPE(PAINT_IT);
-ReconThread::ReconThread(wxEvtHandler* pParent, TomoRecon* recon, GLFrame* Frame, wxStatusBar* status, wxTextCtrl* m_textCtrl)
-	: wxThread(wxTHREAD_DETACHED), m_pParent(pParent), status(status), currentFrame(Frame), m_recon(recon), m_textCtrl(m_textCtrl) {
-}
-
-wxThread::ExitCode ReconThread::Entry(){
-	wxStreamToTextRedirector redirect(m_textCtrl);
-	wxCommandEvent needsPaint(PAINT_IT, GetId());
-	FILETIME filetime, filetime2, filetime3;
-	LONGLONG time1, time2;
-	GetSystemTimeAsFileTime(&filetime);
-
-	//Run the entire reconstruction
-	//Swtich statement is to make it state aware, but otherwise finishes out whatever is left
-	switch (m_recon->currentDisplay) {
-	case raw_images:
-		m_recon->correctProjections();
-		GetSystemTimeAsFileTime(&filetime3);
-		time1 = (((ULONGLONG)filetime.dwHighDateTime) << 32) + filetime.dwLowDateTime;
-		time2 = (((ULONGLONG)filetime3.dwHighDateTime) << 32) + filetime3.dwLowDateTime;
-		std::cout << "Total LoadAndCorrectProjections time: " << (double)(time2 - time1) / 10000000 << " seconds";
-		std::cout << std::endl;
-		//currentFrame->m_canvas->paint();
-		wxPostEvent(m_pParent, needsPaint);
-	case sino_images:
-	case raw_images2:
-		m_recon->reconInit();
-	case norm_images:
-		m_recon->currentDisplay = recon_images;
-		wxMutexGuiEnter();
-		currentFrame->m_scrollBar->SetScrollbar(0, 1, m_recon->Sys->Recon->Nz, 1);
-		wxMutexGuiLeave();
-	case recon_images:
-		wxGauge* progress = new wxGauge(status, wxID_ANY, ITERATIONS, wxPoint(100, 3));
-		progress->SetValue(0);
-		while (!TestDestroy() && m_recon->iteration < ITERATIONS) {
-			m_recon->reconStep();
-			wxPostEvent(m_pParent, needsPaint);
-			status->SetStatusText(wxT("Reconstructing:"));
-			progress->SetValue(m_recon->iteration+1);
-			this->Sleep(200);
-		}
-		delete progress;
-	}
-
-	GetSystemTimeAsFileTime(&filetime2);
-	time1 = (((ULONGLONG)filetime.dwHighDateTime) << 32) + filetime.dwLowDateTime;
-	time2 = (((ULONGLONG)filetime2.dwHighDateTime) << 32) + filetime2.dwLowDateTime;
-	std::cout << "Total Recon time: " << (double)(time2 - time1) / 10000000 << " seconds";
-	std::cout << std::endl;
-
-	std::cout << "Reconstruction finished successfully." << std::endl;
-
-	status->SetStatusText(wxT("Saving image..."));
-	m_recon->TomoSave();
-	status->SetStatusText(wxT("Image saved!"));
-	
-	return static_cast<ExitCode>(NULL);
-}
-
-//---------------------------------------------------------------------------
-// saveThread
-//---------------------------------------------------------------------------
-
-saveThread::saveThread(TomoRecon* recon, wxStatusBar* status) : wxThread(wxTHREAD_DETACHED), m_recon(recon), status(status){
-}
-
-wxThread::ExitCode saveThread::Entry() {
-	status->SetStatusText(wxT("Saving image..."));
-	m_recon->TomoSave();
-	status->SetStatusText(wxT("Image saved!"));
-
-	return static_cast<ExitCode>(NULL);
 }

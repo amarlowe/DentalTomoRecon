@@ -277,7 +277,6 @@ public:
 	~TomoRecon();
 
 	TomoError init(const char * gainFile, const char * darkFile, const char * mainFile);
-	TomoError mallocSlices();
 	TomoError mallocContinuous();
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
@@ -304,7 +303,6 @@ public:
 	TomoError LoadProjections(int index);
 	TomoError correctProjections();
 	TomoError reconInit();
-	TomoError reconStep();
 	TomoError singleFrame();
 	float getDistance();
 	TomoError autoFocus(bool firstRun);
@@ -395,14 +393,6 @@ private:
 	TomoError setGaussDer2(float kernel[KERNELSIZE]);
 	TomoError setGaussDer3(float kernel[KERNELSIZE]);
 
-	//////////////////////////////////////////////////////////////////////////////////////////////
-	//Functions called to control the stages of reconstruction
-	TomoError LoadAndCorrectProjections();
-
-	//////////////////////////////////////////////////////////////////////////////////////////////
-	//Functions to control the SART and TV reconstruction
-	TomoError FindSliceOffset();
-
 	//Conversion helpers
 	float xP2MM(int p);
 	float yP2MM(int p);
@@ -412,6 +402,9 @@ private:
 	int yMM2P(float m);
 	int xMM2R(float m);
 	int yMM2R(float m);
+
+	size_t avail_mem;
+	size_t total_mem;
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Functions to save the images
@@ -443,7 +436,6 @@ private:
 	float * d_Image;
 	float * d_Error;
 	float * d_Sino;
-	float * d_Pro;
 	float * beamx;
 	float * beamy;
 	float * beamz;
@@ -460,11 +452,6 @@ private:
 	//Derivative buffers
 	float * xDer;
 	float * yDer;
-	float * xDer2;
-	float * yDer2;
-	float * xDer3;
-	float * yDer3;
-	float * mag;
 
 	//Kernel call parameters
 	int Cx;
@@ -483,9 +470,6 @@ private:
 
 	//Decay constant for recon
 	float Beta = 1.0f;
-
-	//Define Cuda arrays
-	cudaArray * d_Sinogram;
 
 	cudaStream_t stream;
 

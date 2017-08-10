@@ -35,6 +35,10 @@ TomoRecon
 - Move autodetect geometry to config menu, grey out geo list when this is selected
 - Add popup for vertial or horizontal phantom orientation
 - Make input selections a wizard
+- Calculate relative distances given a baseline with approximate geometries
+- Remove internal pixel buffer in favor of generating everything on the fly
+- Correct for non-xy shifts in the detector
+- Redo read-raw-projections for speed, stability, and color correction accuracy
 
 --------------Bugs---------------------
 - AutoDetection breaks reconstruction badly

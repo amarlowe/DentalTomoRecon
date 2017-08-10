@@ -185,52 +185,26 @@ public:
 	~DTRResDialog();
 };
 
-BEGIN_DECLARE_EVENT_TYPES()
-DECLARE_EVENT_TYPE(PAINT_IT, -1)
-END_DECLARE_EVENT_TYPES()
-class ReconThread : public wxThread{
-public:
-	ReconThread(wxEvtHandler* pParent, TomoRecon* recon, GLFrame* Frame, wxStatusBar* status, wxTextCtrl* m_textCtrl);
-private:
-	wxEvtHandler* m_pParent;
-	TomoRecon* m_recon;
-	GLFrame* currentFrame;
-	wxStatusBar* status;
-	wxTextCtrl* m_textCtrl;
-
-	ExitCode Entry();
-};
-
-class saveThread : public wxThread {
-public:
-	saveThread(TomoRecon* recon, wxStatusBar* status);
-private:
-	TomoRecon* m_recon;
-	wxStatusBar* status;
-
-	ExitCode Entry();
-};
-
 class DTRMainWindow : public mainWindow {
 protected:
 	// Handlers for mainWindow events.
 	void onNew(wxCommandEvent& event);
 	void onOpen(wxCommandEvent& event);
-	void onSave(wxCommandEvent& event);
 	void onQuit(wxCommandEvent& event);
 	void onAbout(wxCommandEvent& event);
 	void onConfig(wxCommandEvent& event);
 	void onGainSelect(wxCommandEvent& event);
 	void onDarkSelect(wxCommandEvent& event);
-	void onStep(wxCommandEvent& event);
-	void onContinue(wxCommandEvent& event);
-	void onContinuous(wxCommandEvent& event);
+	void onProjectionView(wxCommandEvent& event);
+	void onReconstructionVeiw(wxCommandEvent& event);
 	void onResList(wxCommandEvent& event);
 	void onContList(wxCommandEvent& event);
 	void onRunTest(wxCommandEvent& event);
 	void onTestGeo(wxCommandEvent& event);
 	void onAutoGeo(wxCommandEvent& event);
 	void onPageChange(wxCommandEvent& event);
+
+	void onContinuous();
 
 	//constant globals
 	const int NumViews = NUMVIEWS;
