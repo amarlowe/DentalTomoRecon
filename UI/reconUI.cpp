@@ -276,30 +276,6 @@ configDialog::configDialog( wxWindow* parent, wxWindowID id, const wxString& tit
 	fgSizer2->SetFlexibleDirection( wxVERTICAL );
 	fgSizer2->SetNonFlexibleGrowMode( wxFLEX_GROWMODE_SPECIFIED );
 	
-	m_staticText1 = new wxStaticText( this, wxID_ANY, wxT("Automatically detected object distance"), wxDefaultPosition, wxDefaultSize, 0 );
-	m_staticText1->Wrap( 200 );
-	fgSizer2->Add( m_staticText1, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	wxString generateDistanceChoices[] = { wxT("No"), wxT("Yes") };
-	int generateDistanceNChoices = sizeof( generateDistanceChoices ) / sizeof( wxString );
-	generateDistance = new wxRadioBox( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, generateDistanceNChoices, generateDistanceChoices, 1, wxRA_SPECIFY_COLS );
-	generateDistance->SetSelection( 1 );
-	fgSizer2->Add( generateDistance, 0, wxALL|wxEXPAND|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	m_staticText2 = new wxStaticText( this, wxID_ANY, wxT("Estimated distance from detector to object"), wxDefaultPosition, wxDefaultSize, 0 );
-	m_staticText2->Wrap( 200 );
-	fgSizer2->Add( m_staticText2, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	estimatedDistance = new wxTextCtrl( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0 );
-	fgSizer2->Add( estimatedDistance, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5 );
-	
-	m_staticText4 = new wxStaticText( this, wxID_ANY, wxT("Number of slices to reconstruct"), wxDefaultPosition, wxDefaultSize, 0 );
-	m_staticText4->Wrap( 200 );
-	fgSizer2->Add( m_staticText4, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	reconstructionSlices = new wxTextCtrl( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0 );
-	fgSizer2->Add( reconstructionSlices, 1, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
 	m_staticText3 = new wxStaticText( this, wxID_ANY, wxT("Thickness of reconstruction slice"), wxDefaultPosition, wxDefaultSize, 0 );
 	m_staticText3->Wrap( 200 );
 	fgSizer2->Add( m_staticText3, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
@@ -307,25 +283,11 @@ configDialog::configDialog( wxWindow* parent, wxWindowID id, const wxString& tit
 	sliceThickness = new wxTextCtrl( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0 );
 	fgSizer2->Add( sliceThickness, 1, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
 	
-	m_staticText7 = new wxStaticText( this, wxID_ANY, wxT("Edge Blurring"), wxDefaultPosition, wxDefaultSize, 0 );
-	m_staticText7->Wrap( 200 );
-	fgSizer2->Add( m_staticText7, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
+	m_panel4 = new wxPanel( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL );
+	fgSizer2->Add( m_panel4, 1, wxEXPAND | wxALL, 5 );
 	
-	wxString edgeBlurEnabledChoices[] = { wxT("Disabled"), wxT("Enabled") };
-	int edgeBlurEnabledNChoices = sizeof( edgeBlurEnabledChoices ) / sizeof( wxString );
-	edgeBlurEnabled = new wxRadioBox( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, edgeBlurEnabledNChoices, edgeBlurEnabledChoices, 1, wxRA_SPECIFY_COLS );
-	edgeBlurEnabled->SetSelection( 1 );
-	fgSizer2->Add( edgeBlurEnabled, 1, wxALL|wxEXPAND|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	m_staticText8 = new wxStaticText( this, wxID_ANY, wxT("TV denoising"), wxDefaultPosition, wxDefaultSize, 0 );
-	m_staticText8->Wrap( 200 );
-	fgSizer2->Add( m_staticText8, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	wxString denosingEnabledChoices[] = { wxT("Disabled"), wxT("Enabled") };
-	int denosingEnabledNChoices = sizeof( denosingEnabledChoices ) / sizeof( wxString );
-	denosingEnabled = new wxRadioBox( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, denosingEnabledNChoices, denosingEnabledChoices, 1, wxRA_SPECIFY_COLS );
-	denosingEnabled->SetSelection( 1 );
-	fgSizer2->Add( denosingEnabled, 1, wxALL|wxEXPAND|wxALIGN_CENTER_VERTICAL, 5 );
+	m_panel5 = new wxPanel( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL );
+	fgSizer2->Add( m_panel5, 1, wxEXPAND | wxALL, 5 );
 	
 	m_staticText6 = new wxStaticText( this, wxID_ANY, wxT("Orientation"), wxDefaultPosition, wxDefaultSize, 0 );
 	m_staticText6->Wrap( 200 );

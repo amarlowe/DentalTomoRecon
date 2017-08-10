@@ -157,18 +157,10 @@ class configDialog : public wxFrame
 	private:
 	
 	protected:
-		wxStaticText* m_staticText1;
-		wxRadioBox* generateDistance;
-		wxStaticText* m_staticText2;
-		wxTextCtrl* estimatedDistance;
-		wxStaticText* m_staticText4;
-		wxTextCtrl* reconstructionSlices;
 		wxStaticText* m_staticText3;
 		wxTextCtrl* sliceThickness;
-		wxStaticText* m_staticText7;
-		wxRadioBox* edgeBlurEnabled;
-		wxStaticText* m_staticText8;
-		wxRadioBox* denosingEnabled;
+		wxPanel* m_panel4;
+		wxPanel* m_panel5;
 		wxStaticText* m_staticText6;
 		wxRadioBox* orientation;
 		wxStaticText* m_staticText5;
@@ -198,7 +190,7 @@ class configDialog : public wxFrame
 	
 	public:
 		
-		configDialog( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Reconstruction Configuration"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 1343,511 ), long style = wxDEFAULT_FRAME_STYLE|wxTAB_TRAVERSAL );
+		configDialog( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Reconstruction Configuration"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 1343,361 ), long style = wxDEFAULT_FRAME_STYLE|wxTAB_TRAVERSAL );
 		
 		~configDialog();
 	

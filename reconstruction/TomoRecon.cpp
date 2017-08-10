@@ -26,19 +26,12 @@ TomoRecon::TomoRecon(int x, int y, struct SystemControl * Sys) : interop(x, y), 
 TomoRecon::~TomoRecon() {
 	cuda(StreamDestroy(stream));
 	FreeGPUMemory();
-	if (Sys->Proj->RawDataThresh != NULL)
-		delete[] Sys->Proj->RawDataThresh;
 	delete[] Sys->Proj->RawData;
-	delete[] Sys->Proj->SyntData;
-	delete[] Sys->SysGeo.EmitX;
-	delete[] Sys->SysGeo.EmitY;
-	delete[] Sys->SysGeo.EmitZ;
-	delete[] Sys->Norm->DarkData;
-	delete[] Sys->Norm->GainData;
-	delete[] Sys->Norm->ProjBuf;
-	delete[] Sys->Norm->CorrBuf;
-	delete[] Sys->Recon->ReconIm;
-	//delete Sys->Proj;
+	delete[] Sys->Geo.EmitX;
+	delete[] Sys->Geo.EmitY;
+	delete[] Sys->Geo.EmitZ;
+	delete Sys->Recon;
+	delete Sys->Proj;
 	delete Sys;
 }
 
@@ -48,8 +41,7 @@ TomoError TomoRecon::init(const char * gainFile, const char * darkFile, const ch
 	std::string BasePath;
 	std::string FilePath;
 	std::string FileName;
-	savefilename = mainFile;
-	strcpy(GetFilePath, mainFile);
+	strcpy_s(GetFilePath, mainFile);
 	PathRemoveFileSpec(GetFilePath);
 	FileName = PathFindFileName(GetFilePath);
 	FilePath = GetFilePath;
@@ -76,10 +68,10 @@ TomoError TomoRecon::init(const char * gainFile, const char * darkFile, const ch
 	tomo_err_throw(ReadGainImages(gainFile));
 
 	//Step 5. Read Raw Data
-	tomo_err_throw(ReadRawProjectionData(FilePath, savefilename));
+	tomo_err_throw(ReadRawProjectionData(FilePath, mainFile));
 
 	//Step 4. Set up the GPU for Reconstruction
-	tomo_err_throw(SetUpGPUForRecon());
+	tomo_err_throw(initGPU());
 	std::cout << "GPU Ready" << std::endl;
 
 	initialized = true;
@@ -87,6 +79,8 @@ TomoError TomoRecon::init(const char * gainFile, const char * darkFile, const ch
 	zoom = 0;
 	xOff = 0;
 	yOff = 0;
+
+	return Tomo_OK;
 }
 
 TomoError TomoRecon::TomoLoad(const char* file) {
@@ -94,8 +88,7 @@ TomoError TomoRecon::TomoLoad(const char* file) {
 	std::string BasePath;
 	std::string FilePath;
 	std::string FileName;
-	savefilename = file;
-	strcpy(GetFilePath, file);
+	strcpy_s(GetFilePath, file);
 	PathRemoveFileSpec(GetFilePath);
 	FileName = PathFindFileName(GetFilePath);
 	FilePath = GetFilePath;
@@ -110,24 +103,11 @@ TomoError TomoRecon::TomoLoad(const char* file) {
 		BasePath = GetFilePath;
 	}
 
-	tomo_err_throw(ReadRawProjectionData(FilePath, savefilename));
+	tomo_err_throw(ReadRawProjectionData(FilePath, file));
 	correctProjections();
 	singleFrame();
-}
 
-TomoError TomoRecon::TomoSave() {
-	std::string whichsubstr = "AcquiredImage";
-
-	std::size_t pos = savefilename.find(whichsubstr);
-
-	std::string str2 = savefilename.substr(0, pos + whichsubstr.length() + 1);
-	str2 += "_Recon.dcm";
-
-	//Copy the reconstructed images to the CPU
-	tomo_err_throw(CopyAndSaveImages());
-
-	//Save Images
-	tomo_err_throw(SaveDataAsDICOM(str2));
+	return Tomo_OK;
 }
 
 TomoError TomoRecon::setNOOP(float kernel[KERNELSIZE]) {
@@ -140,11 +120,11 @@ TomoError TomoRecon::setNOOP(float kernel[KERNELSIZE]) {
 }
 
 TomoError TomoRecon::setGauss(float kernel[KERNELSIZE]) {
-	float factor = 1 / (sqrt(2 * M_PI) * SIGMA);
-	float denom = 2 * pow(SIGMA, 2);
-	float sum = 0;
+	float factor = 1.0f / ((float)sqrt(2.0 * M_PI) * SIGMA);
+	float denom = 2.0f * pow(SIGMA, 2);
+	float sum = 0.0f;
 	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
-		float temp = factor * exp(-pow(i, 2) / denom);
+		float temp = factor * exp(-pow((float)i, 2) / denom);
 		kernel[i + KERNELRADIUS] = temp;
 		sum += temp;
 	}
@@ -161,11 +141,11 @@ TomoError TomoRecon::setGauss(float kernel[KERNELSIZE]) {
 }
 
 TomoError TomoRecon::setGaussDer(float kernel[KERNELSIZE]) {
-	float factor = 1 / (sqrt(2 * M_PI) * pow(SIGMA,3));
+	float factor = 1 / ((float)sqrt(2.0 * M_PI) * pow(SIGMA,3));
 	float denom = 2 * pow(SIGMA, 2);
 	float sum = 0;
 	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
-		float temp = -i * factor * exp(-pow(i, 2) / denom);
+		float temp = -i * factor * exp(-pow((float)i, 2) / denom);
 		kernel[i + KERNELRADIUS] = temp;
 		sum += temp;
 	}
@@ -181,12 +161,12 @@ TomoError TomoRecon::setGaussDer(float kernel[KERNELSIZE]) {
 }
 
 TomoError TomoRecon::setGaussDer2(float kernel[KERNELSIZE]) {
-	float factor1 = 1 / (sqrt(2 * M_PI) * pow(SIGMA, 3));
-	float factor2 = 1 / (sqrt(2 * M_PI) * pow(SIGMA, 5));
+	float factor1 = 1 / ((float)sqrt(2.0 * M_PI) * pow(SIGMA, 3));
+	float factor2 = 1 / ((float)sqrt(2.0 * M_PI) * pow(SIGMA, 5));
 	float denom = 2 * pow(SIGMA, 2);
 	float sum = 0;
 	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
-		float temp = (pow(i,2) * factor2 - factor1) * exp(-pow(i, 2) / denom);
+		float temp = (pow((float)i,2) * factor2 - factor1) * exp(-pow((float)i, 2) / denom);
 		kernel[i + KERNELRADIUS] = temp;
 		sum += temp;
 	}
@@ -203,11 +183,11 @@ TomoError TomoRecon::setGaussDer2(float kernel[KERNELSIZE]) {
 
 TomoError TomoRecon::setGaussDer3(float kernel[KERNELSIZE]) {
 	float factor1 = 1 / pow(SIGMA, 2);
-	float factor2 = 1 / (sqrt(2 * M_PI) * pow(SIGMA, 5));
+	float factor2 = 1 / ((float)sqrt(2.0 * M_PI) * pow(SIGMA, 5));
 	float denom = 2 * pow(SIGMA, 2);
 	float sum = 0;
 	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
-		float temp = i * factor2*(3 - pow(i, 2)*factor1) * exp(-pow(i, 2) / denom);
+		float temp = i * factor2*(3 - pow((float)i, 2)*factor1) * exp(-pow((float)i, 2) / denom);
 		kernel[i + KERNELRADIUS] = temp;
 		sum += temp;
 	}

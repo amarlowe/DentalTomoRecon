@@ -272,233 +272,6 @@ TomoError ReadSubSetViews(struct SystemControl * Sys, int NumViews, std::string 
 	return Tomo_OK;
 }
 
-//Functions to read the dark and gain images
-TomoError TomoRecon::ReadDarkandGainImages(char * gainFile, char * darkFile){
-	//Define two paths to gain and dark data
-	char* temp = gainFile;
-	PathRemoveFileSpec(temp);
-	std::string GainPath = temp;
-	std::string DarkPath = darkFile;
-
-	int NumDarkSamples = GetNumberOfScans(DarkPath);
-	int NumGainSamples = GetNumberOfScans(GainPath);
-
-	GainPath += "/*";
-	DarkPath += "/*";
-
-	//Set up the basic path to the raw projection dark and gain data
-	FILE * ProjData = NULL;
-
-	//Define the size of the data buffers 
-	int size_single_proj = Sys->Proj->Nx * Sys->Proj->Ny;
-	int size_dark_buf_temp = size_single_proj * 5 * NumDarkSamples;
-	int size_gain_buf_temp = size_single_proj * NumViews * NumGainSamples;
-	int size_dark_buf = size_single_proj;
-	int size_gain_buf = size_single_proj * NumViews;
-
-	//Allocate memory to each buffer
-	Sys->Norm = new NormData();
-	Sys->Norm->DarkData = new unsigned short[size_dark_buf];
-	Sys->Norm->GainData = new unsigned short[size_gain_buf];
-	unsigned short * DarkBuf = new unsigned short[size_dark_buf_temp];
-	unsigned short * GainBuf = new unsigned short[size_gain_buf_temp];
-
-
-	//Set up the find files variables
-	WIN32_FIND_DATA FindFile;
-	HANDLE hfind;
-	bool MoreViews = false;
-	std::string Path;
-
-	//Cycle through the number of samples and read the blank images
-	WIN32_FIND_DATA FindDarkDir;
-	int NumDarkIM = 0;
-	HANDLE hfindDarkDir = FindFirstFile(DarkPath.c_str(), &FindDarkDir);
-	bool MoreDarkFolders = true;
-
-	//Skip first three files
-	while (MoreDarkFolders) {
-		if (FindNextFile(hfindDarkDir, &FindDarkDir)) {
-			if (CheckFileName(std::string(FindDarkDir.cFileName)))
-			{
-				std::string DarkIMPath;
-				DarkIMPath = DarkPath;
-				std::string FileName = FindDarkDir.cFileName;
-				DarkIMPath.replace(DarkIMPath.length() - 1, 1, FileName.c_str(), FileName.length());
-				DarkIMPath += "/*.raw";
-
-				hfind = FindFirstFile(DarkIMPath.c_str(), &FindFile);
-				if (hfind != INVALID_HANDLE_VALUE) {
-					Path = DarkIMPath;
-					std::string FileName = FindFile.cFileName;
-
-					Path.replace(Path.length() - 5, 5, FileName.c_str(), FileName.length());
-					fopen_s(&ProjData, Path.c_str(), "rb");
-					if (ProjData == NULL)
-					{
-						std::cout << "Error opening the file: " << Path.c_str() << std::endl;
-						std::cout << "Please check the path and re-run the program." << std::endl;
-						return Tomo_file_err;
-					}
-
-					//Write the reconstructed data into the predefine memory location
-					fread(DarkBuf + NumDarkIM*size_single_proj*5,
-						sizeof(unsigned short), size_single_proj, ProjData);
-					fclose(ProjData);
-				}
-				else {
-					std::cout << "Error: Dark data path is invalid." << std::endl;
-					std::cout << "Make sure dark data is located at: " << DarkIMPath.c_str();
-					std::cout << std::endl;
-					return Tomo_file_err;
-				}
-
-				for (int view = 1; view < 5; view++)
-				{
-					if (FindNextFile(hfind, &FindFile)) {
-						Path = DarkIMPath;
-						std::string FileName = FindFile.cFileName;
-						Path.replace(Path.length() - 5, 5, FileName.c_str(), FileName.length());
-
-						fopen_s(&ProjData, Path.c_str(), "rb");
-						if (ProjData == NULL)
-						{
-							std::cout << "Vew: " << view << std::endl;
-							std::cout << "Error opening the file: " << Path.c_str() << std::endl;
-							std::cout << "Please check the path and re-run the program." << std::endl;
-							return Tomo_file_err;
-						}
-
-						//Write the reconstructed data into the predefine memory location
-						fread(DarkBuf + NumDarkIM*size_single_proj*5
-							+ view * size_single_proj,sizeof(unsigned short), size_single_proj, ProjData);
-						fclose(ProjData);
-
-					}
-					else {
-						std::cout << "Error: Not enough dark images."<< std::endl;
-						return Tomo_file_err;
-					}
-				}
-				NumDarkIM++;
-			}
-		}
-		if (NumDarkIM >= NumDarkSamples) {
-			MoreDarkFolders = false;
-			break;
-		}
-	}
-
-	//Cycle through the number of samples and read the blank images
-	WIN32_FIND_DATA FindDir;
-	int NumProjections = 0;
-	HANDLE hfindDir = FindFirstFile(GainPath.c_str(), &FindDir);
-	bool MoreFolders = true;
-
-	while (MoreFolders) {
-		if (FindNextFile(hfindDir, &FindDir)) {
-			if (CheckFileName(std::string(FindDir.cFileName)))
-			{
-				std::string ProjPath;
-				ProjPath = GainPath;
-				std::string FileName = FindDir.cFileName;
-				ProjPath.replace(ProjPath.length() - 1, 1, FileName.c_str(), FileName.length());
-				ProjPath += "/*.raw";
-
-				hfind = FindFirstFile(ProjPath.c_str(), &FindFile);
-				if (hfind != INVALID_HANDLE_VALUE) {
-					Path = ProjPath;
-					std::string FileName = FindFile.cFileName;
-					Path.replace(Path.length() - 5, 5, FileName.c_str(), FileName.length());
-
-					fopen_s(&ProjData, Path.c_str(), "rb");
-					if (ProjData == NULL)
-					{
-						std::cout << "Error opening the file: " << Path.c_str() << std::endl;
-						std::cout << "Please check the path and re-run the program." << std::endl;
-						return Tomo_file_err;
-					}
-
-					//Write the reconstructed data into the predefine memory location
-					fread(GainBuf + NumProjections*size_single_proj*NumViews,
-						sizeof(unsigned short), size_single_proj, ProjData);
-					fclose(ProjData);
-				}
-				else {
-					std::cout << "Error: Gain data path is invalid." << std::endl;
-					std::cout << "Make sure dark data is located at: " << ProjPath.c_str();
-					std::cout << std::endl;
-					return Tomo_file_err;
-				}
-				for (int view = 1; view < NumViews; view++)
-				{
-					if (FindNextFile(hfind, &FindFile)) {
-						Path = ProjPath;
-						std::string FileName = FindFile.cFileName;
-						Path.replace(Path.length() - 5, 5, FileName.c_str(), FileName.length());
-
-						fopen_s(&ProjData, Path.c_str(), "rb");
-						if (ProjData == NULL)
-						{
-							std::cout << "Error opening the file: " << ProjPath.c_str() << std::endl;
-							std::cout << "Please check the path and re-run the program." << std::endl;
-							return Tomo_file_err;
-						}
-
-						//Write the reconstructed data into the predefine memory location
-						fread(GainBuf + NumProjections*size_single_proj*NumViews
-							+ view * size_single_proj,
-							sizeof(unsigned short), size_single_proj, ProjData);
-						fclose(ProjData);
-
-					}
-					else {
-						std::cout << "Error: Not enough gain images. Need one gain image";
-						std::cout << " for each projection view." << std::endl;
-						return Tomo_file_err;
-					}
-				}
-				NumProjections++;
-			}
-		}
-
-		if (NumProjections >= NumGainSamples) {
-			MoreFolders = false;
-			break;
-		}
-	}
-	//Average the gain and blank images
-	for (int i = 0; i < Sys->Proj->Nx; i++) {
-		for (int j = 0; j < Sys->Proj->Ny; j++) {
-			float Dark = 0;
-			for (int n = 0; n < NumDarkSamples; n++) {
-				Dark +=	(float)(DarkBuf[n*size_single_proj * 5 + i + j*Sys->Proj->Nx]
-						+ DarkBuf[n*size_single_proj * 5 + i + j*Sys->Proj->Nx + size_single_proj]
-						+ DarkBuf[n*size_single_proj * 5 + i + j*Sys->Proj->Nx + 2 * size_single_proj]
-						+ DarkBuf[n*size_single_proj * 5 + i + j*Sys->Proj->Nx + 3 * size_single_proj]
-						+ DarkBuf[n*size_single_proj * 5 + i + j*Sys->Proj->Nx + 4 * size_single_proj])
-					/ ((float)5 * (float)NumDarkSamples);
-			}
-			Sys->Norm->DarkData[i + j*Sys->Proj->Nx] = (unsigned short)Dark;
-			for(int view = 0; view < NumViews; view++){
-				float GainPro = 0;
-				for (int n = 0; n < NumGainSamples; n++) {
-					GainPro +=
-						(float)(GainBuf[n*size_single_proj*NumViews + view*size_single_proj + i + j*Sys->Proj->Nx]) /
-						((float)NumGainSamples);
-				}
-				Sys->Norm->GainData[i + j*Sys->Proj->Nx + view*size_single_proj] = (unsigned short)GainPro;
-			}
-
-		}
-	}
-
-	delete GainBuf;
-	delete DarkBuf;
-
-	return Tomo_OK;
-}
-
 TomoError TomoRecon::ReadDarkImages(const char * darkFile){
 	int size_single_proj = Sys->Proj->Nx * Sys->Proj->Ny;
 	int size_single_proj_bytes = size_single_proj * 2;
@@ -512,7 +285,6 @@ TomoError TomoRecon::ReadDarkImages(const char * darkFile){
 	strncpy(temp, darkFile, MAX_PATH - 1);
 	PathRemoveFileSpec(temp);
 	std::string DarkPath = temp;
-	std::string darkSearchPath = DarkPath + "/*";
 
 	std::string avgFilePath;
 	avgFilePath = DarkPath + "\\average.raw";
@@ -567,7 +339,7 @@ TomoError TomoRecon::ReadGainImages(const char * gainFile){
 	//write average file
 	for (int view = 0; view < NumViews; view++)
 	{
-		if (!Sys->UsrIn->Orientation)
+		if (!orientation)
 			Path = avgFilePath + "\\right\\average_";
 		else
 			Path = avgFilePath + "\\left\\average_";
@@ -589,7 +361,7 @@ TomoError TomoRecon::ReadGainImages(const char * gainFile){
 
 	if (!foundAvgFile)
 	{
-		if (!Sys->UsrIn->Orientation)
+		if (!orientation)
 			gainSearchPath = GainPath + "\\right";
 		else
 			gainSearchPath = GainPath + "\\left";
@@ -716,7 +488,7 @@ TomoError TomoRecon::ReadGainImages(const char * gainFile){
 		//write average file
 		for (int view = 0; view < NumViews; view++)
 		{
-			if (!Sys->UsrIn->Orientation)
+			if (!orientation)
 				Path = avgFilePath + "\\right\\average_";
 			else
 				Path = avgFilePath + "\\left\\average_";
@@ -754,7 +526,6 @@ TomoError TomoRecon::ReadRawProjectionData(std::string BaseFileIn, std::string F
 	int size_raw_subproj = size_single_proj * Sys->Proj->NumViews;
 
 	//Define the temp buffer to read and correct data
-	Sys->Name = new FileNames;
 	Sys->Norm->CorrBuf = new float[size_raw_subproj];
 	memset(Sys->Norm->CorrBuf, 0, size_raw_subproj * sizeof(float));//was declared unsigned short. dammit this was hard to find
 
@@ -764,8 +535,6 @@ TomoError TomoRecon::ReadRawProjectionData(std::string BaseFileIn, std::string F
 	ProjPath = FileName;
 //	int NumProjSamples = max(GetNumberOfScans(BasePath), 1);
 	int NumProjSamples = 1;
-	Sys->Name->ScanName = FileName;
-	Sys->Name->StudyName = FileName;
 
 	//Define a projection buffer to read all data
 	Sys->Norm->ProjBuf = new unsigned short[size_raw_proj * NumProjSamples];
@@ -902,16 +671,6 @@ TomoError TomoRecon::ReadRawProjectionData(std::string BaseFileIn, std::string F
 				float val = Sys->Norm->CorrBuf[loc];
 				val = val / (float)NumProjSamples;
 				Sys->Proj->RawData[loc] = (unsigned short)(val * USHRT_MAX);
-				if (Sys->UsrIn->CalOffset)
-				{
-					if (Sys->Proj->RawData[loc] > 3000)
-					{
-						Sys->Proj->RawDataThresh[loc] = 3000;
-						howmany++;
-					}
-					else
-						Sys->Proj->RawDataThresh[loc] = Sys->Proj->RawData[loc];
-				}
 			}
 		}
 	}
@@ -919,7 +678,7 @@ TomoError TomoRecon::ReadRawProjectionData(std::string BaseFileIn, std::string F
 	std::cout << "threshold #: " << howmany << std::endl;
 
 	//if orientation = 0, then right orientation and need to rotate the image
-	if (!Sys->UsrIn->Orientation)
+	if (!orientation)
 	{
 		int i, y;
 		int oldPos, newPos;
@@ -952,13 +711,4 @@ TomoError TomoRecon::ReadRawProjectionData(std::string BaseFileIn, std::string F
 	}
 
 	return Tomo_OK;
-
-/*	ProjData = NULL;
-	fopen_s(&ProjData, "D:\\Patients\\testcenter.raw", "wb");
-	if (ProjData != NULL)
-	{
-		fwrite(Sys->Proj->RawData, sizeof(USHORT), size_single_proj, ProjData);
-		fclose(ProjData);
-	}
-	*/
 }

@@ -196,7 +196,7 @@ protected:
 	void onGainSelect(wxCommandEvent& event);
 	void onDarkSelect(wxCommandEvent& event);
 	void onProjectionView(wxCommandEvent& event);
-	void onReconstructionVeiw(wxCommandEvent& event);
+	void onReconstructionView(wxCommandEvent& event);
 	void onResList(wxCommandEvent& event);
 	void onContList(wxCommandEvent& event);
 	void onRunTest(wxCommandEvent& event);
@@ -220,7 +220,6 @@ public:
 	DTRConfigDialog* cfgDialog = NULL;
 	DTRResDialog* resDialog = NULL;
 	wxPanel * CreateNewPage(wxString filename);
-	void onContRun(wxCommandEvent& event);
 
 	//User generated filenames
 	wxString gainFilepath;

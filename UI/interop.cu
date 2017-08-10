@@ -72,10 +72,11 @@ interop::~interop() {
 	cudaDeviceSynchronize();
 
 	// unregister CUDA resources
-	for (int i = 0; i < count; i++){
+	//TODO: investigate necessity
+	/*for (int i = 0; i < count; i++){
 		if (cgr[i] != NULL)
 			cuda(GraphicsUnregisterResource(cgr[i]));
-	}
+	}*/
 
 	// delete rbo's
 	gl(DeleteRenderbuffers(count, rb));

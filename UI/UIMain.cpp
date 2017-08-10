@@ -97,7 +97,6 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 TomoError DTRMainWindow::genSys(struct SystemControl * Sys) {
 	//Finish filling in the structure with all required structures
 	Sys->Proj = new Proj_Data;
-	Sys->UsrIn = new UserInput;
 
 	Sys->Proj->NumViews = NumViews;
 	Sys->Proj->Views = new int[NumViews];
@@ -106,43 +105,28 @@ TomoError DTRMainWindow::genSys(struct SystemControl * Sys) {
 	}
 
 	//Define new buffers to store the x,y,z locations of the x-ray focal spot array
-	Sys->SysGeo.EmitX = new float[Sys->Proj->NumViews];
-	Sys->SysGeo.EmitY = new float[Sys->Proj->NumViews];
-	Sys->SysGeo.EmitZ = new float[Sys->Proj->NumViews];
-
-	//Set the isocenter to the center of the detector array
-	Sys->SysGeo.IsoX = 0;
-	Sys->SysGeo.IsoY = 0;
-	Sys->SysGeo.IsoZ = 0;
+	Sys->Geo.EmitX = new float[Sys->Proj->NumViews];
+	Sys->Geo.EmitY = new float[Sys->Proj->NumViews];
+	Sys->Geo.EmitZ = new float[Sys->Proj->NumViews];
 
 	//load all values from previously saved settings
 	wxConfigBase *pConfig = wxConfigBase::Get();
 
-	Sys->UsrIn->CalOffset = pConfig->ReadLong(wxT("/generateDistance"), 0l) == 0l ? 0 : 1;
-	Sys->UsrIn->SmoothEdge = pConfig->ReadLong(wxT("/edgeBlurEnabled"), 0l) == 0l ? 0 : 1;
-	Sys->UsrIn->UseTV = pConfig->ReadLong(wxT("/denosingEnabled"), 0l) == 0l ? 0 : 1;
-	Sys->UsrIn->Orientation = pConfig->ReadLong(wxT("/orientation"), 0l) == 0l ? 0 : 1;
+	//Sys->UsrIn->Orientation = pConfig->ReadLong(wxT("/orientation"), 0l) == 0l ? 0 : 1;
 	Sys->Proj->Flip = pConfig->ReadLong(wxT("/rotationEnabled"), 0l) == 0l ? 0 : 1;
 
-	Sys->SysGeo.ZDist = pConfig->ReadDouble(wxT("/estimatedDistance"), 5.0f);
-	Sys->Proj->Nz = pConfig->ReadLong(wxT("/reconstructionSlices"), 45l);
-	Sys->SysGeo.ZPitch = pConfig->ReadDouble(wxT("/sliceThickness"), 0.5f);
+	Sys->Geo.ZPitch = pConfig->ReadDouble(wxT("/sliceThickness"), 0.5f);
 	Sys->Proj->Nx = pConfig->ReadLong(wxT("/pixelWidth"), 1915l);
 	Sys->Proj->Ny = pConfig->ReadLong(wxT("/pixelHeight"), 1440l);
 	Sys->Proj->Pitch_x = pConfig->ReadDouble(wxT("/pitchHeight"), 0.0185f);
 	Sys->Proj->Pitch_y = pConfig->ReadDouble(wxT("/pitchWidth"), 0.0185f);
 	for (int j = 0; j < NUMVIEWS; j++) {
-		Sys->SysGeo.EmitX[j] = pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"), j, 0), 0.0f);
-		Sys->SysGeo.EmitY[j] = pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"), j, 1), 0.0f);
-		Sys->SysGeo.EmitZ[j] = pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"), j, 2), 0.0f);
+		Sys->Geo.EmitX[j] = pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"), j, 0), 0.0f);
+		Sys->Geo.EmitY[j] = pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"), j, 1), 0.0f);
+		Sys->Geo.EmitZ[j] = pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"), j, 2), 0.0f);
 	}
 
-	//Define Final Image Buffers 
 	Sys->Proj->RawData = new unsigned short[Sys->Proj->Nx*Sys->Proj->Ny * Sys->Proj->NumViews];
-	Sys->Proj->SyntData = new unsigned short[Sys->Proj->Nx*Sys->Proj->Ny];
-
-	if (Sys->UsrIn->CalOffset)
-		Sys->Proj->RawDataThresh = new unsigned short[Sys->Proj->Nx*Sys->Proj->Ny * Sys->Proj->NumViews];
 
 	return Tomo_OK;
 }
@@ -193,7 +177,7 @@ void DTRMainWindow::onProjectionView(wxCommandEvent& WXUNUSED(event)) {
 		wxICON_INFORMATION | wxOK);
 }
 
-void DTRMainWindow::onReconstructionVeiw(wxCommandEvent& WXUNUSED(event)) {
+void DTRMainWindow::onReconstructionView(wxCommandEvent& WXUNUSED(event)) {
 	wxMessageBox(wxT("TODO"),
 		wxT("TODO"),
 		wxICON_INFORMATION | wxOK);
@@ -205,13 +189,9 @@ void DTRMainWindow::onContinuous() {
 	int statusWidths[] = { -4, -1, -1, -1, -1 };
 
 	wxStreamToTextRedirector redirect(m_textCtrl8);
-
-	if (!recon->reconMemSet) recon->mallocContinuous();
-
 	m_statusBar1->SetFieldsCount(5, statusWidths);
 	recon->continuousMode = true;
 	recon->correctProjections();
-	recon->reconInit();
 	recon->singleFrame();
 	recon->currentDisplay = recon_images;
 	currentFrame->m_scrollBar->SetThumbPosition(0);
@@ -412,13 +392,8 @@ DTRConfigDialog::DTRConfigDialog(wxWindow* parent) : configDialog(parent){
 	//load all values from previously saved settings
 	wxConfigBase *pConfig = wxConfigBase::Get();
 
-	generateDistance->SetSelection(pConfig->ReadLong(wxT("/generateDistance"), 0l) == 0l ? 0 : 1);
-	edgeBlurEnabled->SetSelection(pConfig->ReadLong(wxT("/edgeBlurEnabled"), 0l) == 0l ? 0 : 1);
-	denosingEnabled->SetSelection(pConfig->ReadLong(wxT("/denosingEnabled"), 0l) == 0l ? 0 : 1);
 	orientation->SetSelection(pConfig->ReadLong(wxT("/orientation"), 0l) == 0l ? 0 : 1);
 	rotationEnabled->SetSelection(pConfig->ReadLong(wxT("/rotationEnabled"), 0l) == 0l ? 0 : 1);
-	estimatedDistance->SetValue(wxString::Format(wxT("%.1f"), pConfig->ReadDouble(wxT("/estimatedDistance"), 5.0f)));
-	reconstructionSlices->SetValue(wxString::Format(wxT("%d"), pConfig->ReadLong(wxT("/reconstructionSlices"), 45l)));
 	sliceThickness->SetValue(wxString::Format(wxT("%.1f"), pConfig->ReadDouble(wxT("/sliceThickness"), 0.5f)));
 	pixelWidth->SetValue(wxString::Format(wxT("%d"), pConfig->ReadLong(wxT("/pixelWidth"), 1915l)));
 	pixelHeight->SetValue(wxString::Format(wxT("%d"), pConfig->ReadLong(wxT("/pixelHeight"), 1440l)));
@@ -469,13 +444,8 @@ TomoError DTRConfigDialog::ParseJSONFile(std::string FilePath) {
 
 	//Populate form using parsed values
 	//TODO: shittons of error checking
-	generateDistance->SetSelection(cJSON_GetObjectItem(root, "generateDistance")->type == cJSON_False ? 0 : 1);
-	edgeBlurEnabled->SetSelection(cJSON_GetObjectItem(root, "edgeBlurEnabled")->type == cJSON_False ? 0 : 1);
-	denosingEnabled->SetSelection(cJSON_GetObjectItem(root, "denosingEnabled")->type == cJSON_False ? 0 : 1);
 	orientation->SetSelection(cJSON_GetObjectItem(root, "orientation")->type == cJSON_False ? 0 : 1);
 	rotationEnabled->SetSelection(cJSON_GetObjectItem(root, "rotationEnabled")->type == cJSON_False ? 0 : 1);
-	estimatedDistance->SetValue(wxString::Format(wxT("%.1f"), cJSON_GetObjectItem(root, "estimatedDistance")->valuedouble));
-	reconstructionSlices->SetValue(wxString::Format(wxT("%d"), cJSON_GetObjectItem(root, "reconstructionSlices")->valueint));
 	sliceThickness->SetValue(wxString::Format(wxT("%.1f"), cJSON_GetObjectItem(root, "sliceThickness")->valuedouble));
 	pixelWidth->SetValue(wxString::Format(wxT("%d"), cJSON_GetObjectItem(root, "pixelWidth")->valueint));
 	pixelHeight->SetValue(wxString::Format(wxT("%d"), cJSON_GetObjectItem(root, "pixelHeight")->valueint));
@@ -539,7 +509,6 @@ TomoError DTRConfigDialog::ParseLegacyTxt(std::string FilePath) {
 	//Skip the next 2 lines and read the third to get estimated center of object
 	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
 	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-	estimatedDistance->SetValue(wxString::Format(wxT("%.1f"), atof(data_in)));
 
 	//skip the next 2 lines and read third to get slice thickness
 	for (int i = 0; i < 12; i++) data_in[i] = '\0';
@@ -574,7 +543,6 @@ TomoError DTRConfigDialog::ParseLegacyTxt(std::string FilePath) {
 	//Skip the next two lines and read the third to read number of slices to reconstruct
 	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
 	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-	reconstructionSlices->SetValue(wxString::Format(wxT("%d"), atoi(data_in)));
 	for (int i = 0; i < 12; i++) data_in[i] = '\0';
 	count = 0; num = 0;
 
@@ -588,21 +556,18 @@ TomoError DTRConfigDialog::ParseLegacyTxt(std::string FilePath) {
 	//Skip the next two lines and read the third to see if automatic offset calculation
 	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
 	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-	generateDistance->SetSelection(atoi(data_in) == 0 ? 0 : 1);
 	for (int i = 0; i < 12; i++) data_in[i] = '\0';
 	count = 0; num = 0;
 
 	// Skip the next two lines and read the third to see if automatic offset calculation
 	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
 	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-	edgeBlurEnabled->SetSelection(atoi(data_in) == 0 ? 0 : 1);
 	for (int i = 0; i < 12; i++) data_in[i] = '\0';
 	count = 0; num = 0;
 
 	// Skip the next two lines and read the third to see if use TV reconstruction
 	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
 	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-	denosingEnabled->SetSelection(atoi(data_in) == 0 ? 0 : 1);
 	for (int i = 0; i < 12; i++) data_in[i] = '\0';
 	count = 0; num = 0;
 
@@ -644,27 +609,17 @@ void DTRConfigDialog::onSave(wxCommandEvent& event) {
 	double parsedDouble;
 	long parsedInt = 0;
 	cJSON *root = cJSON_CreateObject();
-	if (generateDistance->GetSelection() == 0) cJSON_AddFalseToObject(root, "generateDistance");
-	else cJSON_AddTrueToObject(root, "generateDistance");
-	if (edgeBlurEnabled->GetSelection() == 0) cJSON_AddFalseToObject(root, "edgeBlurEnabled");
-	else cJSON_AddTrueToObject(root, "edgeBlurEnabled");
-	if (denosingEnabled->GetSelection() == 0) cJSON_AddFalseToObject(root, "denosingEnabled");
-	else cJSON_AddTrueToObject(root, "denosingEnabled");
 	if (orientation->GetSelection() == 0) cJSON_AddFalseToObject(root, "orientation");
 	else cJSON_AddTrueToObject(root, "orientation");
 	if (rotationEnabled->GetSelection() == 0) cJSON_AddFalseToObject(root, "rotationEnabled");
 	else cJSON_AddTrueToObject(root, "rotationEnabled");
 
-	estimatedDistance->GetLineText(0).ToDouble(&parsedDouble);
-	cJSON_AddNumberToObject(root, "estimatedDistance", parsedDouble);
 	sliceThickness->GetLineText(0).ToDouble(&parsedDouble);
 	cJSON_AddNumberToObject(root, "sliceThickness", parsedDouble);
 	pitchHeight->GetLineText(0).ToDouble(&parsedDouble);
 	cJSON_AddNumberToObject(root, "pitchHeight", parsedDouble);
 	pitchWidth->GetLineText(0).ToDouble(&parsedDouble);
 	cJSON_AddNumberToObject(root, "pitchWidth", parsedDouble);
-	reconstructionSlices->GetLineText(0).ToLong(&parsedInt);
-	cJSON_AddNumberToObject(root, "reconstructionSlices", parsedInt);
 	pixelWidth->GetLineText(0).ToLong(&parsedInt);
 	cJSON_AddNumberToObject(root, "pixelWidth", parsedInt);
 	pixelHeight->GetLineText(0).ToLong(&parsedInt);
@@ -706,27 +661,8 @@ TomoError DTRConfigDialog::checkInputs() {
 	long parsedInt = 0;
 	wxConfigBase *pConfig = wxConfigBase::Get();
 
-	pConfig->Write(wxT("/generateDistance"), generateDistance->GetSelection() == 0 ? 0l : 1l);
-	pConfig->Write(wxT("/edgeBlurEnabled"), edgeBlurEnabled->GetSelection() == 0 ? 0l : 1l);
-	pConfig->Write(wxT("/denosingEnabled"), denosingEnabled->GetSelection() == 0 ? 0l : 1l);
 	pConfig->Write(wxT("/orientation"), orientation->GetSelection() == 0 ? 0l : 1l);
 	pConfig->Write(wxT("/rotationEnabled"), rotationEnabled->GetSelection() == 0 ? 0l : 1l);
-
-	if (!estimatedDistance->GetLineText(0).ToDouble(&parsedDouble)) {
-		wxMessageBox(wxT("Invalid input in text box: \"Estimated distance from detector to object\"."),
-			wxT("Invlaid input"),
-			wxICON_STOP | wxOK);
-		return Tomo_input_err;
-	}
-	else pConfig->Write(wxT("/estimatedDistance"), parsedDouble);
-
-	if (!reconstructionSlices->GetLineText(0).ToLong(&parsedInt) || parsedInt <= 0) {
-		wxMessageBox(wxT("Invalid input in text box: \"Number of slices to reconstruct\".\nMust be a whole number greater than 0."),
-			wxT("Invlaid input"),
-			wxICON_STOP | wxOK);
-		return Tomo_input_err;
-	}
-	else pConfig->Write(wxT("/reconstructionSlices"), parsedInt);
 
 	if (!sliceThickness->GetLineText(0).ToDouble(&parsedDouble)) {
 		wxMessageBox(wxT("Invalid input in text box: \"Thickness of reconstruciton slice\"."),
@@ -1119,7 +1055,7 @@ void GLFrame::OnMousewheel(wxMouseEvent& event) {
 	}
 	else {
 		if (m_canvas->recon->continuousMode) {
-			m_canvas->recon->distance += newScrollPos*m_canvas->recon->Sys->Recon->Pitch_z;
+			m_canvas->recon->distance += newScrollPos*m_canvas->recon->Sys->Geo.ZPitch;
 			m_canvas->recon->singleFrame();
 		}
 		else {
