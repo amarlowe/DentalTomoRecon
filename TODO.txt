@@ -39,6 +39,8 @@ TomoRecon
 - Remove internal pixel buffer in favor of generating everything on the fly
 - Correct for non-xy shifts in the detector
 - Redo read-raw-projections for speed, stability, and color correction accuracy
+- Switch to single buffer as the output, calculate pitch widths from pixel ratios
+- Move sys generation to initializer
 
 --------------Bugs---------------------
 - AutoDetection breaks reconstruction badly
@@ -57,6 +59,7 @@ TomoRecon
 - If left untouched for some time, becomes completely unresponsive
 - Zooming out then changing z distance causes a jump in offsets
 - GPU memory leaks abound
+- White artifacts around reconstruction corners
 
 -------------Completed------------------
 -------------Features------------------

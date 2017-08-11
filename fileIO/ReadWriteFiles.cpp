@@ -259,12 +259,7 @@ TomoError ReadSubSetViews(struct SystemControl * Sys, int NumViews, std::string 
 		if (file.eof()) break;
 	}
 
-	Sys->Proj->NumViews = vnum;
-	Sys->Proj->Views = new int[vnum];
-	for (int view = 0; view < vnum; view++) {
-		int n = ViewNum[view];
-		Sys->Proj->Views[n] = ProjNum[view];
-	}
+	Sys->Proj.NumViews = vnum;
 
 	delete[] ViewNum;
 	delete[] ProjNum;
@@ -273,12 +268,11 @@ TomoError ReadSubSetViews(struct SystemControl * Sys, int NumViews, std::string 
 }
 
 TomoError TomoRecon::ReadDarkImages(const char * darkFile){
-	int size_single_proj = Sys->Proj->Nx * Sys->Proj->Ny;
+	int size_single_proj = Sys->Proj.Nx * Sys->Proj.Ny;
 	int size_single_proj_bytes = size_single_proj * 2;
 
 	//Allocate memory to each buffer
-	Sys->Norm = new NormData();
-	Sys->Norm->DarkData = new unsigned short[size_single_proj];
+	Sys->Norm.DarkData = new unsigned short[size_single_proj];
 
 	//Define paths to dark data
 	char temp[MAX_PATH];
@@ -303,7 +297,7 @@ TomoError TomoRecon::ReadDarkImages(const char * darkFile){
 		return Tomo_file_err;
 	}
 
-	fread(Sys->Norm->DarkData, sizeof(USHORT), size_single_proj, fileptr);
+	fread(Sys->Norm.DarkData, sizeof(USHORT), size_single_proj, fileptr);
 
 	fclose(fileptr);
 
@@ -311,7 +305,7 @@ TomoError TomoRecon::ReadDarkImages(const char * darkFile){
 }
 
 TomoError TomoRecon::ReadGainImages(const char * gainFile){
-	int size_single_proj = Sys->Proj->Nx * Sys->Proj->Ny;
+	int size_single_proj = Sys->Proj.Nx * Sys->Proj.Ny;
 	int size_single_proj_bytes = size_single_proj * 2;
 
 	char temp[MAX_PATH];
@@ -330,7 +324,7 @@ TomoError TomoRecon::ReadGainImages(const char * gainFile){
 	int size_gain_buf = size_single_proj * NumViews;
 
 	//Allocate memory to each buffer
-	Sys->Norm->GainData = new unsigned short[size_gain_buf];
+	Sys->Norm.GainData = new unsigned short[size_gain_buf];
 
 	bool foundAvgFile = false;
 
@@ -352,7 +346,7 @@ TomoError TomoRecon::ReadGainImages(const char * gainFile){
 		{
 			foundAvgFile = true;
 
-			fread(&(Sys->Norm->GainData[view*size_single_proj]), sizeof(USHORT), size_single_proj, fileptr);
+			fread(&(Sys->Norm.GainData[view*size_single_proj]), sizeof(USHORT), size_single_proj, fileptr);
 			fclose(fileptr);
 		}
 		else
@@ -466,9 +460,9 @@ TomoError TomoRecon::ReadGainImages(const char * gainFile){
 
 		float GainPro = 0.0;
 		//Average the gain and blank images
-		for (int i = 0; i < Sys->Proj->Nx; i++)
+		for (int i = 0; i < Sys->Proj.Nx; i++)
 		{
-			for (int j = 0; j < Sys->Proj->Ny; j++)
+			for (int j = 0; j < Sys->Proj.Ny; j++)
 			{
 				for (int view = 0; view < NumViews; view++)
 				{
@@ -476,11 +470,11 @@ TomoError TomoRecon::ReadGainImages(const char * gainFile){
 					for (int n = 0; n < NumGainSamples; n++)
 					{
 						GainPro +=
-							(float)(GainBuf[n*size_single_proj*NumViews + view*size_single_proj + i + j*Sys->Proj->Nx]) /
+							(float)(GainBuf[n*size_single_proj*NumViews + view*size_single_proj + i + j*Sys->Proj.Nx]) /
 							((float)NumGainSamples);
 					}
 
-					Sys->Norm->GainData[i + j*Sys->Proj->Nx + view*size_single_proj] = (unsigned short)GainPro;
+					Sys->Norm.GainData[i + j*Sys->Proj.Nx + view*size_single_proj] = (unsigned short)GainPro;
 				}
 			}
 		}
@@ -506,7 +500,7 @@ TomoError TomoRecon::ReadGainImages(const char * gainFile){
 				return Tomo_file_err;
 			}
 			//			fwrite(&(GainData[view*size_single_proj]), sizeof(USHORT), numPerProj, fileptr);
-			fwrite(Sys->Norm->GainData + view * size_single_proj, sizeof(USHORT), size_single_proj, fileptr);
+			fwrite(Sys->Norm.GainData + view * size_single_proj, sizeof(USHORT), size_single_proj, fileptr);
 			fclose(fileptr);
 		}
 
@@ -521,13 +515,13 @@ TomoError TomoRecon::ReadRawProjectionData(std::string BaseFileIn, std::string F
 	FILE * ProjData = NULL;
 
 	//Define the size of the raw projection buffer and set points
-	int size_single_proj = Sys->Proj->Nx * Sys->Proj->Ny;
+	int size_single_proj = Sys->Proj.Nx * Sys->Proj.Ny;
 	int size_raw_proj = size_single_proj * NumViews;
-	int size_raw_subproj = size_single_proj * Sys->Proj->NumViews;
+	int size_raw_subproj = size_single_proj * Sys->Proj.NumViews;
 
 	//Define the temp buffer to read and correct data
-	Sys->Norm->CorrBuf = new float[size_raw_subproj];
-	memset(Sys->Norm->CorrBuf, 0, size_raw_subproj * sizeof(float));//was declared unsigned short. dammit this was hard to find
+	Sys->Norm.CorrBuf = new float[size_raw_subproj];
+	memset(Sys->Norm.CorrBuf, 0, size_raw_subproj * sizeof(float));//was declared unsigned short. dammit this was hard to find
 
 	std::string BasePath, ProjPath;
 //	BasePath = BaseFileIn;
@@ -537,8 +531,8 @@ TomoError TomoRecon::ReadRawProjectionData(std::string BaseFileIn, std::string F
 	int NumProjSamples = 1;
 
 	//Define a projection buffer to read all data
-	Sys->Norm->ProjBuf = new unsigned short[size_raw_proj * NumProjSamples];
-	memset(Sys->Norm->ProjBuf, 0, size_raw_subproj * NumProjSamples * sizeof(unsigned short));
+	Sys->Norm.ProjBuf = new unsigned short[size_raw_proj * NumProjSamples];
+	memset(Sys->Norm.ProjBuf, 0, size_raw_subproj * NumProjSamples * sizeof(unsigned short));
 
 	WIN32_FIND_DATA FindFile;
 	HANDLE hfind;
@@ -575,7 +569,7 @@ TomoError TomoRecon::ReadRawProjectionData(std::string BaseFileIn, std::string F
 			}
 
 			//Write the reconstructed data into the predefine memory location
-			fread(Sys->Norm->ProjBuf + (sample)*size_raw_proj,
+			fread(Sys->Norm.ProjBuf + (sample)*size_raw_proj,
 				sizeof(unsigned short), size_single_proj, ProjData);
 			fclose(ProjData);
 
@@ -602,7 +596,7 @@ TomoError TomoRecon::ReadRawProjectionData(std::string BaseFileIn, std::string F
 				}
 
 				//Write the reconstructed data into the predefine memory location
-				fread(Sys->Norm->ProjBuf + (sample)*size_raw_proj + view * size_single_proj,
+				fread(Sys->Norm.ProjBuf + (sample)*size_raw_proj + view * size_single_proj,
 					sizeof(unsigned short), size_single_proj, ProjData);
 				fclose(ProjData);
 
@@ -623,16 +617,16 @@ TomoError TomoRecon::ReadRawProjectionData(std::string BaseFileIn, std::string F
 	for (int sample = 0; sample < NumProjSamples; sample++) {
 		vnum = 0;
 		for (int view = 0; view < NumViews; view++) {
-			for (int x = 0; x < Sys->Proj->Nx; x++) {
-				for (int y = 0; y < Sys->Proj->Ny; y++)
+			for (int x = 0; x < Sys->Proj.Nx; x++) {
+				for (int y = 0; y < Sys->Proj.Ny; y++)
 				{
-					loc1 = (y + view*Sys->Proj->Ny)*Sys->Proj->Nx + x
-						+ sample*Sys->Proj->Nx*Sys->Proj->Ny*NumViews;
-					GainLoc = y*Sys->Proj->Nx + x + view*Sys->Proj->Nx*Sys->Proj->Ny;
-					DarkLoc = y*Sys->Proj->Nx + x;
+					loc1 = (y + view*Sys->Proj.Ny)*Sys->Proj.Nx + x
+						+ sample*Sys->Proj.Nx*Sys->Proj.Ny*NumViews;
+					GainLoc = y*Sys->Proj.Nx + x + view*Sys->Proj.Nx*Sys->Proj.Ny;
+					DarkLoc = y*Sys->Proj.Nx + x;
 
-					unsigned short val = Sys->Norm->ProjBuf[loc1];
-					unsigned short gval = Sys->Norm->GainData[GainLoc];
+					unsigned short val = Sys->Norm.ProjBuf[loc1];
+					unsigned short gval = Sys->Norm.GainData[GainLoc];
 //					unsigned short dval = Sys->Norm->DarkData[DarkLoc];
 
 
@@ -647,13 +641,13 @@ TomoError TomoRecon::ReadRawProjectionData(std::string BaseFileIn, std::string F
 					float n_val = C_val / C_gval;
 					if (C_val + 25 > C_gval) n_val = 0.0;
 
-					int loc3 = (y + view*Sys->Proj->Ny)*Sys->Proj->Nx
-						+ Sys->Proj->Nx - (x + 1);
+					int loc3 = (y + view*Sys->Proj.Ny)*Sys->Proj.Nx
+						+ Sys->Proj.Nx - (x + 1);
 
-					if (Sys->Proj->Flip == 1) {
-						loc3 = (y + view*Sys->Proj->Ny)*Sys->Proj->Nx + x;
+					if (Sys->Proj.Flip == 1) {
+						loc3 = (y + view*Sys->Proj.Ny)*Sys->Proj.Nx + x;
 					}
-					Sys->Norm->CorrBuf[loc3] += (float)n_val;
+					Sys->Norm.CorrBuf[loc3] += (float)n_val;
 
 				}
 			}
@@ -663,14 +657,14 @@ TomoError TomoRecon::ReadRawProjectionData(std::string BaseFileIn, std::string F
 	int howmany = 0;
 
 	//Allocate memory for the projection data buffer and move data into the buffer
-	for (int view = 0; view < Sys->Proj->NumViews; view++) {
-		for (int x = 0; x < Sys->Proj->Nx; x++) {
-			for (int y = 0; y < Sys->Proj->Ny; y++)
+	for (int view = 0; view < Sys->Proj.NumViews; view++) {
+		for (int x = 0; x < Sys->Proj.Nx; x++) {
+			for (int y = 0; y < Sys->Proj.Ny; y++)
 			{
-				int loc = (y + view*Sys->Proj->Ny)*Sys->Proj->Nx + x;
-				float val = Sys->Norm->CorrBuf[loc];
+				int loc = (y + view*Sys->Proj.Ny)*Sys->Proj.Nx + x;
+				float val = Sys->Norm.CorrBuf[loc];
 				val = val / (float)NumProjSamples;
-				Sys->Proj->RawData[loc] = (unsigned short)(val * USHRT_MAX);
+				Sys->Proj.RawData[loc] = (unsigned short)(val * USHRT_MAX);
 			}
 		}
 	}
@@ -683,7 +677,7 @@ TomoError TomoRecon::ReadRawProjectionData(std::string BaseFileIn, std::string F
 		int i, y;
 		int oldPos, newPos;
 
-		int m_imageSizeAdj = Sys->Proj->Ny*Sys->Proj->Nx;
+		int m_imageSizeAdj = Sys->Proj.Ny*Sys->Proj.Nx;
 
 		USHORT* tempstore = new USHORT[m_imageSizeAdj];
 		memset(tempstore, 0, m_imageSizeAdj);
@@ -696,14 +690,14 @@ TomoError TomoRecon::ReadRawProjectionData(std::string BaseFileIn, std::string F
 
 				newPos = (m_imageSizeAdj - 1) - y;
 
-				tempstore[newPos] = Sys->Proj->RawData[oldPos];
+				tempstore[newPos] = Sys->Proj.RawData[oldPos];
 			}
 
 			for (y = 0; y < m_imageSizeAdj; y++)
 			{
 				newPos = y + i*m_imageSizeAdj;
 
-				Sys->Proj->RawData[newPos] = tempstore[y];
+				Sys->Proj.RawData[newPos] = tempstore[y];
 			}
 		}
 

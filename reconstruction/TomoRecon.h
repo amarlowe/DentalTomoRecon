@@ -55,13 +55,14 @@
 #define UPPERBOUND 20.0f
 #define LOWERBOUND 4.0f
 
-#define SIGMA 1.0f
-#define KERNELRADIUS 5
-#define KERNELSIZE (2*KERNELRADIUS + 1)
-
 //cuda constants
 #define WARPSIZE 32
 #define MAXTHREADS 1024
+
+//Kernel options
+#define SIGMA 1.0f
+#define KERNELRADIUS 5
+#define KERNELSIZE (2*KERNELRADIUS + 1)
 
 //Maps to single instruction in cuda
 #define MUL_ADD(a, b, c) ( __mul24((a), (b)) + (c) )
@@ -134,7 +135,6 @@ typedef enum {
 /********************************************************************************************/
 struct Proj_Data {
 	unsigned short * RawData;				//Pointer to a buffer containing the raw data
-	int * Views;							//Pointer to the view numbers
 	int NumViews;							//The number of projection views the recon uses
 	float Pitch_x;							//The detector pixel pitch in the x direction
 	float Pitch_y;							//The detector pixel pithc in the y direction
@@ -171,9 +171,9 @@ struct ReconGeometry {
 
 //Declare a structure containing other system description structures to pass info
 struct SystemControl {
-	struct Proj_Data * Proj;
-	struct NormData * Norm;
-	struct ReconGeometry * Recon;
+	struct Proj_Data Proj;
+	struct NormData Norm;
+	struct ReconGeometry Recon;
 	struct SysGeometry Geo;
 };
 
@@ -181,26 +181,18 @@ struct SystemControl {
 struct params {
 	int Px;
 	int Py;
-	int Nx;
-	int Ny;
-	int Nz;
-	int MPx;
-	int MPy;
-	int MNx;
-	int MNy;
-	float HalfPx;
-	float HalfPy;
-	float HalfNx;
-	float HalfNy;
+	int Rx;
+	int Ry;
 	int Views;
 	float PitchPx;
 	float PitchPy;
-	float PitchNx;
-	float PitchNy;
-	float PitchNz;
-	float alpharelax;
-	float rmax;
-	int Z_Offset;
+	float PitchRx;
+	float PitchRy;
+	float * Beamx;
+	float * Beamy;
+	float * Beamz;
+	int ReconPitchNum;
+	int ProjPitchNum;
 };
 
 struct toleranceData {
@@ -319,7 +311,6 @@ private:
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Functions to Initialize the GPU and set up the reconstruction normalization
-	void DefineReconstructSpace();
 	TomoError initGPU();
 	TomoError setNOOP(float kernel[KERNELSIZE]);
 	TomoError setGauss(float kernel[KERNELSIZE]);
@@ -331,16 +322,6 @@ private:
 	float focusHelper();
 	TomoError imageKernel(float xK[KERNELSIZE], float yK[KERNELSIZE], float * output);
 
-	//Conversion helpers
-	float xP2MM(int p);
-	float yP2MM(int p);
-	float xR2MM(int r);
-	float yR2MM(int r);
-	int xMM2P(float m);
-	int yMM2P(float m);
-	int xMM2R(float m);
-	int yMM2R(float m);
-
 	//Coordinate conversions
 	TomoError P2R(int* rX, int* rY, int pX, int pY, int view);
 	TomoError R2P(int* pX, int* pY, int rX, int rY, int view);
@@ -348,11 +329,6 @@ private:
 
 	size_t avail_mem;
 	size_t total_mem;
-
-	//////////////////////////////////////////////////////////////////////////////////////////////
-	//Functions to save the images
-	template<typename T>
-	TomoError resizeImage(T* in, int wIn, int hIn, cudaArray_t out, int wOut, int hOut, double maxVar);
 
 	/********************************************************************************************/
 	/* Input Functions to read data into the program											*/
@@ -366,9 +342,10 @@ private:
 	TomoError ReadRawProjectionData(std::string BaseFileIn, std::string FileName);
 
 	//Define data buffer
+	unsigned short * d_Proj;
 	float * d_Image;
 	float * d_Error;
-	float * d_Proj;
+	float * d_Sino;
 	float * beamx;
 	float * beamy;
 	float * beamz;
@@ -388,18 +365,24 @@ private:
 	//Kernel call parameters
 	size_t sizeIM;
 	size_t sizeProj;
+	size_t sizeSino;
+	size_t sizeError;
 
 	dim3 contThreads;
 	dim3 contBlocks;
+	dim3 reductionBlocks;
+	dim3 reductionThreads;
+	int reductionSize = MAXTHREADS * sizeof(float);
 
-	//Decay constant for recon
-	float Beta = 1.0f;
+	//Cuda constants
+	params constants;
 
 	cudaStream_t stream;
 
 	//cuda pitch variables generated from 2d mallocs
 	size_t reconPitch;
 	size_t projPitch;
+	int reconPitchNum;
 
 	//Parameters for 2d geometry search
 	int diffSlice = 0;

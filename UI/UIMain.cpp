@@ -95,38 +95,31 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 }
 
 TomoError DTRMainWindow::genSys(struct SystemControl * Sys) {
-	//Finish filling in the structure with all required structures
-	Sys->Proj = new Proj_Data;
-
-	Sys->Proj->NumViews = NumViews;
-	Sys->Proj->Views = new int[NumViews];
-	for (int n = 0; n < NumViews; n++) {
-		Sys->Proj->Views[n] = n;
-	}
+	Sys->Proj.NumViews = NumViews;
 
 	//Define new buffers to store the x,y,z locations of the x-ray focal spot array
-	Sys->Geo.EmitX = new float[Sys->Proj->NumViews];
-	Sys->Geo.EmitY = new float[Sys->Proj->NumViews];
-	Sys->Geo.EmitZ = new float[Sys->Proj->NumViews];
+	Sys->Geo.EmitX = new float[NumViews];
+	Sys->Geo.EmitY = new float[NumViews];
+	Sys->Geo.EmitZ = new float[NumViews];
 
 	//load all values from previously saved settings
 	wxConfigBase *pConfig = wxConfigBase::Get();
 
-	//Sys->UsrIn->Orientation = pConfig->ReadLong(wxT("/orientation"), 0l) == 0l ? 0 : 1;
-	Sys->Proj->Flip = pConfig->ReadLong(wxT("/rotationEnabled"), 0l) == 0l ? 0 : 1;
+	//Sys->UsrIn->Orientation = pConfig->ReadLong(wxT("/orientation"), 0l) == 0l ? 0 : 1;//TODO: reintroduce
+	Sys->Proj.Flip = pConfig->ReadLong(wxT("/rotationEnabled"), 0l) == 0l ? 0 : 1;
 
 	Sys->Geo.ZPitch = pConfig->ReadDouble(wxT("/sliceThickness"), 0.5f);
-	Sys->Proj->Nx = pConfig->ReadLong(wxT("/pixelWidth"), 1915l);
-	Sys->Proj->Ny = pConfig->ReadLong(wxT("/pixelHeight"), 1440l);
-	Sys->Proj->Pitch_x = pConfig->ReadDouble(wxT("/pitchHeight"), 0.0185f);
-	Sys->Proj->Pitch_y = pConfig->ReadDouble(wxT("/pitchWidth"), 0.0185f);
+	Sys->Proj.Nx = pConfig->ReadLong(wxT("/pixelWidth"), 1915l);
+	Sys->Proj.Ny = pConfig->ReadLong(wxT("/pixelHeight"), 1440l);
+	Sys->Proj.Pitch_x = pConfig->ReadDouble(wxT("/pitchHeight"), 0.0185f);
+	Sys->Proj.Pitch_y = pConfig->ReadDouble(wxT("/pitchWidth"), 0.0185f);
 	for (int j = 0; j < NUMVIEWS; j++) {
 		Sys->Geo.EmitX[j] = pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"), j, 0), 0.0f);
 		Sys->Geo.EmitY[j] = pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"), j, 1), 0.0f);
 		Sys->Geo.EmitZ[j] = pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"), j, 2), 0.0f);
 	}
 
-	Sys->Proj->RawData = new unsigned short[Sys->Proj->Nx*Sys->Proj->Ny * Sys->Proj->NumViews];
+	Sys->Proj.RawData = new unsigned short[Sys->Proj.Nx*Sys->Proj.Ny * Sys->Proj.NumViews];
 
 	return Tomo_OK;
 }
@@ -865,8 +858,8 @@ void DTRResDialog::onAddNew(wxCommandEvent& event) {
 		float scale = frame->m_canvas->recon->scale;
 		float xOff = frame->m_canvas->recon->xOff;
 		float yOff = frame->m_canvas->recon->yOff;
-		float innerOffx = (frame->m_canvas->recon->width - Sys->Proj->Nx / scale) / 2;
-		float innerOffy = (frame->m_canvas->recon->height - Sys->Proj->Ny / scale) / 2;
+		float innerOffx = (frame->m_canvas->recon->width - Sys->Proj.Nx / scale) / 2;
+		float innerOffy = (frame->m_canvas->recon->height - Sys->Proj.Ny / scale) / 2;
 		m_listCtrl->SetItem(index, 1, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->baseX - innerOffx) * scale + xOff)));
 		m_listCtrl->SetItem(index, 2, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->baseY - innerOffy) * scale + yOff)));
 		m_listCtrl->SetItem(index, 3, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->currX - innerOffx) * scale + xOff)));

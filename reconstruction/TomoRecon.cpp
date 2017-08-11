@@ -26,12 +26,14 @@ TomoRecon::TomoRecon(int x, int y, struct SystemControl * Sys) : interop(x, y), 
 TomoRecon::~TomoRecon() {
 	cuda(StreamDestroy(stream));
 	FreeGPUMemory();
-	delete[] Sys->Proj->RawData;
+	delete[] Sys->Proj.RawData;
+	delete[] Sys->Norm.GainData;
+	delete[] Sys->Norm.DarkData;
+	delete[] Sys->Norm.ProjBuf;
+	delete[] Sys->Norm.CorrBuf;
 	delete[] Sys->Geo.EmitX;
 	delete[] Sys->Geo.EmitY;
 	delete[] Sys->Geo.EmitZ;
-	delete Sys->Recon;
-	delete Sys->Proj;
 	delete Sys;
 }
 
