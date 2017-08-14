@@ -16,6 +16,8 @@ inline TomoError TomoRecon::setLight(unsigned int minVal, unsigned int maxVal) {
 	return Tomo_OK;
 }
 
+
+
 bool TomoRecon::getLogView() {
 	return constants.log;
 }

@@ -257,6 +257,8 @@ public:
 	//Getters and setters
 	TomoError getLight(unsigned int * minVal, unsigned int * maxVal);
 	TomoError setLight(unsigned int minVal, unsigned int maxVal);
+	TomoError resetLight();
+	TomoError resetFocus();
 	TomoError setLogView(bool useLog);
 	bool getLogView();
 

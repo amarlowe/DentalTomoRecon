@@ -182,12 +182,22 @@ void DTRMainWindow::onLogView(wxCommandEvent& WXUNUSED(event)) {
 
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
-	//wxMenuItem * logView = view->FindChildItem(view->FindItem("Use Log Correction"));
 
 	recon->setLogView(!recon->getLogView());
+	recon->resetLight();
 	currentFrame->m_canvas->paint();
-	//logView->Check(!logView->IsChecked());//Toggle check
-	//recon->setLogView(logView->IsChecked());
+}
+
+void DTRMainWindow::onResetFocus(wxCommandEvent& WXUNUSED(event)) {
+	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
+		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
+		return;
+	}
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->resetFocus();
 }
 
 void DTRMainWindow::onContinuous() {
@@ -204,21 +214,10 @@ void DTRMainWindow::onContinuous() {
 	currentFrame->m_scrollBar->SetThumbPosition(0);
 	currentFrame->m_canvas->OnScroll(0);
 	currentFrame->m_scrollBar->Show(false);
+
+	recon->resetFocus();
+
 	currentFrame->m_canvas->paint();
-
-	recon->constants.baseXr = 3 * recon->Sys->Recon.Nx / 4;
-	recon->constants.baseYr = 3 * recon->Sys->Recon.Ny / 4;
-	recon->constants.currXr = recon->Sys->Recon.Nx / 4;
-	recon->constants.currYr = recon->Sys->Recon.Ny / 4;
-
-	recon->autoFocus(true);
-	currentFrame->m_canvas->paint();
-	while (recon->autoFocus(false) == Tomo_OK) currentFrame->m_canvas->paint();
-
-	recon->constants.baseXr = -1;
-	recon->constants.baseYr = -1;
-	recon->constants.currXr = -1;
-	recon->constants.currYr = -1;
 }
 
 void DTRMainWindow::onConfig(wxCommandEvent& WXUNUSED(event)) {

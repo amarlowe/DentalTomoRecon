@@ -194,25 +194,24 @@ __global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, int index,
 
 	if (!derDisplay && consts.log) {
 		if (sum != 0) {
-			if (sum <= consts.minVal) sum = (float)consts.minVal;
-			float correctedMax = logf((float)consts.maxVal - consts.minVal + 1);
-			sum = (correctedMax - logf(sum - consts.minVal + 1)) / correctedMax * UCHAR_MAX;
+			float correctedMax = logf(USHRT_MAX);
+			sum = (correctedMax - logf(sum + 1)) / correctedMax * USHRT_MAX;
 		}
 	}
-	else {
+	//else {
 		sum = (sum - consts.minVal) / consts.maxVal * UCHAR_MAX;
 		saturate = sum > UCHAR_MAX;
-	}
+	//}
 
 	union pxl_rgbx_24 rgbx;
 	if (saturate) {
-		rgbx.na = 0xFF;
-		rgbx.r = 255;//flag errors with big red spots
-		rgbx.g = 0;
-		rgbx.b = 0;
+		rgbx.na = UCHAR_MAX;
+		rgbx.r = UCHAR_MAX;//flag errors with big red spots
+		rgbx.g = UCHAR_MAX;//0
+		rgbx.b = UCHAR_MAX;//0
 	}
 	else {
-		rgbx.na = 0xFF;
+		rgbx.na = UCHAR_MAX;
 		if (negative) {
 			rgbx.r = 0;
 			rgbx.g = 0;
@@ -514,8 +513,14 @@ __global__ void histogram256Kernel(unsigned int *d_Histogram, T *d_Data, unsigne
 
 	if (i < minX || i > maxX || j < minY || j > maxY) return;
 
-	unsigned short data = (unsigned short)abs(d_Data[MUL_ADD(j, consts.ReconPitchNum, i)]);//whatever it currently is, cast it to ushort
-	atomicAdd(d_Histogram + (data >> 8), 1);//bin by the upper 256 bits
+	float data = (unsigned short)abs(d_Data[MUL_ADD(j, consts.ReconPitchNum, i)]);//whatever it currently is, cast it to ushort
+	if (consts.log) {
+		if (data != 0) {
+			float correctedMax = logf(USHRT_MAX);
+			data = (correctedMax - logf(data + 1)) / correctedMax * USHRT_MAX;
+		}
+	}
+	atomicAdd(d_Histogram + ((unsigned short)data >> 8), 1);//bin by the upper 256 bits
 }
 
 /********************************************************************************************/
@@ -569,8 +574,6 @@ TomoError TomoRecon::initGPU(const char * gainFile, const char * darkFile, const
 	reductionThreads.x = MAXTHREADS;
 	reductionBlocks.x = (Sys->Recon.Nx + reductionThreads.x - 1) / reductionThreads.x;
 	reductionBlocks.y = Sys->Recon.Ny;
-
-	distance = 0.0;//TODO: initialize by autofocus
 
 	//Set up dispaly and buffer (error) regions
 	cuda(MallocPitch((void**)&d_Image, &reconPitch, Sys->Recon.Nx * sizeof(float), Sys->Recon.Ny));
@@ -750,8 +753,6 @@ TomoError TomoRecon::initGPU(const char * gainFile, const char * darkFile, const
 			}
 		}*/
 	}
-
-	
 
 	return Tomo_OK;
 }
@@ -1266,6 +1267,39 @@ inline TomoError TomoRecon::imageKernel(float xK[KERNELSIZE], float yK[KERNELSIZ
 	cuda(BindTexture2D(NULL, textImage, d_Error, cudaCreateChannelDesc<float>(), Sys->Recon.Nx, Sys->Recon.Ny, reconPitch));
 	KERNELCALL2(convolutionColumnsKernel, contBlocks, contThreads, output, yK, constants);
 	cuda(UnbindTexture(textImage));
+
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::resetLight() {
+	constants.baseXr = 3 * Sys->Recon.Nx / 4;
+	constants.baseYr = 3 * Sys->Recon.Ny / 4;
+	constants.currXr = Sys->Recon.Nx / 4;
+	constants.currYr = Sys->Recon.Ny / 4;
+
+	autoLight();
+
+	constants.baseXr = -1;
+	constants.baseYr = -1;
+	constants.currXr = -1;
+	constants.currYr = -1;
+
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::resetFocus() {
+	constants.baseXr = 3 * Sys->Recon.Nx / 4;
+	constants.baseYr = 3 * Sys->Recon.Ny / 4;
+	constants.currXr = Sys->Recon.Nx / 4;
+	constants.currYr = Sys->Recon.Ny / 4;
+
+	autoFocus(true);
+	while (autoFocus(false) == Tomo_OK);
+
+	constants.baseXr = -1;
+	constants.baseYr = -1;
+	constants.currXr = -1;
+	constants.currYr = -1;
 
 	return Tomo_OK;
 }

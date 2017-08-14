@@ -59,6 +59,10 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	logView = new wxMenuItem( view, wxID_ANY, wxString( wxT("Use Log Correction") ) + wxT('\t') + wxT("Ctrl+L"), wxEmptyString, wxITEM_NORMAL );
 	view->Append( logView );
 	
+	wxMenuItem* resetFocus;
+	resetFocus = new wxMenuItem( view, wxID_ANY, wxString( wxT("Reset Focus and Lighting") ) + wxT('\t') + wxT("Ctrl+F"), wxEmptyString, wxITEM_NORMAL );
+	view->Append( resetFocus );
+	
 	m_menubar1->Append( view, wxT("View") ); 
 	
 	calibration = new wxMenu();
@@ -128,6 +132,7 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	this->Connect( recontructionView->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onReconstructionView ) );
 	this->Connect( projectionView->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onProjectionView ) );
 	this->Connect( logView->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onLogView ) );
+	this->Connect( resetFocus->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onResetFocus ) );
 	this->Connect( resList->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onResList ) );
 	this->Connect( contList->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContList ) );
 	this->Connect( runTest->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onRunTest ) );
@@ -151,6 +156,7 @@ mainWindow::~mainWindow()
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onReconstructionView ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onProjectionView ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onLogView ) );
+	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onResetFocus ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onResList ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContList ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onRunTest ) );
