@@ -68,6 +68,10 @@
 #define MUL_ADD(a, b, c) ( __mul24((a), (b)) + (c) )
 #define UMUL(a, b) ( (a) * (b) )
 
+//Autoscale parameters
+#define AUTOTHRESHOLD 5000
+#define HISTLIMIT 10
+
 //defines from cuda example
 //TODO: merge into our architecture
 #define PARTIAL_HISTOGRAM256_COUNT 240
@@ -202,14 +206,21 @@ struct params {
 	float PitchPy;
 	float PitchRx;
 	float PitchRy;
-	float * Beamx;
-	float * Beamy;
-	float * Beamz;
+	float * h_Beamx;
+	float * h_Beamy;
+	float * h_Beamz;
+	float * d_Beamx;
+	float * d_Beamy;
+	float * d_Beamz;
 	int ReconPitchNum;
 	int ProjPitchNum;
 	bool orientation;
 	bool flip;
 	bool log;
+
+	//Display parameters
+	float minVal;
+	float maxVal;
 };
 
 struct toleranceData {
@@ -246,7 +257,8 @@ public:
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Lower level functions for user interactive debugging
 	TomoError correctProjections();
-	TomoError getHistogram(unsigned short * image, unsigned int byteSize, unsigned int *histogram);
+	template<typename T>
+	TomoError getHistogram(T * image, unsigned int byteSize, unsigned int *histogram);
 	TomoError singleFrame();
 	float getDistance();
 	TomoError autoFocus(bool firstRun);
@@ -361,9 +373,6 @@ private:
 	float * d_Image;
 	float * d_Error;
 	float * d_Sino;
-	float * beamx;
-	float * beamy;
-	float * beamz;
 	float * d_MaxVal;
 	float * d_MinVal;
 

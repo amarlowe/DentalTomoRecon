@@ -27,10 +27,6 @@ TomoRecon::~TomoRecon() {
 	cuda(StreamDestroy(stream));
 	FreeGPUMemory();
 	delete[] Sys->Proj.RawData;
-	delete[] Sys->Norm.GainData;
-	delete[] Sys->Norm.DarkData;
-	delete[] Sys->Norm.ProjBuf;
-	delete[] Sys->Norm.CorrBuf;
 	delete[] Sys->Geo.EmitX;
 	delete[] Sys->Geo.EmitY;
 	delete[] Sys->Geo.EmitZ;
