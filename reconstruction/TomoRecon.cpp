@@ -38,42 +38,14 @@ TomoRecon::~TomoRecon() {
 }
 
 TomoError TomoRecon::init(const char * gainFile, const char * darkFile, const char * mainFile) {
-	//Seperate base path from the example file path
-	char GetFilePath[MAX_PATH];
-	std::string BasePath;
-	std::string FilePath;
-	std::string FileName;
-	strcpy_s(GetFilePath, mainFile);
-	PathRemoveFileSpec(GetFilePath);
-	FileName = PathFindFileName(GetFilePath);
-	FilePath = GetFilePath;
-	PathRemoveFileSpec(GetFilePath);
-
-	//Define Base Path
-	BasePath = GetFilePath;
-	if (CheckFilePathForRepeatScans(BasePath)) {
-		FileName = PathFindFileName(GetFilePath);
-		FilePath = GetFilePath;
-		PathRemoveFileSpec(GetFilePath);
-		BasePath = GetFilePath;
-	}
-
-	//Output FilePaths
-	std::cout << "Reconstructing image set entitled: " << FileName << std::endl;
 	NumViews = NUMVIEWS;
 
 	//Step 3. Read the normalizaton data (dark and gain)
-	PathRemoveFileSpec(GetFilePath);
-	std::string GainPath = GetFilePath;
-	//	ReadDarkandGainImages(Sys, NumViews, GainPath);
-	tomo_err_throw(ReadDarkImages(darkFile));
-	tomo_err_throw(ReadGainImages(gainFile));
-
-	//Step 5. Read Raw Data
-	tomo_err_throw(ReadRawProjectionData(FilePath, mainFile));
+	//tomo_err_throw(ReadDarkImages(darkFile));
+	//tomo_err_throw(ReadGainImages(gainFile));
 
 	//Step 4. Set up the GPU for Reconstruction
-	tomo_err_throw(initGPU());
+	tomo_err_throw(initGPU(gainFile, darkFile, mainFile));
 	std::cout << "GPU Ready" << std::endl;
 
 	initialized = true;
@@ -86,7 +58,8 @@ TomoError TomoRecon::init(const char * gainFile, const char * darkFile, const ch
 }
 
 TomoError TomoRecon::TomoLoad(const char* file) {
-	char GetFilePath[MAX_PATH];
+	//TODO... again
+	/*char GetFilePath[MAX_PATH];
 	std::string BasePath;
 	std::string FilePath;
 	std::string FileName;
@@ -107,7 +80,7 @@ TomoError TomoRecon::TomoLoad(const char* file) {
 
 	tomo_err_throw(ReadRawProjectionData(FilePath, file));
 	correctProjections();
-	singleFrame();
+	singleFrame();*/
 
 	return Tomo_OK;
 }

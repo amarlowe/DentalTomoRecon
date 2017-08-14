@@ -60,6 +60,7 @@ TomoRecon
 - Zooming out then changing z distance causes a jump in offsets
 - GPU memory leaks abound
 - White artifacts around reconstruction corners
+- Flip causes pictures to go negative, not sure if we should fix/detect
 
 -------------Completed------------------
 -------------Features------------------

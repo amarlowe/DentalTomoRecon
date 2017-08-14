@@ -173,7 +173,7 @@ __global__ void squareDiff(float *d_Dst, int view, float xOff, float yOff, int p
 }
 
 //Display functions
-__global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, int index, float scale, int xOff, int yOff, int maxVal, int lightOff, bool log) {//float * maxVar, 
+__global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, int index, float scale, int xOff, int yOff, int maxVal, int lightOff, bool derDisplay, params consts) {//float * maxVar, 
 	// pixel coordinates
 	const int idx = (blockDim.x * blockIdx.x) + threadIdx.x;
 	const int x = idx % wOut;
@@ -186,7 +186,7 @@ __global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, int index,
 	if (i > 0 && j > 0 && i < wIn && j < hIn)
 		sum = tex2D(textImage, (float)i + 0.5f, (float)j + 0.5f + (float)(index * hIn));;
 
-	if (log) {
+	if (!derDisplay && consts.log) {
 		if(sum > 0)
 			sum = (logf((float)USHRT_MAX) - logf(sum)) / (logf((float)USHRT_MAX) - 1) * UCHAR_MAX;
 		if (sum > 0) sum += lightOff;
@@ -285,12 +285,14 @@ __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, flo
 
 	//Check image boundaries
 	if ((i < consts.Px) && (j < consts.Py)){
-		//Log correct the sample size
-		float sample = (float)Proj[j*consts.Px + i];
-		float val = logf(MaxVal) - logf(sample);
-		if (sample > MaxVal) val = 0.0f;
+		//Flip and invert while converting to float
+		int x, y;
+		if (consts.flip) x = consts.Px - i;
+		else x = i;
+		if (consts.orientation) y = consts.Py - j;
+		else y = j;
 
-		Sino[(j + view*consts.Py)*consts.ProjPitchNum + i] = sample;
+		Sino[(y + view*consts.Py)*consts.ProjPitchNum + x] = Proj[j*consts.Px + i];
 	}
 }
 
@@ -343,7 +345,7 @@ __global__ void projectSlice(float * IM, float distance, params consts) {
 	else IM[j*consts.ReconPitchNum + i] = 0;
 }
 
-//Functions to set the reconstructions to save and copy back to cpu
+//Ruduction and histogram functions
 __global__ void GetMaxImageVal(float * Image, int sizeIM, float * MaxVal){
 	//Define shared memory to read all the threads
 	extern __shared__ float data[];
@@ -501,12 +503,19 @@ __global__ void sumReduction(float * Image, int pitch, float * sum, int lowX, in
 	}
 }
 
+__global__ void histogram256Kernel(unsigned int *d_Histogram, unsigned short *d_Data, unsigned int dataCount) {
+	for (unsigned int pos = MUL_ADD(blockIdx.x, blockDim.x, threadIdx.x); pos < dataCount; pos += UMUL(blockDim.x, gridDim.x)) {
+		unsigned short data = d_Data[pos];
+		atomicAdd(d_Histogram + (data >> 8), 1);//bin by the upper 256 bits
+	}
+}
+
 /********************************************************************************************/
 /* Function to interface the CPU with the GPU:												*/
 /********************************************************************************************/
 
 //Function to set up the memory on the GPU
-TomoError TomoRecon::initGPU(){
+TomoError TomoRecon::initGPU(const char * gainFile, const char * darkFile, const char * mainFile){
 	//init recon space
 	Sys->Recon.Pitch_x = Sys->Proj.Pitch_x;
 	Sys->Recon.Pitch_y = Sys->Proj.Pitch_y;
@@ -605,6 +614,9 @@ TomoError TomoRecon::initGPU(){
 	constants.Beamx = beamx;
 	constants.Beamy = beamy;
 	constants.Beamz = beamz;
+	constants.log = true;
+	constants.orientation = true;
+	constants.flip = false;
 
 	int pitch = (int)projPitch / sizeof(float);
 	constants.ReconPitchNum = reconPitchNum;
@@ -642,6 +654,69 @@ TomoError TomoRecon::initGPU(){
 
 	cudaMemGetInfo(&avail_mem, &total_mem);
 	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
+
+	{//Read and correct projections
+		FILE * ProjData = NULL;
+		std::string ProjPath = mainFile;
+
+		//Read the rest of the blank images for given projection sample set 
+		for (int view = 0; view < NumViews; view++) {
+			fopen_s(&ProjData, ProjPath.c_str(), "rb");
+
+			if (ProjData == NULL)
+				return Tomo_file_err;
+
+			//Write the reconstructed data into the predefine memory location
+			fread(Sys->Proj.RawData + view * Sys->Proj.Nx * Sys->Proj.Ny,
+				sizeof(unsigned short), Sys->Proj.Nx * Sys->Proj.Ny, ProjData);
+			fclose(ProjData);
+
+			ProjPath = ProjPath.substr(0, ProjPath.length() - 5);
+			ProjPath += std::to_string(view) + ".raw";
+		}
+		/*
+		int loc1;
+		int GainLoc;
+		int DarkLoc;
+		int vnum = 0;
+		//Correct the Raw projections with the gain and dark images
+		vnum = 0;
+		for (int view = 0; view < NumViews; view++) {
+			for (int x = 0; x < Sys->Proj.Nx; x++) {
+				for (int y = 0; y < Sys->Proj.Ny; y++)
+				{
+					loc1 = (y + view*Sys->Proj.Ny)*Sys->Proj.Nx + x;
+					GainLoc = y*Sys->Proj.Nx + x + view*Sys->Proj.Nx*Sys->Proj.Ny;
+					DarkLoc = y*Sys->Proj.Nx + x;
+
+					unsigned short val = Sys->Norm.ProjBuf[loc1];
+					//unsigned short gval = Sys->Norm.GainData[GainLoc];
+					//					unsigned short dval = Sys->Norm->DarkData[DarkLoc];
+
+
+					//					float C_val = (float)(val)-(float)dval;
+					//					if (C_val < 1) C_val = 1;
+
+					//					float C_gval = (float)(gval)-(float)dval;
+
+					float C_val = (float)(val);
+					//float C_gval = (float)(gval);
+
+					//float n_val = C_val / C_gval;
+					//if (C_val + 25 > C_gval) n_val = 0.0;
+
+					int loc3 = (y + view*Sys->Proj.Ny)*Sys->Proj.Nx
+						+ Sys->Proj.Nx - (x + 1);
+
+					if (Sys->Proj.Flip == 1) {
+						loc3 = (y + view*Sys->Proj.Ny)*Sys->Proj.Nx + x;
+					}
+					Sys->Norm.CorrBuf[loc3] += C_val;
+
+				}
+			}
+		}*/
+	}
 
 	return Tomo_OK;
 }
@@ -686,6 +761,9 @@ TomoError TomoRecon::correctProjections() {
 	for (int view = 0; view < Sys->Proj.NumViews; view++) {
 		cuda(MemcpyAsync(d_Proj, Sys->Proj.RawData + view*size_proj, sizeProj, cudaMemcpyHostToDevice));
 
+		unsigned int histogram[HIST_BIN_COUNT];
+		getHistogram(d_Proj, projPitch*Sys->Proj.Ny, histogram);
+
 		KERNELCALL2(LogCorrectProj, dimGridProj, dimBlockProj, d_Sino, view, d_Proj, USHRT_MAX, constants);
 
 		KERNELCALL3(GetMaxImageVal, dimGridSum, dimBlockSum, 1024 * sizeof(float), d_Sino + projPixels*view, projPixels, d_MaxVal);
@@ -694,6 +772,22 @@ TomoError TomoRecon::correctProjections() {
 
 		KERNELCALL2(rescale, dimGridProj, dimBlockProj, d_Sino, view, d_MaxVal, d_MinVal, constants);
 	}
+
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::getHistogram(unsigned short * image, unsigned int byteSize, unsigned int *histogram) {
+	unsigned int * d_Histogram;
+
+	cuda(Malloc((void **)&d_Histogram, HIST_BIN_COUNT * sizeof(unsigned int)));
+	cuda(Memset(d_Histogram, 0, HIST_BIN_COUNT * sizeof(unsigned int)));
+
+	KERNELCALL2(histogram256Kernel, PARTIAL_HISTOGRAM256_COUNT, HISTOGRAM256_THREADBLOCK_SIZE, 
+		d_Histogram, image, byteSize / sizeof(unsigned int));
+
+	cuda(Memcpy(histogram, d_Histogram, HIST_BIN_COUNT * sizeof(unsigned int), cudaMemcpyDeviceToHost));
+
+	cuda(Free(d_Histogram));
 
 	return Tomo_OK;
 }
@@ -712,7 +806,7 @@ TomoError TomoRecon::test(int index) {
 
 	if (blocks > 0) {
 		KERNELCALL4(resizeKernelTex, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream,
-			Sys->Proj.Nx, Sys->Proj.Ny, width, height, index, scale, xOff, yOff, (int)(UCHAR_MAX / pow(LIGHTFACTOR, light)), LIGHTOFFFACTOR*lightOff, derDisplay == no_der);
+			Sys->Proj.Nx, Sys->Proj.Ny, width, height, index, scale, xOff, yOff, (int)(UCHAR_MAX / pow(LIGHTFACTOR, light)), LIGHTOFFFACTOR*lightOff, derDisplay != no_der, constants);
 		if (baseXr >= 0 && currXr >= 0)
 			KERNELCALL4(drawSelectionBox, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, I2D(max(baseXr, currXr), true),
 				I2D(max(baseYr, currYr), false), I2D(min(baseXr, currXr), true), I2D(min(baseYr, currYr), false), width);
@@ -768,6 +862,9 @@ TomoError TomoRecon::singleFrame() {
 		imageKernel(d_gauss, d_gaussDer3, d_Image);
 		break;
 	}
+
+	//unsigned int histogram[HIST_BIN_COUNT];
+	//getHistogram(d_Image, reconPitch*Sys->Recon.Ny * sizeof(unsigned short));
 
 	return Tomo_OK;
 }

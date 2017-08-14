@@ -66,6 +66,20 @@
 
 //Maps to single instruction in cuda
 #define MUL_ADD(a, b, c) ( __mul24((a), (b)) + (c) )
+#define UMUL(a, b) ( (a) * (b) )
+
+//defines from cuda example
+//TODO: merge into our architecture
+#define PARTIAL_HISTOGRAM256_COUNT 240
+#define LOG2_WARP_SIZE 5U
+#define UINT_BITS 32
+#define HIST_BIN_COUNT 256
+#define MERGE_THREADBLOCK_SIZE 256
+#define SHARED_MEMORY_BANKS 16
+#define HISTOGRAM64_THREADBLOCK_SIZE (4 * SHARED_MEMORY_BANKS)
+#define WARP_COUNT 6
+#define HISTOGRAM256_THREADBLOCK_SIZE (WARP_COUNT * WARPSIZE)
+#define HISTOGRAM256_THREADBLOCK_MEMORY (WARP_COUNT * HIST_BIN_COUNT)
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {										\
@@ -193,6 +207,9 @@ struct params {
 	float * Beamz;
 	int ReconPitchNum;
 	int ProjPitchNum;
+	bool orientation;
+	bool flip;
+	bool log;
 };
 
 struct toleranceData {
@@ -228,8 +245,8 @@ public:
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Lower level functions for user interactive debugging
-	TomoError LoadProjections(int index);
 	TomoError correctProjections();
+	TomoError getHistogram(unsigned short * image, unsigned int byteSize, unsigned int *histogram);
 	TomoError singleFrame();
 	float getDistance();
 	TomoError autoFocus(bool firstRun);
@@ -268,7 +285,6 @@ public:
 	int yOff = 0;
 	float scale = 1.5;
 	float distance = 0.0;
-	bool orientation = false;
 
 	//Selection variables
 
@@ -311,7 +327,7 @@ private:
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Functions to Initialize the GPU and set up the reconstruction normalization
-	TomoError initGPU();
+	TomoError initGPU(const char * gainFile, const char * darkFile, const char * mainFile);
 	TomoError setNOOP(float kernel[KERNELSIZE]);
 	TomoError setGauss(float kernel[KERNELSIZE]);
 	TomoError setGaussDer(float kernel[KERNELSIZE]);
@@ -339,7 +355,6 @@ private:
 	int GetNumProjectionViews(std::string BasePathIn);
 	TomoError ReadDarkImages(const char * darkFile);
 	TomoError ReadGainImages(const char * gainFile);
-	TomoError ReadRawProjectionData(std::string BaseFileIn, std::string FileName);
 
 	//Define data buffer
 	unsigned short * d_Proj;
