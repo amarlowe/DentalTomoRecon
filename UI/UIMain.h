@@ -197,6 +197,7 @@ protected:
 	void onDarkSelect(wxCommandEvent& event);
 	void onProjectionView(wxCommandEvent& event);
 	void onReconstructionView(wxCommandEvent& event);
+	void onLogView(wxCommandEvent& event);
 	void onResList(wxCommandEvent& event);
 	void onContList(wxCommandEvent& event);
 	void onRunTest(wxCommandEvent& event);

@@ -67,6 +67,7 @@ class mainWindow : public wxFrame
 		virtual void onDarkSelect( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onReconstructionView( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onProjectionView( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onLogView( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onResList( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onContList( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onRunTest( wxCommandEvent& event ) { event.Skip(); }

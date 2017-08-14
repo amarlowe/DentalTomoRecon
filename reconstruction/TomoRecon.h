@@ -71,19 +71,7 @@
 //Autoscale parameters
 #define AUTOTHRESHOLD 5000
 #define HISTLIMIT 10
-
-//defines from cuda example
-//TODO: merge into our architecture
-#define PARTIAL_HISTOGRAM256_COUNT 240
-#define LOG2_WARP_SIZE 5U
-#define UINT_BITS 32
 #define HIST_BIN_COUNT 256
-#define MERGE_THREADBLOCK_SIZE 256
-#define SHARED_MEMORY_BANKS 16
-#define HISTOGRAM64_THREADBLOCK_SIZE (4 * SHARED_MEMORY_BANKS)
-#define WARP_COUNT 6
-#define HISTOGRAM256_THREADBLOCK_SIZE (WARP_COUNT * WARPSIZE)
-#define HISTOGRAM256_THREADBLOCK_MEMORY (WARP_COUNT * HIST_BIN_COUNT)
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {										\
@@ -152,7 +140,6 @@ typedef enum {
 /* System Structures (All units are in millimeters)											*/
 /********************************************************************************************/
 struct Proj_Data {
-	unsigned short * RawData;				//Pointer to a buffer containing the raw data
 	int NumViews;							//The number of projection views the recon uses
 	float Pitch_x;							//The detector pixel pitch in the x direction
 	float Pitch_y;							//The detector pixel pithc in the y direction
@@ -172,14 +159,6 @@ struct SysGeometry {
 	std::string Name;						//A name of the emitter file
 };
 
-
-struct NormData {
-	unsigned short * GainData;				//A buffer to contain the gain images
-	unsigned short * DarkData;				//A buffer to contain the dark images
-	unsigned short * ProjBuf;				//A tempory buffer to read projections into
-	float * CorrBuf;						//A buffer to correct the and sum projections
-};
-
 struct ReconGeometry {
 	float Pitch_x;							//Recon Image pixel pitch in the x direction
 	float Pitch_y;							//Recon Image pixel pitch in the y direction
@@ -190,7 +169,6 @@ struct ReconGeometry {
 //Declare a structure containing other system description structures to pass info
 struct SystemControl {
 	struct Proj_Data Proj;
-	struct NormData Norm;
 	struct ReconGeometry Recon;
 	struct SysGeometry Geo;
 };
@@ -221,6 +199,12 @@ struct params {
 	//Display parameters
 	float minVal;
 	float maxVal;
+
+	//selection box parameters
+	int baseXr = -1;
+	int baseYr = -1;
+	int currXr = -1;
+	int currYr = -1;
 };
 
 struct toleranceData {
@@ -235,14 +219,12 @@ struct toleranceData {
 class TomoRecon : public interop {
 public:
 	//Functions
-	//////////////////////////////////////////////////////////////////////////////////////////////
 	//constructor/destructor
 	TomoRecon(int x, int y, struct SystemControl * Sys);
 	~TomoRecon();
 
 	TomoError init(const char * gainFile, const char * darkFile, const char * mainFile);
 
-	//////////////////////////////////////////////////////////////////////////////////////////////
 	//High level functions for command line call
 	TomoError TomoLoad(const char* file);
 	TomoError FreeGPUMemory(void);
@@ -254,15 +236,14 @@ public:
 	int I2D(int i, bool xDir);
 	int D2I(int d, bool xDir);
 
-	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Lower level functions for user interactive debugging
-	TomoError correctProjections();
 	template<typename T>
 	TomoError getHistogram(T * image, unsigned int byteSize, unsigned int *histogram);
 	TomoError singleFrame();
 	float getDistance();
 	TomoError autoFocus(bool firstRun);
 	TomoError autoGeo(bool firstRun);
+	TomoError autoLight();
 	TomoError readPhantom(float * resolution);
 	TomoError initTolerances(std::vector<toleranceData> &data, int numTests, std::vector<float> offsets);
 	TomoError testTolerances(std::vector<toleranceData> &data, bool firstRun);
@@ -272,6 +253,12 @@ public:
 	void map() { interop::map(stream); }
 	void unmap() { interop::unmap(stream); }
 	TomoError test(int index);
+
+	//Getters and setters
+	TomoError getLight(unsigned int * minVal, unsigned int * maxVal);
+	TomoError setLight(unsigned int minVal, unsigned int maxVal);
+	TomoError setLogView(bool useLog);
+	bool getLogView();
 
 	/********************************************************************************************/
 	/* Variables																				*/
@@ -298,6 +285,9 @@ public:
 	float scale = 1.5;
 	float distance = 0.0;
 
+	//Cuda constants
+	params constants;
+
 	//Selection variables
 
 	//box
@@ -313,13 +303,6 @@ public:
 	//upper tick
 	int upX = -1;
 	int upY = -1;
-
-	//coordinates w.r.t. recon
-	//box
-	int baseXr = -1;
-	int baseYr = -1;
-	int currXr = -1;
-	int currYr = -1;
 
 	//lower tick
 	int lowXr = -1;
@@ -369,7 +352,6 @@ private:
 	TomoError ReadGainImages(const char * gainFile);
 
 	//Define data buffer
-	unsigned short * d_Proj;
 	float * d_Image;
 	float * d_Error;
 	float * d_Sino;
@@ -397,9 +379,6 @@ private:
 	dim3 reductionBlocks;
 	dim3 reductionThreads;
 	int reductionSize = MAXTHREADS * sizeof(float);
-
-	//Cuda constants
-	params constants;
 
 	cudaStream_t stream;
 

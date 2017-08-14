@@ -119,8 +119,6 @@ TomoError DTRMainWindow::genSys(struct SystemControl * Sys) {
 		Sys->Geo.EmitZ[j] = pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"), j, 2), 0.0f);
 	}
 
-	Sys->Proj.RawData = new unsigned short[Sys->Proj.Nx*Sys->Proj.Ny * Sys->Proj.NumViews];
-
 	return Tomo_OK;
 }
 
@@ -176,6 +174,22 @@ void DTRMainWindow::onReconstructionView(wxCommandEvent& WXUNUSED(event)) {
 		wxICON_INFORMATION | wxOK);
 }
 
+void DTRMainWindow::onLogView(wxCommandEvent& WXUNUSED(event)) {
+	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
+		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
+		return;
+	}
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+	//wxMenuItem * logView = view->FindChildItem(view->FindItem("Use Log Correction"));
+
+	recon->setLogView(!recon->getLogView());
+	currentFrame->m_canvas->paint();
+	//logView->Check(!logView->IsChecked());//Toggle check
+	//recon->setLogView(logView->IsChecked());
+}
+
 void DTRMainWindow::onContinuous() {
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
@@ -184,13 +198,27 @@ void DTRMainWindow::onContinuous() {
 	wxStreamToTextRedirector redirect(m_textCtrl8);
 	m_statusBar1->SetFieldsCount(5, statusWidths);
 	recon->continuousMode = true;
-	recon->correctProjections();
+
 	recon->singleFrame();
 	recon->currentDisplay = recon_images;
 	currentFrame->m_scrollBar->SetThumbPosition(0);
 	currentFrame->m_canvas->OnScroll(0);
 	currentFrame->m_scrollBar->Show(false);
 	currentFrame->m_canvas->paint();
+
+	recon->constants.baseXr = 3 * recon->Sys->Recon.Nx / 4;
+	recon->constants.baseYr = 3 * recon->Sys->Recon.Ny / 4;
+	recon->constants.currXr = recon->Sys->Recon.Nx / 4;
+	recon->constants.currYr = recon->Sys->Recon.Ny / 4;
+
+	recon->autoFocus(true);
+	currentFrame->m_canvas->paint();
+	while (recon->autoFocus(false) == Tomo_OK) currentFrame->m_canvas->paint();
+
+	recon->constants.baseXr = -1;
+	recon->constants.baseYr = -1;
+	recon->constants.currXr = -1;
+	recon->constants.currYr = -1;
 }
 
 void DTRMainWindow::onConfig(wxCommandEvent& WXUNUSED(event)) {
@@ -869,10 +897,10 @@ void DTRResDialog::onAddNew(wxCommandEvent& event) {
 		m_listCtrl->SetItem(index, 7, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->upX - innerOffx) * scale + xOff)));
 		m_listCtrl->SetItem(index, 8, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->upY - innerOffy) * scale + yOff)));
 		m_listCtrl->SetItem(index, 9, vertical == wxYES ? wxT("Yes") : wxT("No"));
-		m_listCtrl->SetItem(index, 10, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->baseXr - innerOffx) * scale + xOff)));
-		m_listCtrl->SetItem(index, 11, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->baseYr - innerOffy) * scale + yOff)));
-		m_listCtrl->SetItem(index, 12, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->currXr - innerOffx) * scale + xOff)));
-		m_listCtrl->SetItem(index, 13, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->currYr - innerOffy) * scale + yOff)));
+		m_listCtrl->SetItem(index, 10, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->constants.baseXr - innerOffx) * scale + xOff)));
+		m_listCtrl->SetItem(index, 11, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->constants.baseYr - innerOffy) * scale + yOff)));
+		m_listCtrl->SetItem(index, 12, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->constants.currXr - innerOffx) * scale + xOff)));
+		m_listCtrl->SetItem(index, 13, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->constants.currYr - innerOffy) * scale + yOff)));
 	}
 }
 
@@ -1208,10 +1236,10 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
 		last_x_off = recon->xOff;
 		last_y_off = recon->yOff;
 		if (event.m_controlDown) {
-			recon->baseXr = recon->D2I(this_x, true);
-			recon->baseYr = recon->D2I(this_y, false);
-			recon->currXr = -1;
-			recon->currYr = -1;
+			recon->constants.baseXr = recon->D2I(this_x, true);
+			recon->constants.baseYr = recon->D2I(this_y, false);
+			recon->constants.currXr = -1;
+			recon->constants.currYr = -1;
 		}
 	}
 
@@ -1222,14 +1250,14 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
 				recon->yOff = last_y_off - (this_y - last_y)*recon->scale;
 			}
 			else {
-				recon->currXr = recon->D2I(this_x, true);
-				recon->currYr = recon->D2I(this_y, false);
+				recon->constants.currXr = recon->D2I(this_x, true);
+				recon->constants.currYr = recon->D2I(this_y, false);
 			}
 		}
 	}
 
 	if (event.LeftUp()) {
-		if (recon->baseXr >= 0 && recon->currXr >= 0) {
+		if (recon->constants.baseXr >= 0 && recon->constants.currXr >= 0) {
 			//if they're greater than 0, the box was clicked and dragged successfully
 			recon->autoFocus(true);
 			paint();
@@ -1242,8 +1270,8 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
 			}
 			
 			//cleanup
-			recon->baseXr = -1;
-			recon->currXr = -1;
+			recon->constants.baseXr = -1;
+			recon->constants.currXr = -1;
 			recon->lowXr = -1;
 			recon->upXr = -1;
 			recon->singleFrame();
@@ -1286,7 +1314,19 @@ void CudaGLCanvas::OnChar(wxKeyEvent& event){
 			break;
 		}
 
+		recon->constants.baseXr = 3 * recon->Sys->Recon.Nx / 4;
+		recon->constants.baseYr = 3 * recon->Sys->Recon.Ny / 4;
+		recon->constants.currXr = recon->Sys->Recon.Nx / 4;
+		recon->constants.currYr = recon->Sys->Recon.Ny / 4;
+
 		recon->singleFrame();
+		recon->autoLight();
+
+		recon->constants.baseXr = -1;
+		recon->constants.baseYr = -1;
+		recon->constants.currXr = -1;
+		recon->constants.currYr = -1;
+
 		paint();
 	}
 }
@@ -1424,10 +1464,10 @@ void CudaGLInCanvas::OnChar(wxKeyEvent& event) {
 				((GLWindow*)GetParent())->SetTitle(wxT("Select area of interest in the phantom with ctrl + mouse drag.Hit space once selected."));
 
 				//transfer box data to temporary storage internal to recon
-				recon->baseXr = recon->baseX;
-				recon->baseYr = recon->baseY;
-				recon->currXr = recon->currX;
-				recon->currYr = recon->currY;
+				recon->constants.baseXr = recon->baseX;
+				recon->constants.baseYr = recon->baseY;
+				recon->constants.currXr = recon->currX;
+				recon->constants.currYr = recon->currY;
 				recon->baseX = -1;
 				recon->baseY = -1;
 				recon->currX = -1;

@@ -173,41 +173,39 @@ __global__ void squareDiff(float *d_Dst, int view, float xOff, float yOff, int p
 }
 
 //Display functions
-__global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, int index, float scale, int xOff, int yOff, int maxVal, int lightOff, bool derDisplay, params consts) {//float * maxVar, 
+__global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, int index, float scale, int xOff, int yOff, bool derDisplay, params consts) {
 	// pixel coordinates
 	const int idx = (blockDim.x * blockIdx.x) + threadIdx.x;
 	const int x = idx % wOut;
 	const int y = idx / wOut;
 	bool negative = false;
+	bool saturate = false;
 
 	float sum = 0;
 	int i = (x - (wOut - wIn / scale) / 2)*scale + xOff;
 	int j = (y - (hOut - hIn / scale) / 2)*scale + yOff;
 	if (i > 0 && j > 0 && i < wIn && j < hIn)
-		sum = tex2D(textImage, (float)i + 0.5f, (float)j + 0.5f + (float)(index * hIn));;
+		sum = tex2D(textImage, (float)i + 0.5f, (float)j + 0.5f + (float)(index * hIn));
+
+	if (sum < 0) {
+		negative = true;
+		sum = abs(sum);
+	}
 
 	if (!derDisplay && consts.log) {
-		if(sum > 0)
-			sum = (logf((float)USHRT_MAX) - logf(sum)) / (logf((float)USHRT_MAX) - 1) * UCHAR_MAX;
-		if (sum > 0) sum += lightOff;
-		if (sum < 0) {
-			negative = true;
-			sum = abs(sum);
+		if (sum != 0) {
+			if (sum <= consts.minVal) sum = (float)consts.minVal;
+			float correctedMax = logf((float)consts.maxVal - consts.minVal + 1);
+			sum = (correctedMax - logf(sum - consts.minVal + 1)) / correctedMax * UCHAR_MAX;
 		}
-		if (sum > maxVal) sum = UCHAR_MAX;
-		else sum = sum / maxVal * UCHAR_MAX;
 	}
 	else {
 		sum = (sum - consts.minVal) / consts.maxVal * UCHAR_MAX;
-		if (sum < 0) {
-			negative = true;
-			sum = abs(sum);
-		}
+		saturate = sum > UCHAR_MAX;
 	}
-	
 
 	union pxl_rgbx_24 rgbx;
-	if (sum > 255) {
+	if (saturate) {
 		rgbx.na = 0xFF;
 		rgbx.r = 255;//flag errors with big red spots
 		rgbx.g = 0;
@@ -504,25 +502,20 @@ __global__ void sumReduction(float * Image, int pitch, float * sum, int lowX, in
 }
 
 template <typename T>
-__global__ void histogram256Kernel(unsigned int *d_Histogram, T *d_Data, unsigned int dataCount) {
-	for (unsigned int pos = MUL_ADD(blockIdx.x, blockDim.x, threadIdx.x); pos < dataCount; pos += UMUL(blockDim.x, gridDim.x)) {
-		unsigned short data = (unsigned short)d_Data[pos];//whatever it currently is, cast it to ushort
-		atomicAdd(d_Histogram + (data >> 8), 1);//bin by the upper 256 bits
-	}
-}
-
-__global__ void rescaleRecon(float * image, params consts) {
-	//Define pixel location in x and y
+__global__ void histogram256Kernel(unsigned int *d_Histogram, T *d_Data, unsigned int dataCount, params consts) {
+	//Define pixel location in x, y, and z
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
 
-	//Check image boundaries
-	if ((i < consts.Rx) && (j < consts.Ry)) {
-		float test = image[j*consts.ReconPitchNum + i];
-		if (test > 0) {
-			image[j*consts.ReconPitchNum + i] = (test - consts.minVal + 1.0f) / consts.maxVal * USHRT_MAX;//scale from 1 to max
-		}
-	}
+	int minX = min(consts.baseXr, consts.currXr);
+	int maxX = max(consts.baseXr, consts.currXr);
+	int minY = min(consts.baseYr, consts.currYr);
+	int maxY = max(consts.baseYr, consts.currYr);
+
+	if (i < minX || i > maxX || j < minY || j > maxY) return;
+
+	unsigned short data = (unsigned short)abs(d_Data[MUL_ADD(j, consts.ReconPitchNum, i)]);//whatever it currently is, cast it to ushort
+	atomicAdd(d_Histogram + (data >> 8), 1);//bin by the upper 256 bits
 }
 
 /********************************************************************************************/
@@ -541,10 +534,10 @@ TomoError TomoRecon::initGPU(const char * gainFile, const char * darkFile, const
 	Sys->Geo.IsoX = Sys->Geo.EmitX[NUMVIEWS / 2];
 	Sys->Geo.IsoY = Sys->Geo.EmitY[NUMVIEWS / 2];
 	Sys->Geo.IsoZ = Sys->Geo.EmitZ[NUMVIEWS / 2];
-	/*for (int i = 0; i < NUMVIEWS; i++) {
+	for (int i = 0; i < NUMVIEWS; i++) {
 		Sys->Geo.EmitX[i] -= Sys->Geo.IsoX;
 		Sys->Geo.EmitY[i] -= Sys->Geo.IsoY;
-	}*/
+	}
 
 	cudaMemGetInfo(&avail_mem, &total_mem);
 	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
@@ -592,7 +585,6 @@ TomoError TomoRecon::initGPU(const char * gainFile, const char * darkFile, const
 	sizeIM = reconPitch * Sys->Recon.Ny;
 	sizeError = reconPitch * Sys->Recon.Ny;
 	
-	cuda(Malloc((void**)&d_Proj, sizeProj));
 	cuda(Malloc((void**)&constants.d_Beamx, Sys->Proj.NumViews * sizeof(float)));
 	cuda(Malloc((void**)&constants.d_Beamy, Sys->Proj.NumViews * sizeof(float)));
 	cuda(Malloc((void**)&constants.d_Beamz, Sys->Proj.NumViews * sizeof(float)));
@@ -667,25 +659,54 @@ TomoError TomoRecon::initGPU(const char * gainFile, const char * darkFile, const
 	cudaMemGetInfo(&avail_mem, &total_mem);
 	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
 
+
 	{//Read and correct projections
+		unsigned short * RawData = new unsigned short[Sys->Proj.Nx*Sys->Proj.Ny];
+
+		int size_proj = Sys->Proj.Nx * Sys->Proj.Ny;
+		size_t sizeProj = size_proj * sizeof(unsigned short);
+
+		//define the GPU kernel based on size of "ideal projection"
+		dim3 dimBlockProj(32, 32);
+		dim3 dimGridProj((Sys->Proj.Nx + 31) / 32, (Sys->Proj.Ny + 31) / 32);
+
+		dim3 dimGridSum(1, 1);
+		dim3 dimBlockSum(1024, 1);
+
+		int projPixels = reconPitchNum * Sys->Proj.Ny;
+
 		FILE * ProjData = NULL;
 		std::string ProjPath = mainFile;
+		unsigned short * d_Proj;
+		cuda(Malloc((void**)&d_Proj, sizeProj));
 
 		//Read the rest of the blank images for given projection sample set 
 		for (int view = 0; view < NumViews; view++) {
+			ProjPath = ProjPath.substr(0, ProjPath.length() - 5);
+			ProjPath += std::to_string(view) + ".raw";
+
 			fopen_s(&ProjData, ProjPath.c_str(), "rb");
 
 			if (ProjData == NULL)
 				return Tomo_file_err;
 
 			//Write the reconstructed data into the predefine memory location
-			fread(Sys->Proj.RawData + view * Sys->Proj.Nx * Sys->Proj.Ny,
-				sizeof(unsigned short), Sys->Proj.Nx * Sys->Proj.Ny, ProjData);
+			fread(RawData, sizeof(unsigned short), Sys->Proj.Nx * Sys->Proj.Ny, ProjData);
 			fclose(ProjData);
 
-			ProjPath = ProjPath.substr(0, ProjPath.length() - 5);
-			ProjPath += std::to_string(view) + ".raw";
+			cuda(MemcpyAsync(d_Proj, RawData, sizeProj, cudaMemcpyHostToDevice));
+
+			KERNELCALL2(LogCorrectProj, dimGridProj, dimBlockProj, d_Sino, view, d_Proj, USHRT_MAX, constants);
+
+			KERNELCALL3(GetMaxImageVal, dimGridSum, dimBlockSum, 1024 * sizeof(float), d_Sino + projPixels*view, projPixels, d_MaxVal);
+
+			KERNELCALL3(GetMinImageVal, dimGridSum, dimBlockSum, 1024 * sizeof(float), d_Sino + projPixels*view, projPixels, d_MinVal);
+
+			KERNELCALL2(rescale, dimGridProj, dimBlockProj, d_Sino, view, d_MaxVal, d_MinVal, constants);
 		}
+
+		delete[] RawData;
+		cuda(Free(d_Proj));
 		/*
 		int loc1;
 		int GainLoc;
@@ -730,13 +751,14 @@ TomoError TomoRecon::initGPU(const char * gainFile, const char * darkFile, const
 		}*/
 	}
 
+	
+
 	return Tomo_OK;
 }
 
 //Fucntion to free the gpu memory after program finishes
 TomoError TomoRecon::FreeGPUMemory(void){
 	//Free memory allocated on the GPU
-	cuda(Free(d_Proj));
 	cuda(Free(d_Image));
 	cuda(Free(d_Error));
 	cuda(Free(d_Sino));
@@ -755,39 +777,6 @@ TomoError TomoRecon::FreeGPUMemory(void){
 	return Tomo_OK;
 }
 
-TomoError TomoRecon::correctProjections() {
-	//Define memory size of the raw data as unsigned short
-	int size_proj = Sys->Proj.Nx * Sys->Proj.Ny;
-	size_t sizeProj = size_proj * sizeof(unsigned short);
-
-	//define the GPU kernel based on size of "ideal projection"
-	dim3 dimBlockProj(32, 32);
-	dim3 dimGridProj((Sys->Proj.Nx+31) / 32, (Sys->Proj.Ny+31)/ 32);
-
-	dim3 dimGridSum(1, 1);
-	dim3 dimBlockSum(1024, 1);
-
-	int projPixels = reconPitchNum * Sys->Proj.Ny;
-
-	//Cycle through each stream and do simple log correction
-	for (int view = 0; view < Sys->Proj.NumViews; view++) {
-		cuda(MemcpyAsync(d_Proj, Sys->Proj.RawData + view*size_proj, sizeProj, cudaMemcpyHostToDevice));
-
-		unsigned int histogram[HIST_BIN_COUNT];
-		getHistogram(d_Proj, Sys->Proj.Ny*Sys->Proj.Ny*sizeof(unsigned short), histogram);
-
-		KERNELCALL2(LogCorrectProj, dimGridProj, dimBlockProj, d_Sino, view, d_Proj, USHRT_MAX, constants);
-
-		KERNELCALL3(GetMaxImageVal, dimGridSum, dimBlockSum, 1024 * sizeof(float), d_Sino + projPixels*view, projPixels, d_MaxVal);
-
-		KERNELCALL3(GetMinImageVal, dimGridSum, dimBlockSum, 1024 * sizeof(float), d_Sino + projPixels*view, projPixels, d_MinVal);
-
-		KERNELCALL2(rescale, dimGridProj, dimBlockProj, d_Sino, view, d_MaxVal, d_MinVal, constants);
-	}
-
-	return Tomo_OK;
-}
-
 template <typename T>
 TomoError TomoRecon::getHistogram(T * image, unsigned int byteSize, unsigned int *histogram) {
 	unsigned int * d_Histogram;
@@ -795,8 +784,7 @@ TomoError TomoRecon::getHistogram(T * image, unsigned int byteSize, unsigned int
 	cuda(Malloc((void **)&d_Histogram, HIST_BIN_COUNT * sizeof(unsigned int)));
 	cuda(Memset(d_Histogram, 0, HIST_BIN_COUNT * sizeof(unsigned int)));
 
-	KERNELCALL2(histogram256Kernel, PARTIAL_HISTOGRAM256_COUNT, HISTOGRAM256_THREADBLOCK_SIZE, 
-		d_Histogram, image, byteSize / sizeof(T));
+	KERNELCALL2(histogram256Kernel, contBlocks, contThreads, d_Histogram, image, byteSize / sizeof(T), constants);
 
 	cuda(Memcpy(histogram, d_Histogram, HIST_BIN_COUNT * sizeof(unsigned int), cudaMemcpyDeviceToHost));
 
@@ -819,10 +807,10 @@ TomoError TomoRecon::test(int index) {
 
 	if (blocks > 0) {
 		KERNELCALL4(resizeKernelTex, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream,
-			Sys->Proj.Nx, Sys->Proj.Ny, width, height, index, scale, xOff, yOff, (int)(UCHAR_MAX / pow(LIGHTFACTOR, light)), LIGHTOFFFACTOR*lightOff, derDisplay != no_der, constants);
-		if (baseXr >= 0 && currXr >= 0)
-			KERNELCALL4(drawSelectionBox, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, I2D(max(baseXr, currXr), true),
-				I2D(max(baseYr, currYr), false), I2D(min(baseXr, currXr), true), I2D(min(baseYr, currYr), false), width);
+			Sys->Proj.Nx, Sys->Proj.Ny, width, height, index, scale, xOff, yOff, derDisplay != no_der, constants);
+		if (constants.baseXr >= 0 && constants.currXr >= 0)
+			KERNELCALL4(drawSelectionBox, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, I2D(max(constants.baseXr, constants.currXr), true),
+				I2D(max(constants.baseYr, constants.currYr), false), I2D(min(constants.baseXr, constants.currXr), true), I2D(min(constants.baseYr, constants.currYr), false), width);
 		if (lowXr >= 0)
 			KERNELCALL4(drawSelectionBar, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, I2D(lowXr, true), I2D(lowYr, false), width, vertical);
 		if (upXr >= 0)
@@ -875,33 +863,6 @@ TomoError TomoRecon::singleFrame() {
 		imageKernel(d_gauss, d_gaussDer3, d_Image);
 		break;
 	}
-
-	dim3 dimBlockRecon(32, 32);
-	dim3 dimGridRecon((Sys->Recon.Nx + 31) / 32, (Sys->Recon.Ny + 31) / 32);
-
-	unsigned int histogram[HIST_BIN_COUNT];
-	getHistogram(d_Image, reconPitch*Sys->Recon.Ny, histogram);
-
-	int threshold = Sys->Recon.Nx * Sys->Recon.Ny / AUTOTHRESHOLD;
-	int limit = Sys->Recon.Nx * Sys->Recon.Ny / HISTLIMIT;
-
-	int i;
-	for (i = 0; i < HIST_BIN_COUNT; i++) {
-		unsigned int count = histogram[i];
-		if (count > limit) count = 0;//Too many in a bin points to lack of information
-		if (count > threshold) break;
-	}
-	constants.minVal = i * UCHAR_MAX;
-
-	//go from the reverse direction for maxval
-	for (i = HIST_BIN_COUNT; i >= 0; i--) {
-		unsigned int count = histogram[i];
-		if (count > limit) count = 0;//Too many in a bin points to lack of information
-		if (count > threshold) break;
-	}
-	constants.maxVal = i * UCHAR_MAX;
-
-	//KERNELCALL2(rescaleRecon, dimGridRecon, dimBlockRecon, d_Image, constants);
 
 	return Tomo_OK;
 }
@@ -958,6 +919,8 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 				if (abs(step) < LASTSTEP) {
 					light = oldLight;
 					derDisplay = no_der;
+					singleFrame();
+					autoLight();
 					return Tomo_Done;
 				}
 				else distance += step;
@@ -1032,14 +995,39 @@ TomoError TomoRecon::autoGeo(bool firstRun) {
 	return Tomo_Done;
 }
 
+TomoError TomoRecon::autoLight() {
+	unsigned int histogram[HIST_BIN_COUNT];
+	getHistogram(d_Image, reconPitch*Sys->Recon.Ny, histogram);
+
+	int threshold = Sys->Recon.Nx * Sys->Recon.Ny / AUTOTHRESHOLD;
+	int i;
+	for (i = 0; i < HIST_BIN_COUNT; i++) {
+		unsigned int count = histogram[i];
+		if (count > threshold) break;
+	}
+	if (i >= HIST_BIN_COUNT) i = 0;
+	constants.minVal = i * UCHAR_MAX;
+
+	//go from the reverse direction for maxval
+	for (i = HIST_BIN_COUNT - 1; i >= 0; i--) {
+		unsigned int count = histogram[i];
+		if (count > threshold) break;
+	}
+	if (i < 0) i = HIST_BIN_COUNT;
+	constants.maxVal = i * UCHAR_MAX;
+	if (constants.minVal == constants.maxVal) constants.maxVal += UCHAR_MAX;
+
+	return Tomo_OK;
+}
+
 TomoError TomoRecon::readPhantom(float * resolution) {
 	if (vertical) {
 		float phanScale = (lowYr - upYr) / (1/LOWERBOUND - 1/UPPERBOUND);
 		float * h_xDer2 = (float*)malloc(reconPitch*Sys->Recon.Ny);
 		cuda(Memcpy(h_xDer2, d_Image, reconPitch*Sys->Recon.Ny, cudaMemcpyDeviceToHost));
 		//Get x range from the bouding box
-		int startX = min(baseXr, currXr);
-		int endX = max(baseXr, currXr);
+		int startX = min(constants.baseXr, constants.currXr);
+		int endX = max(constants.baseXr, constants.currXr);
 		int thisY = lowYr;//Get beginning y val from tick mark
 		while (thisY >= upYr) {//y counts down
 			int thisX = startX;
@@ -1083,8 +1071,8 @@ TomoError TomoRecon::readPhantom(float * resolution) {
 		float * h_yDer2 = (float*)malloc(reconPitchNum*Sys->Recon.Ny * sizeof(float));
 		cuda(Memcpy(h_yDer2, d_Image, reconPitchNum*Sys->Recon.Ny * sizeof(float), cudaMemcpyDeviceToHost));
 		//Get x range from the bouding box
-		int startY = min(baseYr, currYr);
-		int endY = max(baseYr, currYr);
+		int startY = min(constants.baseYr, constants.currYr);
+		int endY = max(constants.baseYr, constants.currYr);
 		int thisX = lowXr;//Get beginning y val from tick mark
 		while (thisX >= upXr) {//y counts down
 			int thisY = startY;
@@ -1124,10 +1112,6 @@ TomoError TomoRecon::readPhantom(float * resolution) {
 	}
 
 	return Tomo_OK;
-}
-
-inline float TomoRecon::getDistance() {
-	return distance;
 }
 
 TomoError TomoRecon::initTolerances(std::vector<toleranceData> &data, int numTests, std::vector<float> offsets) {
@@ -1255,16 +1239,9 @@ TomoError TomoRecon::testTolerances(std::vector<toleranceData> &data, bool first
 	return Tomo_OK;
 }
 
-TomoError TomoRecon::setReconBox(int index) {
-	P2R(&upXr, &upYr, upX, upY, 0);
-	P2R(&lowXr, &lowYr, lowX, lowY, 0);
-	P2R(&currXr, &currYr, currX, currY, 0);
-	P2R(&baseXr, &baseYr, baseX, baseY, 0);
-
-	return Tomo_OK;
-}
-
-//Kernel launch helpers
+/****************************************************************************/
+/*								Kernel launch helpers						*/
+/****************************************************************************/
 
 inline float TomoRecon::focusHelper() {
 	//Render new frame
@@ -1274,7 +1251,9 @@ inline float TomoRecon::focusHelper() {
 	float currentBest;
 	cuda(MemsetAsync(d_MaxVal, 0, sizeof(float)));
 	//TODO: check boundary conditions
-	KERNELCALL3(sumReduction, reductionBlocks, reductionThreads, reductionSize, d_Image, reconPitchNum, d_MaxVal, min(baseXr, currXr), max(baseXr, currXr), min(baseYr, currYr), max(baseYr, currYr));
+	KERNELCALL3(sumReduction, reductionBlocks, reductionThreads, reductionSize, d_Image, reconPitchNum, d_MaxVal, 
+		min(constants.baseXr, constants.currXr), max(constants.baseXr, constants.currXr), min(constants.baseYr, constants.currYr), max(constants.baseYr, constants.currYr));
+
 	cuda(Memcpy(&currentBest, d_MaxVal, sizeof(float), cudaMemcpyDeviceToHost));
 	return currentBest;
 }
@@ -1291,7 +1270,9 @@ inline TomoError TomoRecon::imageKernel(float xK[KERNELSIZE], float yK[KERNELSIZ
 	return Tomo_OK;
 }
 
-//Coordinate pair conversions
+/****************************************************************************/
+/*									Conversions								*/
+/****************************************************************************/
 
 //Projection space to recon space
 TomoError TomoRecon::P2R(int* rX, int* rY, int pX, int pY, int view) {
