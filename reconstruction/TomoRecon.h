@@ -31,7 +31,7 @@
 #pragma comment(lib, "Shlwapi.lib")
 
 #define NUMVIEWS 7
-//#define PROFILER
+#define PROFILER
 #define ITERATIONS 7
 #define DECAY 0.8f
 #define MAXZOOM 30
@@ -89,6 +89,7 @@
 typedef enum {
 	Tomo_OK,
 	Tomo_input_err,
+	Tomo_invalid_arg,
 	Tomo_file_err,
 	Tomo_DICOM_err,
 	Tomo_CUDA_err,
@@ -156,7 +157,6 @@ struct SysGeometry {
 	float IsoY;								//Location of the system isocenter in y direction
 	float IsoZ;								//Location of the system isocenter in z direction
 	float ZPitch;							//The distance between slices
-	std::string Name;						//A name of the emitter file
 };
 
 struct ReconGeometry {
@@ -257,6 +257,8 @@ public:
 	//Getters and setters
 	TomoError getLight(unsigned int * minVal, unsigned int * maxVal);
 	TomoError setLight(unsigned int minVal, unsigned int maxVal);
+	TomoError addMaxLight(int amount);
+	TomoError addMinLight(int amount);
 	TomoError resetLight();
 	TomoError resetFocus();
 	TomoError setLogView(bool useLog);
@@ -266,12 +268,6 @@ public:
 	/* Variables																				*/
 	/********************************************************************************************/
 	bool initialized = false;
-
-#ifdef PROFILER
-	display_t currentDisplay = recon_images;
-#else
-	display_t currentDisplay = raw_images;
-#endif
 
 	struct SystemControl * Sys;
 	int NumViews;

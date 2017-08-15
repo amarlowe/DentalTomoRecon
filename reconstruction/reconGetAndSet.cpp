@@ -4,19 +4,31 @@
 /*								Getters and Setters							*/
 /****************************************************************************/
 
-inline TomoError TomoRecon::getLight(unsigned int * minVal, unsigned int * maxVal) {
+TomoError TomoRecon::getLight(unsigned int * minVal, unsigned int * maxVal) {
 	*minVal = constants.minVal;
 	*maxVal = constants.maxVal;
 	return Tomo_OK;
 }
 
-inline TomoError TomoRecon::setLight(unsigned int minVal, unsigned int maxVal) {
+TomoError TomoRecon::setLight(unsigned int minVal, unsigned int maxVal) {
 	constants.minVal = minVal;
 	constants.maxVal = maxVal;
 	return Tomo_OK;
 }
 
+TomoError TomoRecon::addMaxLight(int amount) {
+	int append = UCHAR_MAX * amount;
+	if (append > USHRT_MAX - constants.maxVal || append <= constants.minVal - constants.maxVal) return Tomo_invalid_arg;
+	constants.maxVal += append;
+	return Tomo_OK;
+}
 
+TomoError TomoRecon::addMinLight(int amount) {
+	int append = UCHAR_MAX * amount;
+	if (append < -constants.minVal || append >= constants.maxVal - constants.minVal) return Tomo_invalid_arg;
+	constants.minVal += append;
+	return Tomo_OK;
+}
 
 bool TomoRecon::getLogView() {
 	return constants.log;
@@ -27,7 +39,7 @@ TomoError TomoRecon::setLogView(bool useLog) {
 	return Tomo_OK;
 }
 
-inline float TomoRecon::getDistance() {
+float TomoRecon::getDistance() {
 	return distance;
 }
 

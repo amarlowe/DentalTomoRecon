@@ -621,7 +621,7 @@ TomoError TomoRecon::initGPU(const char * gainFile, const char * darkFile, const
 	constants.PitchRx = Sys->Recon.Pitch_x;
 	constants.PitchRy = Sys->Recon.Pitch_y;
 	constants.Views = Sys->Proj.NumViews;
-	constants.log = false;
+	constants.log = true;
 	constants.orientation = true;
 	constants.flip = false;
 

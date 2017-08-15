@@ -206,14 +206,14 @@ protected:
 	void onAutoGeo(wxCommandEvent& event);
 	void onPageChange(wxCommandEvent& event);
 
-	void onContinuous();
-
 	//constant globals
 	const int NumViews = NUMVIEWS;
 
 public:
 	// Generate a System object from config file
 	TomoError genSys(struct SystemControl * Sys);
+
+	void onContinuous();
 
 	// Constructor
 	DTRMainWindow(wxWindow* parent);

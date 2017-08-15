@@ -27,9 +27,10 @@ bool MyApp::OnInit(){
 	DTRMainWindow *frame = new DTRMainWindow(NULL);
 
 #ifdef PROFILER
+	wxString filename = wxT("C:\\Users\\jdean\\Desktop\\Patient18\\AcquiredImage1_0.raw");
 	frame->Show(true);
 	static unsigned s_pageAdded = 0;
-	frame->m_auinotebook6->AddPage(frame->CreateNewPage(),
+	frame->m_auinotebook6->AddPage(frame->CreateNewPage(filename),
 		wxString::Format
 		(
 			wxT("%u"),
@@ -37,7 +38,7 @@ bool MyApp::OnInit(){
 		),
 		true);
 	wxCommandEvent test;
-	frame->onContRun(test);
+	frame->onContinuous();
 	exit(0);
 #else
 	frame->Show(true);
@@ -78,9 +79,6 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 	(*m_textCtrl8) << "Opening new tab titled: \"" << (int)s_pageAdded << "\"\n";
 
 	//Step 1: Get and example file for get the path
-#ifdef PROFILER
-	wxString filename = wxT("C:\\Users\\jdean\\Desktop\\Patient18\\AcquiredImage1_0.raw");
-#else
 	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
 		"Raw File (*.raw)|*.raw", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
@@ -88,7 +86,6 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 		return;
 
 	wxString filename(openFileDialog.GetPath());
-#endif
 
 	m_auinotebook6->AddPage(CreateNewPage(filename), wxString::Format(wxT("%u"), s_pageAdded++), true);
 	onContinuous();
@@ -153,7 +150,6 @@ void DTRMainWindow::onOpen(wxCommandEvent& WXUNUSED(event)) {
 	
 	wxStreamToTextRedirector redirect(m_textCtrl8);
 	recon->TomoLoad(filename.mb_str());
-	recon->currentDisplay = recon_images;
 	currentFrame->m_canvas->paint();
 }
 
@@ -210,7 +206,6 @@ void DTRMainWindow::onContinuous() {
 	recon->continuousMode = true;
 
 	recon->singleFrame();
-	recon->currentDisplay = recon_images;
 	currentFrame->m_scrollBar->SetThumbPosition(0);
 	currentFrame->m_canvas->OnScroll(0);
 	currentFrame->m_scrollBar->Show(false);
@@ -1062,7 +1057,7 @@ void GLFrame::OnMousewheel(wxMouseEvent& event) {
 	//GetKeyboardState()
 	int newScrollPos = event.GetWheelRotation() / 120;
 	if (event.m_controlDown && event.m_altDown) {
-		m_canvas->recon->lightOff += newScrollPos;
+		m_canvas->recon->addMinLight(newScrollPos);
 	}
 	else if (event.m_controlDown) {
 		m_canvas->recon->zoom += newScrollPos;
@@ -1071,7 +1066,7 @@ void GLFrame::OnMousewheel(wxMouseEvent& event) {
 		m_canvas->recon->yOff += (event.GetY() - GetSize().y / 2)*m_canvas->recon->scale / 10 * newScrollPos;// - GetScreenPosition().y
 	}
 	else if (event.m_altDown) {
-		m_canvas->recon->light += newScrollPos;
+		m_canvas->recon->addMaxLight(newScrollPos);
 	}
 	else {
 		if (m_canvas->recon->continuousMode) {
@@ -1123,7 +1118,7 @@ void GLWindow::OnMousewheel(wxMouseEvent& event) {
 	//GetKeyboardState()
 	int newScrollPos = event.GetWheelRotation() / 120;
 	if (event.m_controlDown && event.m_altDown) {
-		m_canvas->recon->lightOff += newScrollPos;
+		m_canvas->recon->addMinLight(newScrollPos);
 		m_canvas->paint();
 	}
 	else if (event.m_controlDown) {
@@ -1134,8 +1129,7 @@ void GLWindow::OnMousewheel(wxMouseEvent& event) {
 		m_canvas->recon->yOff += (event.GetY() - GetSize().y / 2)*m_canvas->recon->scale / 10 * newScrollPos;// - GetScreenPosition().y
 	}
 	else if (event.m_altDown) {
-		m_canvas->recon->light += newScrollPos;
-		//if (m_canvas->recon->light < 0) m_canvas->recon->light = 0;
+		m_canvas->recon->addMaxLight(newScrollPos);
 		m_canvas->paint();
 	}
 }
