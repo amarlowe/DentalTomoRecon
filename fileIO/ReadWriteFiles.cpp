@@ -25,7 +25,7 @@ bool CheckFileName(std::string Name)
 {
 	bool ValidName = false;
 	if (Name != "." && Name != ".." && Name != "blank"
-		&& Name != "dark.dcm" && Name != "Source_Sequence.txt" && Name!="AVG") {
+		&& Name != "dark.dcm" && Name != "Source_Sequence.txt" && Name != "AVG") {
 		ValidName = true;
 	}
 	return (ValidName);
@@ -36,15 +36,15 @@ bool CheckDirName(std::string Name)
 	bool ValidName = false;
 	std::string endstr;
 	endstr = Name;
-	endstr.erase(0,endstr.length() - 4);
-	if(endstr != ".raw" && Name != "." && Name != ".." && Name != "blank"
+	endstr.erase(0, endstr.length() - 4);
+	if (endstr != ".raw" && Name != "." && Name != ".." && Name != "blank"
 		&& Name != "dark.dcm" && Name != "Source_Sequence.txt" && Name != "AVG") {
 		ValidName = true;
 	}
 	return (ValidName);
 }
 
-BOOL TomoRecon::CheckFilePathForRepeatScans(std::string BasePathIn){
+BOOL TomoRecon::CheckFilePathForRepeatScans(std::string BasePathIn) {
 	std::string BasePath;
 	BasePath = BasePathIn + "/*";
 	WIN32_FIND_DATA FindFile;
@@ -80,7 +80,7 @@ BOOL TomoRecon::CheckFilePathForRepeatScans(std::string BasePathIn){
 
 
 //Simple Function to count the number example images
-int TomoRecon::GetNumberOfScans(std::string BasePathIn){
+int TomoRecon::GetNumberOfScans(std::string BasePathIn) {
 	int NumScans = 0;
 	bool MoreViews = true;
 
@@ -92,14 +92,10 @@ int TomoRecon::GetNumberOfScans(std::string BasePathIn){
 	hfind = FindFirstFile(BasePath.c_str(), &FindFile);
 	if (hfind != INVALID_HANDLE_VALUE) {
 		if (CheckDirName(std::string(FindFile.cFileName))) NumScans++;
-		//if (CheckFileName(std::string(FindFile.cFileName))) NumScans++;
 	}
 	while (MoreViews) {
 		if (FindNextFile(hfind, &FindFile)) {
 			if (CheckDirName(std::string(FindFile.cFileName))) NumScans++;
-			//if (CheckFileName(std::string(FindFile.cFileName))) {
-			//	NumScans++;
-		//	}
 		}
 		else {
 			MoreViews = false;
@@ -111,7 +107,7 @@ int TomoRecon::GetNumberOfScans(std::string BasePathIn){
 }
 
 //Function to determine how many files exist to be averaged together
-int TomoRecon::GetNumOfProjectionsPerView(std::string BasePathIn){
+int TomoRecon::GetNumOfProjectionsPerView(std::string BasePathIn) {
 	int NumProjections = 0;
 	bool MoreFolders = true;
 	bool MoreProjections = true;
@@ -156,7 +152,7 @@ int TomoRecon::GetNumOfProjectionsPerView(std::string BasePathIn){
 }
 
 //Get the number of views to use for the reconstruction
-int TomoRecon::GetNumProjectionViews(std::string BasePathIn){
+int TomoRecon::GetNumProjectionViews(std::string BasePathIn) {
 	int NumViews = 0;
 	bool MoreFolders = true;
 	bool MoreProjections = true;
@@ -215,7 +211,7 @@ int TomoRecon::GetNumProjectionViews(std::string BasePathIn){
 }
 
 //Read a subset of the total views
-TomoError ReadSubSetViews(struct SystemControl * Sys, int NumViews, std::string BasePathIn){
+TomoError ReadSubSetViews(struct SystemControl * Sys, int NumViews, std::string BasePathIn) {
 	std::string FilePath = BasePathIn + "/Source_Sequence.txt";
 
 	//Open fstream to text file
@@ -267,46 +263,9 @@ TomoError ReadSubSetViews(struct SystemControl * Sys, int NumViews, std::string 
 	return Tomo_OK;
 }
 
-TomoError TomoRecon::ReadDarkImages(const char * darkFile){
+TomoError TomoRecon::GetGainAverages(const char * gainFile) {
 	int size_single_proj = Sys->Proj.Nx * Sys->Proj.Ny;
-	int size_single_proj_bytes = size_single_proj * 2;
-
-	//Allocate memory to each buffer
-	Sys->Norm.DarkData = new unsigned short[size_single_proj];
-
-	//Define paths to dark data
-	char temp[MAX_PATH];
-	strncpy(temp, darkFile, MAX_PATH - 1);
-	PathRemoveFileSpec(temp);
-	std::string DarkPath = temp;
-
-	std::string avgFilePath;
-	avgFilePath = DarkPath + "\\average.raw";
-
-	int status = 0;
-
-	FILE* fileptr = NULL;
-
-	fopen_s(&fileptr, avgFilePath.c_str(), "rb");
-
-	if (fileptr == NULL)
-	{
-		std::cout << "Error opening the file: " << avgFilePath.c_str() << std::endl;
-		std::cout << "Please check the path and re-run the program." << std::endl;
-		status = 1;
-		return Tomo_file_err;
-	}
-
-	fread(Sys->Norm.DarkData, sizeof(USHORT), size_single_proj, fileptr);
-
-	fclose(fileptr);
-
-	return Tomo_OK;
-}
-
-TomoError TomoRecon::ReadGainImages(const char * gainFile){
-	int size_single_proj = Sys->Proj.Nx * Sys->Proj.Ny;
-	int size_single_proj_bytes = size_single_proj * 2;
+	int size_single_proj_bytes = size_single_proj * sizeof(unsigned short);
 
 	char temp[MAX_PATH];
 	strncpy(temp, gainFile, MAX_PATH - 1);
@@ -324,188 +283,122 @@ TomoError TomoRecon::ReadGainImages(const char * gainFile){
 	int size_gain_buf = size_single_proj * NumViews;
 
 	//Allocate memory to each buffer
-	Sys->Norm.GainData = new unsigned short[size_gain_buf];
-
-	bool foundAvgFile = false;
+	unsigned short * GainData = new unsigned short[size_gain_buf];
 
 	std::string Path;
-	std::string tempfilename;
-	//write average file
-	for (int view = 0; view < NumViews; view++)
-	{
-		if (!orientation)
-			Path = avgFilePath + "\\right\\average_";
-		else
-			Path = avgFilePath + "\\left\\average_";
-
-		tempfilename = std::to_string(view);
-		Path = Path + tempfilename + ".raw";
-
-		fopen_s(&fileptr, Path.c_str(), "rb");
-		if (fileptr != NULL)
-		{
-			foundAvgFile = true;
-
-			fread(&(Sys->Norm.GainData[view*size_single_proj]), sizeof(USHORT), size_single_proj, fileptr);
-			fclose(fileptr);
-		}
-		else
-			foundAvgFile = false;
+	std::string tempPath;
+	if (!constants.orientation) {
+		Path = avgFilePath + "\\right\\average_";
+		gainSearchPath = GainPath + "\\right";
+	}
+	else {
+		Path = avgFilePath + "\\left\\average_";
+		gainSearchPath = GainPath + "\\left";
 	}
 
-	if (!foundAvgFile)
-	{
-		if (!orientation)
-			gainSearchPath = GainPath + "\\right";
-		else
-			gainSearchPath = GainPath + "\\left";
+	int NumGainSamples = GetNumberOfScans(gainSearchPath);
 
-		int NumGainSamples = GetNumberOfScans(gainSearchPath);
+	int size_gain_buf_temp = size_single_proj * NumViews * NumGainSamples;
 
-		int size_gain_buf_temp = size_single_proj * NumViews * NumGainSamples;
+	USHORT* GainBuf = new USHORT[size_gain_buf_temp];
 
-		USHORT* GainBuf = new USHORT[size_gain_buf_temp];
+	gainSearchPath = gainSearchPath + "\\*";
 
-		gainSearchPath = gainSearchPath + "\\*";
+	//Set up the find files variables
+	WIN32_FIND_DATA FindFile;
+	HANDLE hfind;
 
-		//Set up the find files variables
-		WIN32_FIND_DATA FindFile;
-		HANDLE hfind;
-		bool MoreViews = false;
+	std::string FileName;
+	//Cycle through the number of samples and read the blank images
+	WIN32_FIND_DATA FindDir;
+	int NumProjections = 0;
+	HANDLE hfindDir = FindFirstFile(gainSearchPath.c_str(), &FindDir);
+	bool MoreFolders = true;
+	std::string ProjPath;
 
-		std::string FileName;
-		//Cycle through the number of samples and read the blank images
-		WIN32_FIND_DATA FindDir;
-		int NumProjections = 0;
-		HANDLE hfindDir = FindFirstFile(gainSearchPath.c_str(), &FindDir);
-		bool MoreFolders = true;
-		std::string ProjPath;
+	while (MoreFolders) {
+		if (FindNextFile(hfindDir, &FindDir)) {
+			if (CheckFileName(FindDir.cFileName)) {
+				ProjPath = gainSearchPath;
+				FileName = FindDir.cFileName;
+				ProjPath.replace(ProjPath.length() - 1, 1, FileName.c_str(), FileName.length());
+				ProjPath += "/*.raw";
 
-		while (MoreFolders) {
-			if (FindNextFile(hfindDir, &FindDir)) {
-				if (CheckFileName(FindDir.cFileName))
-				{
-					ProjPath = gainSearchPath;
-					FileName = FindDir.cFileName;
-					ProjPath.replace(ProjPath.length() - 1, 1, FileName.c_str(), FileName.length());
-					ProjPath += "/*.raw";
+				hfind = FindFirstFile(ProjPath.c_str(), &FindFile);
+				if (hfind != INVALID_HANDLE_VALUE) {
+					tempPath = ProjPath;
+					FileName = FindFile.cFileName;
+					tempPath.replace(tempPath.length() - 5, 5, FileName.c_str(), FileName.length());
+					fopen_s(&fileptr, tempPath.c_str(), "rb");
 
-					hfind = FindFirstFile(ProjPath.c_str(), &FindFile);
-					if (hfind != INVALID_HANDLE_VALUE) {
-						Path = ProjPath;
+					if (fileptr == NULL)
+						return Tomo_file_err;
+
+					fread(GainBuf + NumProjections*size_single_proj*NumViews,
+						sizeof(USHORT), size_single_proj, fileptr);
+					fclose(fileptr);
+				}
+				else continue;
+
+				for (int view = 1; view < NumViews; view++) {
+					if (FindNextFile(hfind, &FindFile)) {
+						tempPath = ProjPath;
 						FileName = FindFile.cFileName;
-						Path.replace(Path.length() - 5, 5, FileName.c_str(), FileName.length());
+						tempPath.replace(tempPath.length() - 5, 5, FileName.c_str(), FileName.length());
 
-						fopen_s(&fileptr, Path.c_str(), "rb");
+						fopen_s(&fileptr, tempPath.c_str(), "rb");
 						if (fileptr == NULL)
-						{
-							//							status = 1;
-							//							return status;
-							std::cout << "Error opening the file: " << avgFilePath.c_str() << std::endl;
-							std::cout << "Please check the path and re-run the program." << std::endl;
 							return Tomo_file_err;
-						}
 
-						fread(GainBuf + NumProjections*size_single_proj*NumViews,
-							sizeof(USHORT), size_single_proj, fileptr);
+						fread(GainBuf + NumProjections*size_single_proj*NumViews + view * size_single_proj,
+							sizeof(unsigned short), size_single_proj, fileptr);
 						fclose(fileptr);
 					}
 					else
-					{
-						//						status = 1;
-						//						return status;
 						return Tomo_file_err;
-					}
-					for (int view = 1; view < NumViews; view++)
-					{
-						if (FindNextFile(hfind, &FindFile)) {
-							Path = ProjPath;
-							FileName = FindFile.cFileName;
-							Path.replace(Path.length() - 5, 5, FileName.c_str(), FileName.length());
-
-							fopen_s(&fileptr, Path.c_str(), "rb");
-							if (fileptr == NULL)
-							{
-								//								status = 1;
-								//								return status;
-								std::cout << "Error opening the file: " << avgFilePath.c_str() << std::endl;
-								std::cout << "Please check the path and re-run the program." << std::endl;
-								return Tomo_file_err;
-							}
-
-							fread(GainBuf + NumProjections*size_single_proj*NumViews
-								+ view * size_single_proj,
-								sizeof(unsigned short), size_single_proj, fileptr);
-							fclose(fileptr);
-
-						}
-						else
-						{
-							//							status = 1;
-							//							return status;
-							std::cout << "Error opening the file: " << avgFilePath.c_str() << std::endl;
-							std::cout << "Please check the path and re-run the program." << std::endl;
-							return Tomo_file_err;
-						}
-					}
-					NumProjections++;
 				}
-			}
-
-			if (NumProjections >= NumGainSamples) {
-				MoreFolders = false;
-				break;
+				NumProjections++;
 			}
 		}
 
-		float GainPro = 0.0;
-		//Average the gain and blank images
-		for (int i = 0; i < Sys->Proj.Nx; i++)
-		{
-			for (int j = 0; j < Sys->Proj.Ny; j++)
-			{
-				for (int view = 0; view < NumViews; view++)
-				{
-					GainPro = 0.0;
-					for (int n = 0; n < NumGainSamples; n++)
-					{
-						GainPro +=
-							(float)(GainBuf[n*size_single_proj*NumViews + view*size_single_proj + i + j*Sys->Proj.Nx]) /
-							((float)NumGainSamples);
-					}
-
-					Sys->Norm.GainData[i + j*Sys->Proj.Nx + view*size_single_proj] = (unsigned short)GainPro;
-				}
-			}
+		if (NumProjections >= NumGainSamples) {
+			MoreFolders = false;
+			break;
 		}
-
-		//write average file
-		for (int view = 0; view < NumViews; view++)
-		{
-			if (!orientation)
-				Path = avgFilePath + "\\right\\average_";
-			else
-				Path = avgFilePath + "\\left\\average_";
-
-			tempfilename = std::to_string(view);
-			Path = Path + tempfilename + ".raw";
-
-			fopen_s(&fileptr, Path.c_str(), "wb");
-			if (fileptr == NULL)
-			{
-				//				status = 1;
-				//				return status;
-				std::cout << "Error opening the file: " << avgFilePath.c_str() << std::endl;
-				std::cout << "Please check the path and re-run the program." << std::endl;
-				return Tomo_file_err;
-			}
-			//			fwrite(&(GainData[view*size_single_proj]), sizeof(USHORT), numPerProj, fileptr);
-			fwrite(Sys->Norm.GainData + view * size_single_proj, sizeof(USHORT), size_single_proj, fileptr);
-			fclose(fileptr);
-		}
-
-		delete GainBuf;
 	}
+
+	float GainPro = 0.0;
+	//Average the gain and blank images
+	for (int i = 0; i < Sys->Proj.Nx; i++) {
+		for (int j = 0; j < Sys->Proj.Ny; j++) {
+			for (int view = 0; view < NumViews; view++) {
+				GainPro = 0.0;
+				for (int n = 0; n < NumGainSamples; n++) {
+					GainPro +=
+						(float)(GainBuf[n*size_single_proj*NumViews + view*size_single_proj + i + j*Sys->Proj.Nx]) /
+						((float)NumGainSamples);
+				}
+
+				GainData[i + j*Sys->Proj.Nx + view*size_single_proj] = (unsigned short)GainPro;
+			}
+		}
+	}
+
+	//write average file
+	for (int view = 0; view < NumViews; view++) {
+		tempPath = Path + std::to_string(view) + ".raw";
+		fopen_s(&fileptr, tempPath.c_str(), "wb");
+
+		if (fileptr == NULL)
+			return Tomo_file_err;
+
+		fwrite(GainData + view * size_single_proj, sizeof(USHORT), size_single_proj, fileptr);
+		fclose(fileptr);
+	}
+
+	delete GainBuf;
+
+	delete[] GainData;
+
 	return Tomo_OK;
-	//	return status;
 }

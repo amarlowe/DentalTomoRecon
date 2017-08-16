@@ -159,15 +159,35 @@ void DTRMainWindow::onQuit(wxCommandEvent& WXUNUSED(event)){
 }
 
 void DTRMainWindow::onProjectionView(wxCommandEvent& WXUNUSED(event)) {
-	wxMessageBox(wxT("TODO"),
-		wxT("TODO"),
-		wxICON_INFORMATION | wxOK);
+	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
+		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
+		return;
+	}
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->dataDisplay = projections;
+	currentFrame->m_scrollBar->Show(true);
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint();
 }
 
 void DTRMainWindow::onReconstructionView(wxCommandEvent& WXUNUSED(event)) {
-	wxMessageBox(wxT("TODO"),
-		wxT("TODO"),
-		wxICON_INFORMATION | wxOK);
+	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
+		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
+		return;
+	}
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->dataDisplay = reconstruction;
+	currentFrame->m_scrollBar->Show(false);
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint();
 }
 
 void DTRMainWindow::onLogView(wxCommandEvent& WXUNUSED(event)) {
@@ -194,6 +214,8 @@ void DTRMainWindow::onResetFocus(wxCommandEvent& WXUNUSED(event)) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->resetFocus();
+
+	currentFrame->m_canvas->paint();
 }
 
 void DTRMainWindow::onContinuous() {
@@ -206,8 +228,6 @@ void DTRMainWindow::onContinuous() {
 	recon->continuousMode = true;
 
 	recon->singleFrame();
-	currentFrame->m_scrollBar->SetThumbPosition(0);
-	currentFrame->m_canvas->OnScroll(0);
 	currentFrame->m_scrollBar->Show(false);
 
 	recon->resetFocus();
@@ -1069,7 +1089,7 @@ void GLFrame::OnMousewheel(wxMouseEvent& event) {
 		m_canvas->recon->addMaxLight(newScrollPos);
 	}
 	else {
-		if (m_canvas->recon->continuousMode) {
+		if (m_canvas->recon->dataDisplay == reconstruction) {
 			m_canvas->recon->distance += newScrollPos*m_canvas->recon->Sys->Geo.ZPitch;
 			m_canvas->recon->singleFrame();
 		}
@@ -1169,7 +1189,8 @@ CudaGLCanvas::~CudaGLCanvas(){
 }
 
 void CudaGLCanvas::OnScroll(int index) {
-	imageIndex = index;
+	recon->sliceIndex = index;
+	recon->singleFrame();
 	paint();
 }
 
@@ -1203,7 +1224,7 @@ void CudaGLCanvas::paint() {
 		m_status->SetStatusText(wxString::Format(wxT("Detector distance: %.2f mm."), recon->distance), zPosition);
 	}
 
-	recon->test(imageIndex);
+	recon->draw();
 
 	recon->unmap();
 
@@ -1375,7 +1396,7 @@ void CudaGLInCanvas::paint() {
 	recon->display(width, height);
 	recon->map();
 
-	recon->test(imageIndex);
+	recon->draw();
 
 	recon->unmap();
 

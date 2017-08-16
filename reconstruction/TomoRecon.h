@@ -31,13 +31,9 @@
 #pragma comment(lib, "Shlwapi.lib")
 
 #define NUMVIEWS 7
-#define PROFILER
-#define ITERATIONS 7
-#define DECAY 0.8f
+//#define PROFILER
 #define MAXZOOM 30
 #define ZOOMFACTOR 1.1f
-#define LIGHTFACTOR 1.1f
-#define LIGHTOFFFACTOR 3
 #define LINEWIDTH 3
 #define BARHEIGHT 40
 
@@ -60,8 +56,10 @@
 #define MAXTHREADS 1024
 
 //Kernel options
+//#define SIGMA 1.0f
+//#define KERNELRADIUS 5
 #define SIGMA 1.0f
-#define KERNELRADIUS 5
+#define KERNELRADIUS 10
 #define KERNELSIZE (2*KERNELRADIUS + 1)
 
 //Maps to single instruction in cuda
@@ -97,9 +95,9 @@ typedef enum {
 } TomoError;
 
 typedef enum {
-	raw_images,
-	recon_images
-} display_t;
+	projections,
+	reconstruction
+} sourceData;
 
 typedef enum {
 	no_der,
@@ -184,9 +182,6 @@ struct params {
 	float PitchPy;
 	float PitchRx;
 	float PitchRy;
-	float * h_Beamx;
-	float * h_Beamy;
-	float * h_Beamz;
 	float * d_Beamx;
 	float * d_Beamy;
 	float * d_Beamz;
@@ -252,7 +247,7 @@ public:
 	//interop extensions
 	void map() { interop::map(stream); }
 	void unmap() { interop::unmap(stream); }
-	TomoError test(int index);
+	TomoError draw();
 
 	//Getters and setters
 	TomoError getLight(unsigned int * minVal, unsigned int * maxVal);
@@ -263,6 +258,12 @@ public:
 	TomoError resetFocus();
 	TomoError setLogView(bool useLog);
 	bool getLogView();
+
+	/* Input Functions to read data into the program                      */	BOOL CheckFilePathForRepeatScans(std::string BasePathIn);
+	int GetNumberOfScans(std::string BasePathIn);
+	int GetNumOfProjectionsPerView(std::string BasePathIn);
+	int GetNumProjectionViews(std::string BasePathIn);
+	TomoError GetGainAverages(const char * gainFile);
 
 	/********************************************************************************************/
 	/* Variables																				*/
@@ -312,6 +313,7 @@ public:
 
 	bool vertical;
 	derivative_t derDisplay = no_der;
+	sourceData dataDisplay = reconstruction;
 
 private:
 	/********************************************************************************************/
@@ -335,19 +337,6 @@ private:
 	TomoError P2R(int* rX, int* rY, int pX, int pY, int view);
 	TomoError R2P(int* pX, int* pY, int rX, int rY, int view);
 	TomoError I2D(int* dX, int* dY, int iX, int iY);
-
-	size_t avail_mem;
-	size_t total_mem;
-
-	/********************************************************************************************/
-	/* Input Functions to read data into the program											*/
-	/********************************************************************************************/
-	BOOL CheckFilePathForRepeatScans(std::string BasePathIn);
-	int GetNumberOfScans(std::string BasePathIn);
-	int GetNumOfProjectionsPerView(std::string BasePathIn);
-	int GetNumProjectionViews(std::string BasePathIn);
-	TomoError ReadDarkImages(const char * darkFile);
-	TomoError ReadGainImages(const char * gainFile);
 
 	//Define data buffer
 	float * d_Image;

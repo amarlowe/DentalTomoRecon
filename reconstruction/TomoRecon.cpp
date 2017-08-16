@@ -1,16 +1,4 @@
 /********************************************************************************************/
-/* TomoRecon.cpp																			*/
-/* Copyright 2016, XinRay Inc., All rights reserved											*/
-/********************************************************************************************/
-
-/********************************************************************************************/
-/* Version: 1.2																				*/
-/* Date: October 27, 2016																	*/
-/* Author: Brian Gonzales																	*/
-/* Project: TomoD IntraOral Tomosynthesis													*/
-/********************************************************************************************/
-
-/********************************************************************************************/
 /* Include a general header																	*/
 /********************************************************************************************/
 #include "TomoRecon.h"
@@ -34,10 +22,6 @@ TomoRecon::~TomoRecon() {
 
 TomoError TomoRecon::init(const char * gainFile, const char * darkFile, const char * mainFile) {
 	NumViews = NUMVIEWS;
-
-	//Step 3. Read the normalizaton data (dark and gain)
-	//tomo_err_throw(ReadDarkImages(darkFile));
-	//tomo_err_throw(ReadGainImages(gainFile));
 
 	//Step 4. Set up the GPU for Reconstruction
 	tomo_err_throw(initGPU(gainFile, darkFile, mainFile));
