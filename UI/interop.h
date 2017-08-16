@@ -14,8 +14,6 @@ public:
 	void display(int x, int y);
 	void map(cudaStream_t stream);
 	void unmap(cudaStream_t stream);
-	void swap();
-	void clear();
 	void blit();
 
 	//Variables

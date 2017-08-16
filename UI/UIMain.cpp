@@ -1229,7 +1229,6 @@ void CudaGLCanvas::paint() {
 	recon->unmap();
 
 	recon->blit();
-	recon->swap();
 
 	SwapBuffers();
 }
@@ -1240,7 +1239,6 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
 	float this_y = event.GetY();
 
 	// Allow default processing to happen, or else the canvas cannot gain focus
-	// (for key events).
 	event.Skip();
 
 	if (event.LeftDown()) {
@@ -1328,18 +1326,8 @@ void CudaGLCanvas::OnChar(wxKeyEvent& event){
 			break;
 		}
 
-		recon->constants.baseXr = 3 * recon->Sys->Recon.Nx / 4;
-		recon->constants.baseYr = 3 * recon->Sys->Recon.Ny / 4;
-		recon->constants.currXr = recon->Sys->Recon.Nx / 4;
-		recon->constants.currYr = recon->Sys->Recon.Ny / 4;
-
 		recon->singleFrame();
-		recon->autoLight();
-
-		recon->constants.baseXr = -1;
-		recon->constants.baseYr = -1;
-		recon->constants.currXr = -1;
-		recon->constants.currYr = -1;
+		recon->resetLight();
 
 		paint();
 	}
@@ -1401,7 +1389,6 @@ void CudaGLInCanvas::paint() {
 	recon->unmap();
 
 	recon->blit();
-	recon->swap();
 
 	SwapBuffers();
 }

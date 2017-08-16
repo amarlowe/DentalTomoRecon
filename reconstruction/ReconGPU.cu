@@ -287,7 +287,7 @@ __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, uns
 		//float val = Proj[j*consts.Px + i];
 		if (val < 10.0) val = 0.0;
 		val /= Gain[j*consts.Px + i];
-		if (val > 0.95) val = 0.0;
+		if (val > 0.98) val = 0.0;
 
 		Sino[(y + view*consts.Py)*consts.ProjPitchNum + x] = val * USHRT_MAX;
 	}
@@ -344,111 +344,6 @@ __global__ void projectSlice(float * IM, float distance, params consts) {
 }
 
 //Ruduction and histogram functions
-__global__ void GetMaxImageVal(float * Image, int sizeIM, float * MaxVal){
-	//Define shared memory to read all the threads
-	extern __shared__ float data[];
-
-	//define the thread and block location
-	int thread = threadIdx.x;
-	int i = blockIdx.x * (blockDim.x * 2) + threadIdx.x;
-	int j = blockIdx.y *blockDim.y + threadIdx.y;
-	int gridSize = blockDim.x * 2 * gridDim.x;
-
-	//Declare a sum value and iterat through grid to sum
-	float val = 0;
-	for (int n = i; n + blockDim.x < sizeIM; n += gridSize) {
-		float val1 = Image[j*sizeIM + n];
-		float val2 = Image[j*sizeIM + n + blockDim.x];
-		val = max(val, max(val1, val2));
-	}
-
-	//Each thread puts its local sum into shared memory
-	data[thread] = val;
-	__syncthreads();
-
-	//Do reduction in shared memory
-	if (thread < 512) { data[thread] = val = max(val, data[thread + 512]); }
-	__syncthreads();
-
-	if (thread < 256) { data[thread] = val = max(val, data[thread + 256]); }
-	__syncthreads();
-
-	if (thread < 128) { data[thread] = val = max(val, data[thread + 128]); }
-	__syncthreads();
-
-	if (thread < 64) { data[thread] = val = max(val, data[thread + 64]); }
-	__syncthreads();
-
-	if (thread < 32){
-		// Fetch final intermediate sum from 2nd warp
-		val = max(val, data[thread + 32]);
-		// Reduce final warp using shuffle
-		for (int offset = warpSize / 2; offset > 0; offset /= 2){
-			val = max(val, __shfl_down(val, offset));
-		}
-	}
-
-	//write the result for this block to global memory
-	if (thread == 0) {
-		atomicMax(MaxVal, val);
-	}
-}
-
-__global__ void GetMinImageVal(float * Image, int sizeIM, float * MinVal) {
-	//Define shared memory to read all the threads
-	extern __shared__ float data[];
-
-	//define the thread and block location
-	int thread = threadIdx.x;
-	int i = blockIdx.x * (blockDim.x * 2) + threadIdx.x;
-	int j = blockIdx.y *blockDim.y + threadIdx.y;
-	int gridSize = blockDim.x * 2 * gridDim.x;
-
-	if (i == 0 && j == 0) *MinVal = (float)USHRT_MAX;
-	__syncthreads();
-
-	//Declare a sum value and iterat through grid to sum
-	float val = (float)USHRT_MAX;
-	for (int n = i; n + blockDim.x < sizeIM; n += gridSize) {
-		float val1 = Image[j*sizeIM + n];
-		float val2 = Image[j*sizeIM + n + blockDim.x];
-		if (val1 == 0.0f) val1 = (float)USHRT_MAX;
-		if (val2 == 0.0f) val2 = (float)USHRT_MAX;
-		val = min(val, min(val1, val2));
-	}
-
-	//Each thread puts its local sum into shared memory
-	data[thread] = val;
-	__syncthreads();
-
-	//Do reduction in shared memory
-	if (thread < 512) { data[thread] = val = min(val, data[thread + 512]); }
-	__syncthreads();
-
-	if (thread < 256) { data[thread] = val = min(val, data[thread + 256]); }
-	__syncthreads();
-
-	if (thread < 128) { data[thread] = val = min(val, data[thread + 128]); }
-	__syncthreads();
-
-	if (thread < 64) { data[thread] = val = min(val, data[thread + 64]); }
-	__syncthreads();
-
-	if (thread < 32) {
-		// Fetch final intermediate sum from 2nd warp
-		val = min(val, data[thread + 32]);
-		// Reduce final warp using shuffle
-		for (int offset = warpSize / 2; offset > 0; offset /= 2) {
-			val = min(val, __shfl_down(val, offset));
-		}
-	}
-
-	//write the result for this block to global memory
-	if (thread == 0) {
-		atomicMin(MinVal, val);
-	}
-}
-
 __global__ void sumReduction(float * Image, int pitch, float * sum, int lowX, int upX, int lowY, int upY) {
 	//Define shared memory to read all the threads
 	extern __shared__ float data[];
@@ -727,29 +622,13 @@ TomoError TomoRecon::initGPU(const char * gainFile, const char * darkFile, const
 
 			KERNELCALL2(LogCorrectProj, dimGridProj, dimBlockProj, d_Sino, view, d_Proj, d_Dark, d_Gain, constants);
 
+			//Normalize projection image lighting
 			float maxVal, minVal;
-			int threshold = 80;
 			unsigned int histogram[HIST_BIN_COUNT];
 			getHistogram(d_Sino + view*projPitch / sizeof(float)*Sys->Proj.Ny, projPitch*Sys->Proj.Ny, histogram);
-			int i;
-			for (i = 1; i < HIST_BIN_COUNT; i++) {
-				unsigned int count = histogram[i];
-				if (count > threshold) break;
-			}
-			if (i >= HIST_BIN_COUNT) i = 0;
-			minVal = i * UCHAR_MAX;
-
-			for (i = HIST_BIN_COUNT - 1; i >= 0; i--) {
-				unsigned int count = histogram[i];
-				if (count > threshold) break;
-			}
-			if (i < 0) i = HIST_BIN_COUNT;
-			maxVal = i * UCHAR_MAX;
-			std::cout << "Max: " << maxVal << ", Min: " << minVal << "\n";
+			autoLight(histogram, 80, &minVal, &maxVal);
 			cuda(Memcpy(d_MaxVal, &maxVal, sizeof(float), cudaMemcpyHostToDevice));
 			cuda(Memcpy(d_MinVal, &minVal, sizeof(float), cudaMemcpyHostToDevice));
-			//KERNELCALL3(GetMaxImageVal, dimGridSum, dimBlockSum, 1024 * sizeof(float), d_Sino + projPixels*view, projPixels, d_MaxVal);
-			//KERNELCALL3(GetMinImageVal, dimGridSum, dimBlockSum, 1024 * sizeof(float), d_Sino + projPixels*view, projPixels, d_MinVal);
 			KERNELCALL2(rescale, dimGridProj, dimBlockProj, d_Sino, view, d_MaxVal, d_MinVal, constants);
 		}
 
@@ -942,7 +821,10 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 					light = oldLight;
 					derDisplay = no_der;
 					singleFrame();
-					autoLight();
+					unsigned int histogram[HIST_BIN_COUNT];
+					int threshold = Sys->Recon.Nx * Sys->Recon.Ny / AUTOTHRESHOLD;
+					getHistogram(d_Image, reconPitch*Sys->Recon.Ny, histogram);
+					autoLight(histogram, threshold, &constants.minVal, &constants.maxVal);
 					return Tomo_Done;
 				}
 				else distance += step;
@@ -1018,18 +900,14 @@ TomoError TomoRecon::autoGeo(bool firstRun) {
 	return Tomo_Done;
 }
 
-TomoError TomoRecon::autoLight() {
-	unsigned int histogram[HIST_BIN_COUNT];
-	getHistogram(d_Image, reconPitch*Sys->Recon.Ny, histogram);
-
-	int threshold = Sys->Recon.Nx * Sys->Recon.Ny / AUTOTHRESHOLD;
+TomoError TomoRecon::autoLight(unsigned int histogram[HIST_BIN_COUNT], int threshold, float * minVal, float * maxVal) {
 	int i;
 	for (i = 0; i < HIST_BIN_COUNT; i++) {
 		unsigned int count = histogram[i];
 		if (count > threshold) break;
 	}
 	if (i >= HIST_BIN_COUNT) i = 0;
-	constants.minVal = i * UCHAR_MAX;
+	*minVal = i * UCHAR_MAX;
 
 	//go from the reverse direction for maxval
 	for (i = HIST_BIN_COUNT - 1; i >= 0; i--) {
@@ -1037,8 +915,8 @@ TomoError TomoRecon::autoLight() {
 		if (count > threshold) break;
 	}
 	if (i < 0) i = HIST_BIN_COUNT;
-	constants.maxVal = i * UCHAR_MAX;
-	if (constants.minVal == constants.maxVal) constants.maxVal += UCHAR_MAX;
+	*maxVal = i * UCHAR_MAX;
+	if (*minVal == *maxVal) *maxVal += UCHAR_MAX;
 
 	return Tomo_OK;
 }
@@ -1299,7 +1177,10 @@ TomoError TomoRecon::resetLight() {
 	constants.currXr = Sys->Recon.Nx / 4;
 	constants.currYr = Sys->Recon.Ny / 4;
 
-	autoLight();
+	unsigned int histogram[HIST_BIN_COUNT];
+	int threshold = Sys->Recon.Nx * Sys->Recon.Ny / AUTOTHRESHOLD;
+	getHistogram(d_Image, reconPitch*Sys->Recon.Ny, histogram);
+	autoLight(histogram, threshold, &constants.minVal, &constants.maxVal);
 
 	constants.baseXr = -1;
 	constants.baseYr = -1;

@@ -140,15 +140,6 @@ void interop::unmap(cudaStream_t stream){
 	cuda(GraphicsUnmapResources(1, &cgr[index], stream));
 }
 
-void interop::swap() {
-	index = (index + 1) % count;
-}
-
-void interop::clear() {
-	GLfloat clear_color[] = { 1.0f, 1.0f, 1.0f, 1.0f };
-	gl(ClearNamedFramebufferfv(fb[index], GL_COLOR, 0, clear_color));
-}
-
 void interop::blit() {
 	gl(BlitNamedFramebuffer(fb[index], 0,
 		0, 0, width, height,

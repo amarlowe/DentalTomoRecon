@@ -238,7 +238,7 @@ public:
 	float getDistance();
 	TomoError autoFocus(bool firstRun);
 	TomoError autoGeo(bool firstRun);
-	TomoError autoLight();
+	TomoError autoLight(unsigned int histogram[HIST_BIN_COUNT], int threshold, float * minVal, float * maxVal);
 	TomoError readPhantom(float * resolution);
 	TomoError initTolerances(std::vector<toleranceData> &data, int numTests, std::vector<float> offsets);
 	TomoError testTolerances(std::vector<toleranceData> &data, bool firstRun);
