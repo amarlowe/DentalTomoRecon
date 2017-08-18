@@ -7,17 +7,17 @@
 /* Constructor and destructor																*/
 /********************************************************************************************/
 
-TomoRecon::TomoRecon(int x, int y, struct SystemControl * Sys) : interop(x, y), Sys(Sys){
+TomoRecon::TomoRecon(int x, int y, struct SystemControl * Sys) : interop(x, y), Sys(*Sys){
 	cuda(StreamCreate(&stream));
 }
 
 TomoRecon::~TomoRecon() {
+	cudaDeviceSynchronize();
 	cuda(StreamDestroy(stream));
 	FreeGPUMemory();
-	delete[] Sys->Geo.EmitX;
-	delete[] Sys->Geo.EmitY;
-	delete[] Sys->Geo.EmitZ;
-	delete Sys;
+	delete[] Sys.Geo.EmitX;
+	delete[] Sys.Geo.EmitY;
+	delete[] Sys.Geo.EmitZ;
 }
 
 TomoError TomoRecon::init(const char * gainFile, const char * darkFile, const char * mainFile) {
@@ -25,41 +25,10 @@ TomoError TomoRecon::init(const char * gainFile, const char * darkFile, const ch
 
 	//Step 4. Set up the GPU for Reconstruction
 	tomo_err_throw(initGPU(gainFile, darkFile, mainFile));
-	std::cout << "GPU Ready" << std::endl;
-
-	initialized = true;
 
 	zoom = 0;
 	xOff = 0;
 	yOff = 0;
-
-	return Tomo_OK;
-}
-
-TomoError TomoRecon::TomoLoad(const char* file) {
-	//TODO... again
-	/*char GetFilePath[MAX_PATH];
-	std::string BasePath;
-	std::string FilePath;
-	std::string FileName;
-	strcpy_s(GetFilePath, file);
-	PathRemoveFileSpec(GetFilePath);
-	FileName = PathFindFileName(GetFilePath);
-	FilePath = GetFilePath;
-	PathRemoveFileSpec(GetFilePath);
-
-	//Define Base Path
-	BasePath = GetFilePath;
-	if (CheckFilePathForRepeatScans(BasePath)) {
-		FileName = PathFindFileName(GetFilePath);
-		FilePath = GetFilePath;
-		PathRemoveFileSpec(GetFilePath);
-		BasePath = GetFilePath;
-	}
-
-	tomo_err_throw(ReadRawProjectionData(FilePath, file));
-	correctProjections();
-	singleFrame();*/
 
 	return Tomo_OK;
 }

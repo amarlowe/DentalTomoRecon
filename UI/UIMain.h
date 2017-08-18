@@ -36,6 +36,9 @@
 #include "../sample.xpm"
 #endif
 
+#define MOUSEWHEELMAG 120
+#define SCROLLFACTOR 10
+
 typedef enum {
 	Status = 0,
 	zPosition,
@@ -82,7 +85,6 @@ public:
 
 	virtual ~CudaGLCanvas();
 
-	void OnEvent(wxCommandEvent& event);
 	void OnPaint(wxPaintEvent& event);
 	void OnChar(wxKeyEvent& event);
 	void OnMouseEvent(wxMouseEvent& event);
@@ -114,10 +116,13 @@ public:
 
 	void OnScroll(wxScrollEvent& event);
 	void OnMousewheel(wxMouseEvent& event);
+	void hideScrollBar();
+	void showScrollBar();
 
 	CudaGLCanvas *m_canvas;
 	wxScrollBar* m_scrollBar;
 	wxStatusBar* m_status;
+	wxBoxSizer* bSizer = NULL;
 
 	wxDECLARE_NO_COPY_CLASS(GLFrame);
 	wxDECLARE_EVENT_TABLE();
@@ -131,7 +136,6 @@ public:
 
 	virtual ~CudaGLInCanvas();
 
-	void OnEvent(wxCommandEvent& event);
 	void OnPaint(wxPaintEvent& event);
 	void OnMouseEvent(wxMouseEvent& event);
 	void OnChar(wxKeyEvent& event);

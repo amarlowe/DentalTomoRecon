@@ -43,7 +43,7 @@ bool CheckDirName(std::string Name)
 	}
 	return (ValidName);
 }
-
+/*
 BOOL TomoRecon::CheckFilePathForRepeatScans(std::string BasePathIn) {
 	std::string BasePath;
 	BasePath = BasePathIn + "/*";
@@ -402,3 +402,4 @@ TomoError TomoRecon::GetGainAverages(const char * gainFile) {
 
 	return Tomo_OK;
 }
+*/

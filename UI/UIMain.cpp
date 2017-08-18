@@ -1,8 +1,7 @@
 #include "UIMain.h"
 
 // Define a new application type, each program should derive a class from wxApp
-class MyApp : public wxApp
-{
+class MyApp : public wxApp{
 public:
 	virtual bool OnInit() wxOVERRIDE;
 };
@@ -46,10 +45,6 @@ bool MyApp::OnInit(){
 
 	return true;
 }
-
-// ----------------------------------------------------------------------------
-// main frame
-// ----------------------------------------------------------------------------
 
 DTRMainWindow::DTRMainWindow(wxWindow* parent) : mainWindow(parent){
 	wxConfigBase *pConfig = wxConfigBase::Get();
@@ -120,25 +115,20 @@ TomoError DTRMainWindow::genSys(struct SystemControl * Sys) {
 }
 
 wxPanel *DTRMainWindow::CreateNewPage(wxString filename) {
-	struct SystemControl * Sys = new SystemControl;
-	genSys(Sys);
+	struct SystemControl Sys;
+	genSys(&Sys);
 	wxStreamToTextRedirector redirect(m_textCtrl8);
-	return new GLFrame(m_auinotebook6, m_statusBar1, Sys, gainFilepath, darkFilepath, filename);
+	return new GLFrame(m_auinotebook6, m_statusBar1, &Sys, gainFilepath, darkFilepath, filename);
 }
 
-void DTRMainWindow::onOpen(wxCommandEvent& WXUNUSED(event)) {
+void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
-		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
+		onNew(event);
 		return;
 	}
 
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
-
-	if (!recon->continuousMode) {
-		(*m_textCtrl8) << "Open currently only works with reconstructions created with new, then run in continuous mode.\n";
-		return;
-	}
 
 	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
 		"Raw File (*.raw)|*.raw", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
@@ -149,7 +139,9 @@ void DTRMainWindow::onOpen(wxCommandEvent& WXUNUSED(event)) {
 	wxString filename(openFileDialog.GetPath());
 	
 	wxStreamToTextRedirector redirect(m_textCtrl8);
-	recon->TomoLoad(filename.mb_str());
+	recon->ReadProjections(gainFilepath.mb_str(), darkFilepath.mb_str(), filename.mb_str());
+	recon->singleFrame();
+	recon->resetFocus();
 	currentFrame->m_canvas->paint();
 }
 
@@ -168,7 +160,7 @@ void DTRMainWindow::onProjectionView(wxCommandEvent& WXUNUSED(event)) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->dataDisplay = projections;
-	currentFrame->m_scrollBar->Show(true);
+	currentFrame->showScrollBar();
 	recon->singleFrame();
 	recon->resetLight();
 	currentFrame->m_canvas->paint();
@@ -184,7 +176,7 @@ void DTRMainWindow::onReconstructionView(wxCommandEvent& WXUNUSED(event)) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->dataDisplay = reconstruction;
-	currentFrame->m_scrollBar->Show(false);
+	currentFrame->hideScrollBar();
 	recon->singleFrame();
 	recon->resetLight();
 	currentFrame->m_canvas->paint();
@@ -309,10 +301,7 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 	wxConfigBase *pConfig = wxConfigBase::Get();
 	std::vector<float> offsets = { 0.1f, 0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 5.0f };
 	std::vector<toleranceData> data;
-	for (int i = 0; i < pConfig->Read(wxT("/resPhanItems"), 0l); i++)
-	//if(pConfig->Read(wxT("/resPhanItems"), 0l) > 0)
-	{
-		//int i = 0;
+	for (int i = 0; i < pConfig->Read(wxT("/resPhanItems"), 0l); i++){
 		wxFileName filename = pConfig->Read(wxString::Format(wxT("/resPhanFile%d"), i));
 		if (i == 0) {
 			m_auinotebook6->AddPage(CreateNewPage(filename.GetFullPath()), wxString::Format(wxT("Geo Test %u"), i), true);
@@ -321,7 +310,10 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 		GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 		TomoRecon* recon = currentFrame->m_canvas->recon;
 
-		if (i != 0) recon->TomoLoad(filename.GetFullPath().mb_str());
+		if (i != 0) recon->ReadProjections(gainFilepath.mb_str(), darkFilepath.mb_str(), filename.GetFullPath().mb_str());
+
+		//TODO: remove
+		recon->constants.log = false;
 
 		if (data.empty()) recon->initTolerances(data, 1, offsets);
 		
@@ -343,13 +335,6 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 			recon->setReconBox(0);
 			currentFrame->m_canvas->paint();
 		}
-		/*recon->autoGeo(true);
-		currentFrame->m_canvas->paint();
-		recon->setReconBox(0);
-		while (recon->autoGeo(false) == Tomo_OK) {
-			recon->setReconBox(0);
-			currentFrame->m_canvas->paint();
-		}*/
 
 		//switch from autofocus box to area of interest
 		recon->baseX = pConfig->Read(wxString::Format(wxT("/resPhanBoxLx%d"), i), 0l);
@@ -366,6 +351,7 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 		m_statusBar1->SetStatusText(filename.GetFullPath());
 		FILE.open(wxString::Format(wxT("%s\\testResults.txt"), filename.GetPath()).mb_str());
 		recon->testTolerances(data, true);
+		currentFrame->m_canvas->paint();
 		while (recon->testTolerances(data, false) == Tomo_OK) {
 			currentFrame->m_canvas->paint();
 			FILE << data[output].name << ", " << data[output].numViewsChanged << ", " << data[output].viewsChanged << ", " 
@@ -885,9 +871,9 @@ void DTRResDialog::onAddNew(wxCommandEvent& event) {
 		wxT("Input orientation"),
 		wxICON_INFORMATION | wxYES | wxNO);
 
-	struct SystemControl * Sys = new SystemControl;
-	((DTRMainWindow*)GetParent())->genSys(Sys);
-	frame = new GLWindow(this, vertical == wxYES, Sys, ((DTRMainWindow*)GetParent())->gainFilepath, ((DTRMainWindow*)GetParent())->darkFilepath, openFileDialog.GetPath());
+	struct SystemControl Sys;
+	((DTRMainWindow*)GetParent())->genSys(&Sys);
+	frame = new GLWindow(this, vertical == wxYES, &Sys, ((DTRMainWindow*)GetParent())->gainFilepath, ((DTRMainWindow*)GetParent())->darkFilepath, openFileDialog.GetPath());
 	int res = frame->ShowModal();
 
 	if (res == wxID_OK) {
@@ -900,8 +886,8 @@ void DTRResDialog::onAddNew(wxCommandEvent& event) {
 		float scale = frame->m_canvas->recon->scale;
 		float xOff = frame->m_canvas->recon->xOff;
 		float yOff = frame->m_canvas->recon->yOff;
-		float innerOffx = (frame->m_canvas->recon->width - Sys->Proj.Nx / scale) / 2;
-		float innerOffy = (frame->m_canvas->recon->height - Sys->Proj.Ny / scale) / 2;
+		float innerOffx = (frame->m_canvas->recon->width - Sys.Proj.Nx / scale) / 2;
+		float innerOffy = (frame->m_canvas->recon->height - Sys.Proj.Ny / scale) / 2;
 		m_listCtrl->SetItem(index, 1, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->baseX - innerOffx) * scale + xOff)));
 		m_listCtrl->SetItem(index, 2, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->baseY - innerOffy) * scale + yOff)));
 		m_listCtrl->SetItem(index, 3, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->currX - innerOffx) * scale + xOff)));
@@ -1027,13 +1013,7 @@ void DTRResDialog::onCancel(wxCommandEvent& event) {
 	Close(true);
 }
 
-DTRResDialog::~DTRResDialog() {
-
-}
-
-//---------------------------------------------------------------------------
-// GLFrame
-//---------------------------------------------------------------------------
+DTRResDialog::~DTRResDialog() {}
 
 wxBEGIN_EVENT_TABLE(GLFrame, wxPanel)
 EVT_SCROLL(GLFrame::OnScroll)
@@ -1043,21 +1023,21 @@ wxEND_EVENT_TABLE()
 GLFrame::GLFrame(wxAuiNotebook *frame, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
 	const wxPoint& pos, const wxSize& size, long style)
 	: wxPanel(frame, wxID_ANY, pos, size), m_canvas(NULL), m_status(status){
-	//Set up sizer to make the canvas take up the entire panel (wxWidgets handles garbage collection)
-	wxBoxSizer* bSizer;
-	bSizer = new wxBoxSizer(wxVERTICAL);
-
 	//initialize the canvas to this object
 	m_canvas = new CudaGLCanvas(this, status, Sys, gainFile, darkFile, filename, wxID_ANY, NULL, GetClientSize());
-	bSizer->Add(m_canvas, 1, wxEXPAND | wxALL, 5);
-
 	m_scrollBar = new wxScrollBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSB_HORIZONTAL);
-	m_scrollBar->SetScrollbar(0, 1, 7, 1);
+	bSizer = new wxBoxSizer(wxVERTICAL);
+
+	bSizer->Add(m_canvas, 1, wxEXPAND | wxALL, 5);
+	m_scrollBar->SetScrollbar(0, 1, NUMVIEWS, 1);
 	bSizer->Add(m_scrollBar, 0, wxALL | wxEXPAND, 5);
 
+	m_scrollBar->Show(true);
+
 	this->SetSizer(bSizer);
-	this->Layout();
 	bSizer->Fit(this);
+
+	hideScrollBar();
 
 	// Show the frame
 	Show(true);
@@ -1068,29 +1048,35 @@ GLFrame::~GLFrame(){
 	delete m_canvas;
 }
 
+void GLFrame::hideScrollBar() {
+	bSizer->Hide(1);
+	this->Layout();
+}
+
+void GLFrame::showScrollBar() {
+	bSizer->ShowItems(true);
+	this->Layout();
+}
+
 void GLFrame::OnScroll(wxScrollEvent& event) {
 	m_canvas->OnScroll(m_scrollBar->GetThumbPosition());
 }
 
 void GLFrame::OnMousewheel(wxMouseEvent& event) {
 	wxKeyboardState keyboard;
-	//GetKeyboardState()
-	int newScrollPos = event.GetWheelRotation() / 120;
-	if (event.m_controlDown && event.m_altDown) {
-		m_canvas->recon->addMinLight(newScrollPos);
-	}
+	int newScrollPos = event.GetWheelRotation() / MOUSEWHEELMAG;
+
+	if (event.m_controlDown && event.m_altDown)
+		m_canvas->recon->appendMinLight(newScrollPos);
 	else if (event.m_controlDown) {
-		m_canvas->recon->zoom += newScrollPos;
-		if (m_canvas->recon->zoom < 0) m_canvas->recon->zoom = 0;
-		m_canvas->recon->xOff += (event.GetX() - GetSize().x / 2)*m_canvas->recon->scale / 10 * newScrollPos;//- GetScreenPosition().x
-		m_canvas->recon->yOff += (event.GetY() - GetSize().y / 2)*m_canvas->recon->scale / 10 * newScrollPos;// - GetScreenPosition().y
+		m_canvas->recon->appendZoom(newScrollPos);
+		m_canvas->recon->appendOffsets((event.GetX() - GetSize().x / 2) / SCROLLFACTOR * newScrollPos, (event.GetY() - GetSize().y / 2) / SCROLLFACTOR * newScrollPos);
 	}
-	else if (event.m_altDown) {
-		m_canvas->recon->addMaxLight(newScrollPos);
-	}
+	else if (event.m_altDown)
+		m_canvas->recon->appendMaxLight(newScrollPos);
 	else {
 		if (m_canvas->recon->dataDisplay == reconstruction) {
-			m_canvas->recon->distance += newScrollPos*m_canvas->recon->Sys->Geo.ZPitch;
+			m_canvas->recon->stepDistance(newScrollPos);
 			m_canvas->recon->singleFrame();
 		}
 		else {
@@ -1103,10 +1089,6 @@ void GLFrame::OnMousewheel(wxMouseEvent& event) {
 	}
 	m_canvas->paint();
 }
-
-//---------------------------------------------------------------------------
-// GLWindow
-//---------------------------------------------------------------------------
 
 wxBEGIN_EVENT_TABLE(GLWindow, wxWindow)
 EVT_MOUSEWHEEL(GLWindow::OnMousewheel)
@@ -1135,32 +1117,23 @@ GLWindow::~GLWindow() {
 
 void GLWindow::OnMousewheel(wxMouseEvent& event) {
 	wxKeyboardState keyboard;
-	//GetKeyboardState()
-	int newScrollPos = event.GetWheelRotation() / 120;
-	if (event.m_controlDown && event.m_altDown) {
-		m_canvas->recon->addMinLight(newScrollPos);
-		m_canvas->paint();
-	}
+	int newScrollPos = event.GetWheelRotation() / MOUSEWHEELMAG;
+
+	if (event.m_controlDown && event.m_altDown)
+		m_canvas->recon->appendMinLight(newScrollPos);
 	else if (event.m_controlDown) {
-		m_canvas->recon->zoom += newScrollPos;
-		if (m_canvas->recon->zoom < 0) m_canvas->recon->zoom = 0;
-		m_canvas->paint();
-		m_canvas->recon->xOff += (event.GetX() - GetSize().x / 2)*m_canvas->recon->scale / 10 * newScrollPos;//- GetScreenPosition().x
-		m_canvas->recon->yOff += (event.GetY() - GetSize().y / 2)*m_canvas->recon->scale / 10 * newScrollPos;// - GetScreenPosition().y
+		m_canvas->recon->appendZoom(newScrollPos);
+		m_canvas->recon->appendOffsets((event.GetX() - GetSize().x / 2) / SCROLLFACTOR * newScrollPos, (event.GetY() - GetSize().y / 2) / SCROLLFACTOR * newScrollPos);
 	}
-	else if (event.m_altDown) {
-		m_canvas->recon->addMaxLight(newScrollPos);
-		m_canvas->paint();
-	}
+	else if (event.m_altDown)
+		m_canvas->recon->appendMaxLight(newScrollPos);
+
+	m_canvas->paint();
 }
 
 void GLWindow::onClose(wxCloseEvent& event) {
 	Destroy();
 }
-
-//---------------------------------------------------------------------------
-// CudaGLCanvas
-//---------------------------------------------------------------------------
 
 wxBEGIN_EVENT_TABLE(CudaGLCanvas, wxGLCanvas)
 EVT_PAINT(CudaGLCanvas::OnPaint)
@@ -1178,9 +1151,6 @@ CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemC
 
 	recon = new TomoRecon(GetSize().x, GetSize().y, Sys);
 	recon->init((const char*)gainFile.mb_str(), (const char*)darkFile.mb_str(), (const char*)filename.mb_str());
-
-	recon->sliceIndex = 0;//initialization in recon.h doesn't work for some reason
-	recon->zoom = 0;
 }
 
 CudaGLCanvas::~CudaGLCanvas(){
@@ -1189,104 +1159,66 @@ CudaGLCanvas::~CudaGLCanvas(){
 }
 
 void CudaGLCanvas::OnScroll(int index) {
-	recon->sliceIndex = index;
+	recon->setActiveProjection(index);
 	recon->singleFrame();
 	paint();
 }
 
-void CudaGLCanvas::OnEvent(wxCommandEvent& WXUNUSED(event)) {
-	if (recon->initialized) {
-		paint();
-	}
-}
-
 void CudaGLCanvas::OnPaint(wxPaintEvent& WXUNUSED(event)){
-	// This is a dummy, to avoid an endless succession of paint messages.
 	// OnPaint handlers must always create a wxPaintDC.
 	wxPaintDC(this);
 
-	if (recon->initialized) {
-		paint();
-	}
+	paint();
 }
 
 void CudaGLCanvas::paint() {
 	SetCurrent(*m_glRC);//tells opengl which buffers to use, mutliple windows fail without this
-	int width = GetSize().x;
-	int height = GetSize().y;
-	recon->display(width, height);
-	recon->map();
 
-	if (recon->continuousMode) {
-		m_status->SetStatusText(wxString::Format(wxT("Zoom: %.2fx"), pow(ZOOMFACTOR, recon->zoom)), scaleNum);
-		m_status->SetStatusText(wxString::Format(wxT("X offset: %d px."), recon->xOff), xOffset);
-		m_status->SetStatusText(wxString::Format(wxT("Y offset: %d px."), recon->yOff), yOffset);
-		m_status->SetStatusText(wxString::Format(wxT("Detector distance: %.2f mm."), recon->distance), zPosition);
-	}
+	m_status->SetStatusText(wxString::Format(wxT("Zoom: %.2fx"), pow(ZOOMFACTOR, recon->zoom)), scaleNum);
+	m_status->SetStatusText(wxString::Format(wxT("X offset: %d px."), recon->xOff), xOffset);
+	m_status->SetStatusText(wxString::Format(wxT("Y offset: %d px."), recon->yOff), yOffset);
+	m_status->SetStatusText(wxString::Format(wxT("Detector distance: %.2f mm."), recon->distance), zPosition);
 
-	recon->draw();
-
-	recon->unmap();
-
-	recon->blit();
+	recon->draw(GetSize().x, GetSize().y);
 
 	SwapBuffers();
 }
 
 void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
-	static float last_x, last_y, last_x_off, last_y_off;
-	float this_x = event.GetX();
-	float this_y = event.GetY();
+	static int last_x, last_y, last_x_off, last_y_off;
+	int this_x = event.GetX();
+	int this_y = event.GetY();
 
 	// Allow default processing to happen, or else the canvas cannot gain focus
 	event.Skip();
 
 	if (event.LeftDown()) {
+		recon->getOffsets(&last_x_off, &last_y_off);
 		last_x = this_x;
 		last_y = this_y;
 		
-		last_x_off = recon->xOff;
-		last_y_off = recon->yOff;
-		if (event.m_controlDown) {
-			recon->constants.baseXr = recon->D2I(this_x, true);
-			recon->constants.baseYr = recon->D2I(this_y, false);
-			recon->constants.currXr = -1;
-			recon->constants.currYr = -1;
-		}
+		if (event.m_controlDown)
+			recon->setSelBoxStart(this_x, this_y);
 	}
 
 	if (event.LeftIsDown())	{
 		if(event.Dragging()){
-			if (!event.m_controlDown) {
-				recon->xOff = last_x_off - (this_x - last_x)*recon->scale;
-				recon->yOff = last_y_off - (this_y - last_y)*recon->scale;
-			}
-			else {
-				recon->constants.currXr = recon->D2I(this_x, true);
-				recon->constants.currYr = recon->D2I(this_y, false);
-			}
+			if (event.m_controlDown)
+				recon->setSelBoxEnd(this_x, this_y);
+			else 
+				recon->setOffsets(last_x_off - (this_x - last_x), last_y_off - (this_y - last_y));
 		}
 	}
 
 	if (event.LeftUp()) {
-		if (recon->constants.baseXr >= 0 && recon->constants.currXr >= 0) {
+		if (recon->selBoxReady()) {
 			//if they're greater than 0, the box was clicked and dragged successfully
 			recon->autoFocus(true);
 			paint();
 			while (recon->autoFocus(false) == Tomo_OK) paint();
-			if (event.m_altDown) {
-				//dependent on a focused image
-				recon->autoGeo(true);
-				paint();
-				while (recon->autoGeo(false) == Tomo_OK) paint();
-			}
 			
 			//cleanup
-			recon->constants.baseXr = -1;
-			recon->constants.currXr = -1;
-			recon->lowXr = -1;
-			recon->upXr = -1;
-			recon->singleFrame();
+			recon->resetSelBox();
 		}
 	}
 
@@ -1296,33 +1228,33 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
 void CudaGLCanvas::OnChar(wxKeyEvent& event){
 	//Switch the derivative display
 	if (event.GetKeyCode() == 32) {
-		switch (recon->derDisplay) {
+		switch (recon->getDisplay()) {
 		case no_der:
-			recon->derDisplay = der_x;
+			recon->setDisplay(der_x);
 			break;
 		case der_x:
-			recon->derDisplay = der_y;
+			recon->setDisplay(der_y);
 			break;
 		case der_y:
-			recon->derDisplay = slice_diff;
+			recon->setDisplay(slice_diff);
 			break;
 		case slice_diff:
-			recon->derDisplay = square_mag;
+			recon->setDisplay(square_mag);
 			break;
 		case square_mag:
-			recon->derDisplay = der2_x;
+			recon->setDisplay(der2_x);
 			break;
 		case der2_x:
-			recon->derDisplay = der2_y;
+			recon->setDisplay(der2_y);
 			break;
 		case der2_y:
-			recon->derDisplay = der3_x;
+			recon->setDisplay(der3_x);
 			break;
 		case der3_x:
-			recon->derDisplay = der3_y;
+			recon->setDisplay(der3_y);
 			break;
 		case der3_y:
-			recon->derDisplay = no_der;
+			recon->setDisplay(no_der);
 			break;
 		}
 
@@ -1332,10 +1264,6 @@ void CudaGLCanvas::OnChar(wxKeyEvent& event){
 		paint();
 	}
 }
-
-//---------------------------------------------------------------------------
-// CudaGLInCanvas
-//---------------------------------------------------------------------------
 
 wxBEGIN_EVENT_TABLE(CudaGLInCanvas, wxGLCanvas)
 EVT_PAINT(CudaGLInCanvas::OnPaint)
@@ -1353,7 +1281,7 @@ CudaGLInCanvas::CudaGLInCanvas(wxWindow *parent, bool vertical, struct SystemCon
 
 	recon = new TomoRecon(GetSize().x, GetSize().y, Sys);
 	recon->init((const char*)gainFile.mb_str(), (const char*)darkFile.mb_str(), (const char*)filename.mb_str());
-	recon->vertical = vertical;
+	recon->setInputVeritcal(vertical);
 }
 
 CudaGLInCanvas::~CudaGLInCanvas() {
@@ -1361,45 +1289,25 @@ CudaGLInCanvas::~CudaGLInCanvas() {
 	delete m_glRC;
 }
 
-void CudaGLInCanvas::OnEvent(wxCommandEvent& WXUNUSED(event)) {
-	if (recon->initialized) {
-		paint();
-	}
-}
-
 void CudaGLInCanvas::OnPaint(wxPaintEvent& WXUNUSED(event)) {
-	// This is a dummy, to avoid an endless succession of paint messages.
 	// OnPaint handlers must always create a wxPaintDC.
 	wxPaintDC(this);
 
-	if (recon->initialized) {
-		paint();
-	}
+	paint();
 }
 
 void CudaGLInCanvas::paint() {
 	SetCurrent(*m_glRC);//tells opengl which buffers to use, mutliple windows fail without this
-	int width = GetSize().x;
-	int height = GetSize().y;
-	recon->display(width, height);
-	recon->map();
-
-	recon->draw();
-
-	recon->unmap();
-
-	recon->blit();
-
+	recon->draw(GetSize().x, GetSize().y);
 	SwapBuffers();
 }
 
 void CudaGLInCanvas::OnMouseEvent(wxMouseEvent& event) {
-	static float last_x, last_y, last_x_off, last_y_off;
-	float this_x = event.GetX();
-	float this_y = event.GetY();
+	static int last_x, last_y, last_x_off, last_y_off;
+	int this_x = event.GetX();
+	int this_y = event.GetY();
 
 	// Allow default processing to happen, or else the canvas cannot gain focus
-	// (for key events).
 	event.Skip();
 
 	if (event.LeftDown()) {
@@ -1423,8 +1331,7 @@ void CudaGLInCanvas::OnMouseEvent(wxMouseEvent& event) {
 		}
 		last_x = this_x;
 		last_y = this_y;
-		last_x_off = recon->xOff;
-		last_y_off = recon->yOff;
+		recon->getOffsets(&last_x_off, &last_y_off);
 	}
 
 	if (event.LeftIsDown()) {
@@ -1447,8 +1354,7 @@ void CudaGLInCanvas::OnMouseEvent(wxMouseEvent& event) {
 				}
 			}
 			else {
-				recon->xOff = last_x_off - (this_x - last_x)*recon->scale;
-				recon->yOff = last_y_off - (this_y - last_y)*recon->scale;
+				recon->setOffsets(last_x_off - (this_x - last_x), last_y_off - (this_y - last_y));
 			}
 			paint();
 		}

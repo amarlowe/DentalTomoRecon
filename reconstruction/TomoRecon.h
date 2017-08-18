@@ -37,6 +37,11 @@
 #define LINEWIDTH 3
 #define BARHEIGHT 40
 
+//Projection correction parameters
+#define LOWTHRESH 80.0f
+#define HIGHTHRESH 0.98f
+#define DIFFTHRESH 30.0f
+
 //Autofocus parameters
 #define STARTSTEP 1.0f
 #define LASTSTEP 0.001f
@@ -56,10 +61,8 @@
 #define MAXTHREADS 1024
 
 //Kernel options
-//#define SIGMA 1.0f
-//#define KERNELRADIUS 5
 #define SIGMA 1.0f
-#define KERNELRADIUS 10
+#define KERNELRADIUS 5
 #define KERNELSIZE (2*KERNELRADIUS + 1)
 
 //Maps to single instruction in cuda
@@ -221,7 +224,7 @@ public:
 	TomoError init(const char * gainFile, const char * darkFile, const char * mainFile);
 
 	//High level functions for command line call
-	TomoError TomoLoad(const char* file);
+	TomoError ReadProjections(const char * gainFile, const char * darkFile, const char * mainFile);
 	TomoError FreeGPUMemory(void);
 
 	TomoError setReconBox(int index);
@@ -235,7 +238,6 @@ public:
 	template<typename T>
 	TomoError getHistogram(T * image, unsigned int byteSize, unsigned int *histogram);
 	TomoError singleFrame();
-	float getDistance();
 	TomoError autoFocus(bool firstRun);
 	TomoError autoGeo(bool firstRun);
 	TomoError autoLight(unsigned int histogram[HIST_BIN_COUNT], int threshold, float * minVal, float * maxVal);
@@ -243,21 +245,35 @@ public:
 	TomoError initTolerances(std::vector<toleranceData> &data, int numTests, std::vector<float> offsets);
 	TomoError testTolerances(std::vector<toleranceData> &data, bool firstRun);
 
-	//////////////////////////////////////////////////////////////////////////////////////////////
-	//interop extensions
-	void map() { interop::map(stream); }
-	void unmap() { interop::unmap(stream); }
-	TomoError draw();
+	//interop extension
+	TomoError draw(int x, int y);
 
 	//Getters and setters
 	TomoError getLight(unsigned int * minVal, unsigned int * maxVal);
 	TomoError setLight(unsigned int minVal, unsigned int maxVal);
-	TomoError addMaxLight(int amount);
-	TomoError addMinLight(int amount);
+	TomoError appendMaxLight(int amount);
+	TomoError appendMinLight(int amount);
+	float getDistance();
+	TomoError setDistance(float distance);
+	TomoError stepDistance(int steps);
 	TomoError resetLight();
 	TomoError resetFocus();
 	TomoError setLogView(bool useLog);
 	bool getLogView();
+	TomoError setInputVeritcal(bool vertical);
+	TomoError setActiveProjection(int index);
+	TomoError setOffsets(int xOff, int yOff);
+	TomoError appendOffsets(int xOff, int yOff);
+	void getOffsets(int * xOff, int * yOff);
+	TomoError setSelBoxStart(int x, int y);
+	TomoError setSelBoxEnd(int x, int y);
+	TomoError resetSelBox();
+	bool selBoxReady();
+	TomoError appendZoom(int amount);
+	TomoError setZoom(int value);
+	TomoError resetZoom();
+	derivative_t getDisplay();
+	TomoError setDisplay(derivative_t type);
 
 	/* Input Functions to read data into the program                      */	BOOL CheckFilePathForRepeatScans(std::string BasePathIn);
 	int GetNumberOfScans(std::string BasePathIn);
@@ -268,9 +284,7 @@ public:
 	/********************************************************************************************/
 	/* Variables																				*/
 	/********************************************************************************************/
-	bool initialized = false;
-
-	struct SystemControl * Sys;
+	struct SystemControl Sys;
 	int NumViews;
 
 	int iteration = 0;
@@ -328,6 +342,10 @@ private:
 	TomoError setGaussDer(float kernel[KERNELSIZE]);
 	TomoError setGaussDer2(float kernel[KERNELSIZE]);
 	TomoError setGaussDer3(float kernel[KERNELSIZE]);
+
+	//Get and set helpers
+	TomoError checkOffsets(int * xOff, int * yOff);
+	TomoError checkBoundaries(int * x, int * y);
 
 	//Kernel call helpers
 	float focusHelper();
