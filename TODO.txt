@@ -8,62 +8,31 @@ TomoRecon
 - Save configuration settings on project file/directory instead of registry to make them project specific
 - "Set default" options for configuration and any other setting we can come up with
 - Replace each failure state with it's own error type and dialoag (or pass a string)
-- Inefficienicies in initial load and correction, can remove the final blur step and blurxy array
-- Recon norm has essentially uniform values across the entire image, consider killing to save memory (incorrect value was being read from it in the past)
-- Automatic phantom reader
-- Alt + wheel to change lighting
-- Color correction within current viewport
 - Look into upres using the mutltiple viewing angles
-- Clean up all non-recon memory when recon finishes
-- Siphon mem from open recons by reading from disk and just having a buffer of slices
 - Confirm overwrite on save if file already exists
-- Add Units to all number descriptions in settings
-- Make a labled and colored rectangular selection tool
-- Make a dialoag box that adds selections 
+- Add Units to all number descriptions in settings 
 - Make an automated test bench for algorithm changes
 - Correct for dead pixels (not necessarily on all projection inputs)
-- Recon artifacts are occuring whenever there are high derivative areas, if a lossy filter is a solution, make it optional
-- Need to rescale lighting to accent constrast, possibly with HDR algorigthms
 - Gui tools for translating scales into real world measurments
-- Window and lighting adjustment presets for diffent diagnosis types
 - Edit lighting and contrast panel
 - Image annotations
 - Remove focus artifacts, only show in focus areas
-- Y offset geometry causes images to go out of frame at different angles, investigate necessity of them (or at least of a constant offset, may center around average)
-- Add a display and save filter for log values
 - Use autofocus to generate relative geometries
 - Move autodetect geometry to config menu, grey out geo list when this is selected
-- Add popup for vertial or horizontal phantom orientation
 - Make input selections a wizard
-- Calculate relative distances given a baseline with approximate geometries
-- Remove internal pixel buffer in favor of generating everything on the fly
 - Correct for non-xy shifts in the detector
-- Redo read-raw-projections for speed, stability, and color correction accuracy
-- Switch to single buffer as the output, calculate pitch widths from pixel ratios
-- Move sys generation to initializer
+- Save projection images after processing
 
 --------------Bugs---------------------
-- AutoDetection breaks reconstruction badly
 - Disable console close button
 - Close behavior breaks when the console is the selected tab
-- Number of Slices to Reconstruct too large may crash program
 - Throw all tomo errors instead of crashing the program
-- No boundary checking when changing between display types (ie, out of bounds if recon has fewer slices than input and left on the final slice)
-- Cancel on new does not cancel operation
 - Changing config after opening image set does not update
-- Images saved are offset by about 10 pixels, giving garbage data at the top and cutting off the bottom
-- If left to run, error comes in from bottom and does not stop
-- Conflict between continous mode and others
-- Cuda constants are global, not object specific
-- offset maximums are not calculated correctly, have overshoot
-- If left untouched for some time, becomes completely unresponsive
-- Zooming out then changing z distance causes a jump in offsets
-- GPU memory leaks abound
-- White artifacts around reconstruction corners
-- Flip causes pictures to go negative, not sure if we should fix/detect
+- Histogram lighting has some issues (see rmi single)
 
 -------------Completed------------------
 -------------Features------------------
+- Move sys generation to initializer
 - Fix readGainAndDarkimages
 - Remove magic numbers and filepaths
 - Implement cjson struct building
@@ -83,6 +52,25 @@ TomoRecon
 - Zoom with ctrl + mouse wheel
 - Drag to move around in zoomed in space
 - Zoom targets current mouse position as center
+- Alt + wheel to change lighting
+- Automatic phantom reader
+- Color correction within current viewport
+- Make a labled and colored rectangular selection tool
+- Inefficienicies in initial load and correction, can remove the final blur step and blurxy array
+- Recon norm has essentially uniform values across the entire image, consider killing to save memory (incorrect value was being read from it in the past)
+- Clean up all non-recon memory when recon finishes
+- Siphon mem from open recons by reading from disk and just having a buffer of slices (turned into just a single slice recon)
+- Make a dialoag box that adds selections
+- Recon artifacts are occuring whenever there are high derivative areas, if a lossy filter is a solution, make it optional (removed backprojection)
+- Need to rescale lighting to accent constrast, possibly with HDR algorigthms (imageJ win+lvl)
+- Window and lighting adjustment presets for diffent diagnosis types (autoadjustment based on selections)
+- Add a display and save filter for log values
+- Add popup for vertial or horizontal phantom orientation
+- Calculate relative distances given a baseline with approximate geometries
+- Remove internal pixel buffer in favor of generating everything on the fly
+- Redo read-raw-projections for speed, stability, and color correction accuracy
+- Correct for scan lines
+- Switch to single buffer as the output, calculate pitch widths from pixel ratios
 
 --------------Bugs---------------------
 - additional lines included on increasing z size
@@ -99,3 +87,16 @@ TomoRecon
 - Loading more than 2 projections causes odd bugs
 - Check for console tab before running reconstructions
 - Y axis not checked for out of bounds, leading to white noise on top and bottom
+- Number of Slices to Reconstruct too large may crash program
+- No boundary checking when changing between display types (ie, out of bounds if recon has fewer slices than input and left on the final slice)
+- Cancel on new does not cancel operation
+- Images saved are offset by about 10 pixels, giving garbage data at the top and cutting off the bottom
+- If left to run, error comes in from bottom and does not stop
+- Conflict between continous mode and others
+- Cuda constants are global, not object specific
+- offset maximums are not calculated correctly, have overshoot
+- If left untouched for some time, becomes completely unresponsive
+- Zooming out then changing z distance causes a jump in offsets
+- GPU memory leaks abound
+- White artifacts around reconstruction corners
+- Flip causes pictures to go negative, not sure if we should fix/detect

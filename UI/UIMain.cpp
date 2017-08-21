@@ -312,15 +312,17 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 
 		if (i != 0) recon->ReadProjections(gainFilepath.mb_str(), darkFilepath.mb_str(), filename.GetFullPath().mb_str());
 
-		//TODO: remove
-		recon->constants.log = false;
+		recon->setLogView(false);
 
 		if (data.empty()) recon->initTolerances(data, 1, offsets);
+
+		recon->setSelBoxStart(pConfig->Read(wxString::Format(wxT("/resPhanBoxLxF%d"), i), 0l), pConfig->Read(wxString::Format(wxT("/resPhanBoxLyF%d"), i), 0l));
+		recon->setSelBoxEnd(pConfig->Read(wxString::Format(wxT("/resPhanBoxUxF%d"), i), 0l), pConfig->Read(wxString::Format(wxT("/resPhanBoxUyF%d"), i), 0l));
 		
-		recon->baseX = pConfig->Read(wxString::Format(wxT("/resPhanBoxLxF%d"), i), 0l);
+		/*recon->baseX = pConfig->Read(wxString::Format(wxT("/resPhanBoxLxF%d"), i), 0l);
 		recon->baseY = pConfig->Read(wxString::Format(wxT("/resPhanBoxLyF%d"), i), 0l);
 		recon->currX = pConfig->Read(wxString::Format(wxT("/resPhanBoxUxF%d"), i), 0l);
-		recon->currY = pConfig->Read(wxString::Format(wxT("/resPhanBoxUyF%d"), i), 0l);
+		recon->currY = pConfig->Read(wxString::Format(wxT("/resPhanBoxUyF%d"), i), 0l);*/
 		recon->lowX = pConfig->Read(wxString::Format(wxT("/resPhanLowx%d"), i), 0l);
 		recon->lowY = pConfig->Read(wxString::Format(wxT("/resPhanLowy%d"), i), 0l);
 		recon->upX = pConfig->Read(wxString::Format(wxT("/resPhanUpx%d"), i), 0l);

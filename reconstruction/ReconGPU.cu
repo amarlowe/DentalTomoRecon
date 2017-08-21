@@ -280,14 +280,17 @@ __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, uns
 				val = val3;
 		}
 		if (val < LOWTHRESH) val = 0.0;
+
 		val /= Gain[j*consts.Px + i];
 		if (val > HIGHTHRESH) val = 0.0;
 
-		Sino[(y + view*consts.Py)*consts.ProjPitchNum + x] = val * USHRT_MAX;
+		//if (val / Gain[j*consts.Px + i] > HIGHTHRESH) val = 0.0;
+
+		Sino[(y + view*consts.Py)*consts.ProjPitchNum + x] = val;
 	}
 }
 
-__global__ void rescale(float * Sino, int view, float * MaxVal, float * MinVal, params consts) {
+__global__ void rescale(float * Sino, int view, float * MaxVal, float * MinVal, float * colShifts, float * rowShifts, params consts) {
 	//Define pixel location in x and y
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
@@ -296,7 +299,7 @@ __global__ void rescale(float * Sino, int view, float * MaxVal, float * MinVal, 
 	if ((i < consts.Px) && (j < consts.Py)) {
 		float test = Sino[(j + view*consts.Py)*consts.ProjPitchNum + i] - *MinVal;
 		if (test > 0) {
-			Sino[(j + view*consts.Py)*consts.ProjPitchNum + i] = test / *MaxVal * USHRT_MAX;//scale from 1 to max
+			Sino[(j + view*consts.Py)*consts.ProjPitchNum + i] = (test - colShifts[i] - rowShifts[j]) / *MaxVal * USHRT_MAX;//scale from 1 to max
 		}
 		else Sino[(j + view*consts.Py)*consts.ProjPitchNum + i] = 0.0;
 	}
@@ -387,6 +390,62 @@ __global__ void sumReduction(float * Image, int pitch, float * sum, int lowX, in
 	//write the result for this block to global memory
 	if (thread == 0 && val > 0) {
 		atomicAdd(sum, val);
+	}
+}
+
+__global__ void sumRowsOrCols(float * sum, bool cols, params consts) {
+	//Define shared memory to read all the threads
+	extern __shared__ float data[];
+
+	//define the thread and block location
+	const int thread = threadIdx.x;
+	const int x = MUL_ADD(blockDim.x, blockIdx.x, threadIdx.x);
+	const int y = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
+
+	float val = 0;
+	int i = x;
+	int limit;
+	if (cols) limit = consts.Py;
+	else limit = consts.Px;
+
+	while(i < limit){
+		if(cols)
+			val += tex2D(textSino, y, i);
+		else
+			val += tex2D(textSino, i, y);
+		i += blockDim.x;
+	}
+
+	data[thread] = val;
+
+	//Each thread puts its local sum into shared memory
+	__syncthreads();
+
+	//Do reduction in shared memory
+	if (thread < 512) data[thread] = val += data[thread + 512];
+	__syncthreads();
+
+	if (thread < 256) data[thread] = val += data[thread + 256];
+	__syncthreads();
+
+	if (thread < 128) data[thread] = val += data[thread + 128];
+	__syncthreads();
+
+	if (thread < 64) data[thread] = val += data[thread + 64];
+	__syncthreads();
+
+	if (thread < 32) {
+		// Fetch final intermediate sum from 2nd warp
+		data[thread] = val += data[thread + 32];
+		// Reduce final warp using shuffle
+		for (int offset = warpSize / 2; offset > 0; offset /= 2) {
+			val += __shfl_down(val, offset);
+		}
+	}
+
+	//write the result for this block to global memory
+	if (thread == 0) {
+		sum[y] = val;
 	}
 }
 
@@ -563,6 +622,15 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * darkFil
 	unsigned short * DarkData = new unsigned short[Sys.Proj.Nx*Sys.Proj.Ny];
 	unsigned short * GainData = new unsigned short[Sys.Proj.Nx*Sys.Proj.Ny];
 
+	float * sumValsVert = new float[NumViews * Sys.Proj.Nx];
+	float * sumValsHor = new float[NumViews * Sys.Proj.Ny];
+	float * vertOff = new float[NumViews * Sys.Proj.Nx];
+	float * horOff = new float[NumViews * Sys.Proj.Ny];
+	float * d_SumValsVert;
+	float * d_SumValsHor;
+	cuda(Malloc((void**)&d_SumValsVert, Sys.Proj.Nx * sizeof(float)));
+	cuda(Malloc((void**)&d_SumValsHor, Sys.Proj.Ny * sizeof(float)));
+
 	//define the GPU kernel based on size of "ideal projection"
 	dim3 dimBlockProj(32, 32);
 	dim3 dimGridProj((Sys.Proj.Nx + 31) / 32, (Sys.Proj.Ny + 31) / 32);
@@ -620,14 +688,136 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * darkFil
 
 		KERNELCALL2(LogCorrectProj, dimGridProj, dimBlockProj, d_Sino, view, d_Proj, d_Dark, d_Gain, constants);
 
-		//Normalize projection image lighting
-		float maxVal, minVal;
-		unsigned int histogram[HIST_BIN_COUNT];
-		getHistogram(d_Sino + view*projPitch / sizeof(float)*Sys.Proj.Ny, projPitch*Sys.Proj.Ny, histogram);
-		autoLight(histogram, 80, &minVal, &maxVal);
-		cuda(Memcpy(d_MaxVal, &maxVal, sizeof(float), cudaMemcpyHostToDevice));
-		cuda(Memcpy(d_MinVal, &minVal, sizeof(float), cudaMemcpyHostToDevice));
-		KERNELCALL2(rescale, dimGridProj, dimBlockProj, d_Sino, view, d_MaxVal, d_MinVal, constants);
+		scanLineDetect(view, d_SumValsVert, sumValsVert + view * Sys.Proj.Nx, vertOff + view * Sys.Proj.Nx, true);
+		scanLineDetect(view, d_SumValsHor, sumValsHor + view * Sys.Proj.Ny, horOff + view * Sys.Proj.Ny, false);
+	}
+
+	float step;
+	float best;
+	bool linearRegion;
+	bool firstLin = true;
+	float bestDist;
+
+	float * scales = new float[NumViews];
+
+	for (int i = 0; i < NumViews; i++) {
+		float offLight = 0.0;
+		float bestOffLight = 0.0;
+		float bestScale = 1.0;
+		float thisScale = 1.0;
+		bool scaleSwitch = false;
+		firstLin = true;
+		float scaleStep = 0.01;
+		step = 10;
+		best = FLT_MAX;
+		while (true) {
+			float newVal = graphCost(sumValsVert, sumValsHor, i, offLight, thisScale, 0.0);
+
+			//compare to current
+			if (newVal < best) {
+				if (scaleSwitch) {
+					bestScale = thisScale;
+					thisScale += scaleStep;
+				}
+				else {
+					bestOffLight = offLight;
+					offLight += step;
+				}
+				best = newVal;
+			}
+			else {
+				if (!firstLin) {
+					if(scaleSwitch) thisScale -= scaleStep;//revert last move
+					else offLight -= step;//revert last move
+				}
+				scaleSwitch = !scaleSwitch;
+				if (!scaleSwitch) {
+					step = -step / 2;//find next step
+					scaleStep = -scaleStep / 2;
+
+					if (abs(step) < 0.1)
+						break;
+					else offLight += step;
+				}
+				else thisScale += scaleStep;
+			}
+			firstLin = false;
+		}
+
+		scales[i] = bestScale;
+		for (int j = 0; j < Sys.Proj.Nx; j++) {
+			float r = xP2MM(j, Sys.Proj.Nx, Sys.Proj.Pitch_x) - Sys.Geo.EmitX[i];
+			sumValsVert[j + i * Sys.Proj.Nx] = sumValsVert[j + i * Sys.Proj.Nx] * bestScale - 0.0*pow(r, 2) + bestOffLight;
+		}
+		for (int j = 0; j < Sys.Proj.Ny; j++) {
+			float r = yP2MM(j, Sys.Proj.Ny, Sys.Proj.Pitch_y) - Sys.Geo.EmitY[i];
+			sumValsHor[j + i * Sys.Proj.Ny] = sumValsHor[j + i * Sys.Proj.Ny] * bestScale - 0.0*pow(r, 2) + bestOffLight;
+			horOff[j + i * Sys.Proj.Ny] -= bestOffLight;
+		}
+	}
+
+	step = STARTSTEP;
+	distance = MINDIS;
+	bestDist = MINDIS;
+	best = FLT_MAX;
+	linearRegion = false;
+	firstLin = true;
+
+	while (true) {
+		float newVal = graphCost(sumValsVert, sumValsHor);
+
+		if (newVal < best) {
+			best = newVal;
+			bestDist = distance;
+		}
+
+		distance += step;
+
+		if (distance > MAXDIS) {
+			distance = bestDist;
+			break;
+		}
+	}
+
+	//Normalize projection image lighting
+	float maxVal, minVal;
+	unsigned int histogram[HIST_BIN_COUNT];
+	getHistogram(d_Sino + (NumViews / 2)*projPitch / sizeof(float)*Sys.Proj.Ny, projPitch*Sys.Proj.Ny, histogram);
+	autoLight(histogram, 80, &minVal, &maxVal);
+	cuda(Memcpy(d_MinVal, &minVal, sizeof(float), cudaMemcpyHostToDevice));
+
+	for (int view = 0; view < NumViews; view++) {
+		float scale = maxVal/scales[view];
+		cuda(Memcpy(d_MaxVal, &scale, sizeof(float), cudaMemcpyHostToDevice));
+		
+		{
+			std::ofstream FILE1, FILE2;
+			std::stringstream outputfile1, outputfile2;
+			outputfile1 << "C:\\Users\\jdean\\Downloads\\cudaTV\\cudaTV\\correctedVert" << view << ".txt";
+			outputfile2 << "C:\\Users\\jdean\\Downloads\\cudaTV\\cudaTV\\correctedHor" << view << ".txt";
+			FILE1.open(outputfile1.str());
+			for (int i = 0; i < Sys.Proj.Nx; i++) {
+				int x = i + Sys.Geo.EmitX[view] * distance / Sys.Geo.EmitZ[view] / constants.PitchPx;
+				if(x < Sys.Proj.Nx && x > 0)
+					FILE1 << sumValsVert[x + view * Sys.Proj.Nx] << "\n";
+				else FILE1 << 0.0 << "\n";
+			}
+			FILE1.close();
+
+			FILE2.open(outputfile2.str());
+			for (int i = 0; i < Sys.Proj.Ny; i++) {
+				int x = i + Sys.Geo.EmitY[view] * distance / Sys.Geo.EmitZ[view] / constants.PitchPy;
+				if (x < Sys.Proj.Ny && x > 0)
+					FILE2 << sumValsHor[x + view * Sys.Proj.Ny] << "\n";
+				else FILE2 << 0.0 << "\n";
+			}
+			FILE2.close();
+		}
+
+		cuda(MemcpyAsync(d_SumValsVert, vertOff + view * Sys.Proj.Nx, Sys.Proj.Nx * sizeof(float), cudaMemcpyHostToDevice));
+		cuda(MemcpyAsync(d_SumValsHor, horOff + view * Sys.Proj.Ny, Sys.Proj.Ny * sizeof(float), cudaMemcpyHostToDevice));
+
+		KERNELCALL2(rescale, dimGridProj, dimBlockProj, d_Sino, view, d_MaxVal, d_MinVal, d_SumValsVert, d_SumValsHor, constants);
 	}
 
 	constants.log = oldLog;
@@ -637,14 +827,133 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * darkFil
 	constants.currXr = -1;
 	constants.currYr = -1;
 
+	delete[] scales;
 	delete[] RawData;
 	delete[] DarkData;
 	delete[] GainData;
+	delete[] sumValsHor;
+	delete[] sumValsVert;
+	delete[] vertOff;
+	delete[] horOff;
 	cuda(Free(d_Proj));
 	cuda(Free(d_Dark));
 	cuda(Free(d_Gain));
+	cuda(Free(d_SumValsHor));
+	cuda(Free(d_SumValsVert));
 
 	return Tomo_OK;
+}
+
+TomoError TomoRecon::scanLineDetect(int view, float * d_sum, float * sum, float * offset, bool vert) {
+	int vectorSize;
+	if (vert) vectorSize = Sys.Proj.Nx;
+	else vectorSize = Sys.Proj.Ny;
+
+	cuda(BindTexture2D(NULL, textSino, d_Sino + view*Sys.Proj.Ny*projPitch / sizeof(float), cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny, projPitch));
+	KERNELCALL3(sumRowsOrCols, dim3(1, vectorSize), reductionThreads, reductionSize, d_sum, vert, constants);
+	cuda(Memcpy(sum, d_sum, vectorSize * sizeof(float), cudaMemcpyDeviceToHost));
+
+#ifdef PRINTSCANCORRECTIONS
+	float * sumCorr = new float[vectorSize];
+	{
+		std::ofstream FILE;
+		std::stringstream outputfile;
+		outputfile << "C:\\Users\\jdean\\Downloads\\cudaTV\\cudaTV\\original" << view << ".txt";
+		FILE.open(outputfile.str());
+		for (int i = 0; i < vectorSize; i++) {
+			sum[i] /= vectorSize;
+			FILE << sum[i] << "\n";
+			sumCorr[i] = sum[i];
+		}
+		FILE.close();
+	}
+#endif
+
+#ifdef CHAMBOLLE
+	float *g, *z, *z0, *div, *div0;
+	size_t size;
+	int N = vectorSize;
+	int i, j;
+	float alpha;
+	float tau = 0.25;
+	float lambda = 10000;
+
+
+	size = N * sizeof(float);
+	g = sumCorr;
+	div = (float*)malloc(size);
+	div0 = (float*)malloc(size);
+	z = (float*)malloc(2 * size);
+	z0 = (float*)malloc(2 * size);
+
+	for (i = 0; i<N; i++) {
+	div0[i] = 0;
+	z0[i] = 0;
+	}
+
+	#define SWP(a,b) {float *swap=a;a=b;b=swap;}
+	for (j = 0; j<200; j++) {
+	for (i = 0; i<N; i++) { div[i] = div0[i] - g[i] / lambda; }
+
+	nabla(div, z, N);
+	for (i = 0; i<N; i++)
+	{
+	int ix = 2 * i + 0;
+	int iy = 2 * i + 1;
+	alpha = 1.0 / (1.0 + tau*sqrtf(z[ix] * z[ix] + z[iy] * z[iy]));
+
+	z[ix] = (z0[ix] + tau*z[ix])*alpha;
+	z[iy] = (z0[iy] + tau*z[iy])*alpha;
+	}
+
+	diver(z, div, N);
+	SWP(z, z0);
+	SWP(div, div0);
+
+	}
+
+	for (i = 0; i<N; i++) { sumCorr[i] = g[i] - div0[i] * lambda; }
+
+	free(div);
+	free(div0);
+	free(z);
+	free(z0);
+#else
+	float *di;
+	size_t size;
+	int i, j;
+	int N = vectorSize;
+	size = N * sizeof(float);
+	di = (float*)malloc(size);
+	float tau = vert ? cConstants.vertTau : cConstants.horTau;
+
+	for (j = 0; j < cConstants.iterations; j++) {
+		lapla(sumCorr, di, N);
+		for (i = 0; i < N; i++) sumCorr[i] += di[i] * tau;
+	}
+
+	free(di);
+#endif
+
+#ifdef PRINTSCANCORRECTIONS
+	{
+		std::ofstream FILE;
+		std::stringstream outputfile;
+		outputfile << "C:\\Users\\jdean\\Downloads\\cudaTV\\cudaTV\\corrected" << view << ".txt";
+		FILE.open(outputfile.str());
+		for (int i = 0; i < vectorSize; i++) {
+			FILE << sumCorr[i] << "\n";
+			offset[i] = sum[i] - sumCorr[i];
+			sum[i] = sumCorr[i];
+		}
+		FILE.close();
+	}
+	delete[] sumCorr;
+#else
+	for (int i = 0; i < vectorSize; i++) {
+		sum[i] -= sumValsVertCorr[i];
+	}
+#endif
 }
 
 //Fucntion to free the gpu memory after program finishes
@@ -776,69 +1085,67 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 	static bool linearRegion;
 	static bool firstLin = true;
 	static float bestDist;
-	static int oldLight;
 
 	if (firstRun) {
 		step = STARTSTEP;
+		distance = MINDIS;
+		bestDist = MINDIS;
 		best = 0;
 		linearRegion = false;
 		derDisplay = square_mag;
-		oldLight = light;
-		light = -100;
-		distance = MINDIS;
-		bestDist = MINDIS;
+		singleFrame();
+
+		unsigned int histogram[HIST_BIN_COUNT];
+		int threshold = Sys.Recon.Nx * Sys.Recon.Ny / AUTOTHRESHOLD;
+		getHistogram(d_Image, reconPitch*Sys.Recon.Ny, histogram);
+		autoLight(histogram, threshold, &constants.minVal, &constants.maxVal);
 	}
 
-	if (continuousMode) {
-		float newVal = focusHelper();
+	float newVal = focusHelper();
 
-		if (!linearRegion) {
-			if (newVal > best) {
-				best = newVal;
-				bestDist = distance;
-			}
+	if (!linearRegion) {
+		if (newVal > best) {
+			best = newVal;
+			bestDist = distance;
+		}
 
+		distance += step;
+
+		if (distance > MAXDIS) {
+			linearRegion = true;
+			firstLin = true;
+			distance = bestDist;
+		}
+	}
+	else {
+		//compare to current
+		if (newVal > best) {
+			best = newVal;
+			bestDist = distance;
 			distance += step;
-
-			if (distance > MAXDIS) {
-				linearRegion = true;
-				firstLin = true;
-				distance = bestDist;
-			}
 		}
 		else {
-			//compare to current
-			if (newVal > best) {
-				best = newVal;
-				bestDist = distance;
-				distance += step;
-			}
-			else {
-				if(!firstLin) distance -= step;//revert last move
+			if(!firstLin) distance -= step;//revert last move
 
-				//find next step
-				step = -step / 2;
+			//find next step
+			step = -step / 2;
 
-				if (abs(step) < LASTSTEP) {
-					light = oldLight;
-					derDisplay = no_der;
-					singleFrame();
-					unsigned int histogram[HIST_BIN_COUNT];
-					int threshold = Sys.Recon.Nx * Sys.Recon.Ny / AUTOTHRESHOLD;
-					getHistogram(d_Image, reconPitch*Sys.Recon.Ny, histogram);
-					autoLight(histogram, threshold, &constants.minVal, &constants.maxVal);
-					return Tomo_Done;
-				}
-				else distance += step;
+			if (abs(step) < LASTSTEP) {
+				derDisplay = no_der;
+				singleFrame();
+				unsigned int histogram[HIST_BIN_COUNT];
+				int threshold = Sys.Recon.Nx * Sys.Recon.Ny / AUTOTHRESHOLD;
+				getHistogram(d_Image, reconPitch*Sys.Recon.Ny, histogram);
+				autoLight(histogram, threshold, &constants.minVal, &constants.maxVal);
+				return Tomo_Done;
 			}
-			
-			firstLin = false;
+			else distance += step;
 		}
-
-		return Tomo_OK;
+			
+		firstLin = false;
 	}
 
-	return Tomo_Done;
+	return Tomo_OK;
 }
 
 //TODO: fix, currently worse than default geo
@@ -1211,6 +1518,62 @@ TomoError TomoRecon::resetFocus() {
 	constants.currYr = -1;
 
 	return Tomo_OK;
+}
+
+float TomoRecon::graphCost(float * vertGraph, float * horGraph, int view, float offset, float lightScale, float rSq) {
+	float sum = 0.0;
+	int sizeX = Sys.Proj.Nx;
+	int sizeY = Sys.Proj.Ny;
+	int center = NumViews / 2;
+
+	for (int i = 0; i < sizeX; i++) {
+		float base = vertGraph[i + center*sizeX];
+		if (view == -1) {
+			int count = 0;
+			float avg = 0.0;
+			for (int j = 0; j < NumViews; j++) {
+				float x = i + Sys.Geo.EmitX[j] * distance / Sys.Geo.EmitZ[j] / constants.PitchPx;
+				if (x < sizeX && x > 0) {
+					count++;
+					//avg += pow(vertGraph[(int)x + j*sizeX]* lightScale - base, 2);
+					avg += abs(vertGraph[(int)x + j*sizeX] * lightScale - base);
+				}
+			}
+			if (count > 0) sum += avg / count;
+		}
+		else {
+			/*float x = i + Sys.Geo.EmitX[view] * distance / Sys.Geo.EmitZ[view] / constants.PitchPx;
+			if (x < sizeX && x > 0) {
+				sum += pow(vertGraph[(int)x + view*sizeX] + offset - base, 2);
+			}*/
+		}
+	}
+
+	for (int i = 0; i < sizeY; i++) {
+		float base = horGraph[i + center*sizeY];
+		if (view == -1) {
+			/*int count = 0;
+			float avg = 0.0;
+			for (int j = 0; j < NumViews; j++) {
+				float x = i + Sys.Geo.EmitY[j] * distance / Sys.Geo.EmitZ[j] / constants.PitchPy;
+				if (x < sizeY && x > 0) {
+					count++;
+					avg += pow(horGraph[(int)x + j*sizeY] - base, 2);
+				}
+			}
+			if (count > 0) sum += avg / count;*/
+		}
+		else {
+			float x = i + Sys.Geo.EmitY[view] * distance / Sys.Geo.EmitZ[view] / constants.PitchPy;
+			float r = yP2MM(i, Sys.Proj.Ny, Sys.Proj.Pitch_y) - Sys.Geo.EmitY[view];
+			if (x < sizeY && x > 0) {
+				//sum += pow(horGraph[(int)x + view*sizeY]*lightScale + offset - base, 2);
+				sum += abs(horGraph[(int)x + view*sizeY] * lightScale + offset + rSq*pow(r,2) - base);
+			}
+		}
+	}
+
+	return sum;
 }
 
 /****************************************************************************/

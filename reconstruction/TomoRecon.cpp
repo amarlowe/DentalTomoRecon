@@ -124,3 +124,41 @@ TomoError TomoRecon::setGaussDer3(float kernel[KERNELSIZE]) {
 
 	return Tomo_OK;
 }
+
+//difference of differences in x and y (normalizes for derivative)
+void TomoRecon::diver(float *z, float * d, int n){
+	double a, b;
+	int i, j, adr;
+
+	adr = 0;
+	for (i = 0; i < n; i++) {
+		if (i == 0) d[adr] = z[adr];
+		else if (i == n - 1) d[adr] = -z[adr - 1];
+		else d[adr] = z[adr] - z[adr - 1];
+		adr++;
+	}
+}
+
+//difference with right/upper neighbor
+void TomoRecon::nabla(float *u, float *g, int n){
+	int i, j, adr;
+
+	adr = 0;
+	for (i = 0; i < n; i++) {
+		if (i == (n - 1)) g[adr] = 0;
+		else g[adr] = u[adr + 1] - u[adr];
+		adr++;
+	}
+}
+
+//average difference on either side
+void TomoRecon::lapla(float *a, float *b, int n){
+	int x, y, idx = 0;
+	for (x = 0; x<n; x++){
+		float AX = 0, BX = 0;
+		if (x>0) { BX += a[idx - 1]; AX++; }
+		if (x<n - 1) { BX += a[idx + 1]; AX++; }
+		b[idx] = -AX*a[idx] + BX;
+		idx++;
+	}
+}

@@ -31,7 +31,6 @@
 #pragma comment(lib, "Shlwapi.lib")
 
 #define NUMVIEWS 7
-//#define PROFILER
 #define MAXZOOM 30
 #define ZOOMFACTOR 1.1f
 #define LINEWIDTH 3
@@ -70,9 +69,14 @@
 #define UMUL(a, b) ( (a) * (b) )
 
 //Autoscale parameters
-#define AUTOTHRESHOLD 5000
+#define AUTOTHRESHOLD 50000
 #define HISTLIMIT 10
 #define HIST_BIN_COUNT 256
+
+//Code use parameters
+//#define PROFILER
+//#define CHAMBOLLE
+#define PRINTSCANCORRECTIONS
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {										\
@@ -195,14 +199,20 @@ struct params {
 	bool log;
 
 	//Display parameters
-	float minVal;
-	float maxVal;
+	float minVal = 0.0;
+	float maxVal = USHRT_MAX;
 
 	//selection box parameters
 	int baseXr = -1;
 	int baseYr = -1;
 	int currXr = -1;
 	int currYr = -1;
+};
+
+struct CPUParams {
+	float vertTau = 0.25;
+	float horTau = 0.1;
+	int iterations = 40;
 };
 
 struct toleranceData {
@@ -342,6 +352,9 @@ private:
 	TomoError setGaussDer(float kernel[KERNELSIZE]);
 	TomoError setGaussDer2(float kernel[KERNELSIZE]);
 	TomoError setGaussDer3(float kernel[KERNELSIZE]);
+	void diver(float * z, float * d, int n);
+	void nabla(float * u, float * g, int n);
+	void lapla(float * a, float * b, int n);
 
 	//Get and set helpers
 	TomoError checkOffsets(int * xOff, int * yOff);
@@ -350,6 +363,8 @@ private:
 	//Kernel call helpers
 	float focusHelper();
 	TomoError imageKernel(float xK[KERNELSIZE], float yK[KERNELSIZE], float * output);
+	TomoError scanLineDetect(int view, float * d_sum, float * sum, float * offset, bool vert);
+	float graphCost(float * vertGraph, float * horGraph, int view = -1, float offset = 0.0, float lightScale = 1.0, float rsq = 0.0);
 
 	//Coordinate conversions
 	TomoError P2R(int* rX, int* rY, int pX, int pY, int view);
@@ -394,6 +409,10 @@ private:
 
 	//Parameters for 2d geometry search
 	int diffSlice = 0;
+
+	//Constants for program set by outside caller
+	CPUParams cConstants;
+	//params constants;
 };
 
 /********************************************************************************************/
