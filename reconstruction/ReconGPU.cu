@@ -283,6 +283,7 @@ __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, uns
 
 		val /= Gain[j*consts.Px + i];
 		if (val > HIGHTHRESH) val = 0.0;
+		val *= USHRT_MAX;
 
 		//if (val / Gain[j*consts.Px + i] > HIGHTHRESH) val = 0.0;
 
@@ -692,11 +693,56 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * darkFil
 		scanLineDetect(view, d_SumValsHor, sumValsHor + view * Sys.Proj.Ny, horOff + view * Sys.Proj.Ny, false);
 	}
 
-	float step;
-	float best;
-	bool linearRegion;
+	float step = 10;
+	float best = FLT_MAX;
+	float bestRSq;
+	float rSq = 0.0;
 	bool firstLin = true;
 	float bestDist;
+	/*
+	for (int index = 0; index < NumViews; index++) {
+		firstLin = true;
+		step = 1;
+		best = FLT_MAX;
+		while (true) {
+			float newVal = 0.0;
+
+			//Total variation as error
+			for (int i = 1; i < Sys.Proj.Ny; i++) {
+				float r1 = yP2MM(i, Sys.Proj.Ny, Sys.Proj.Pitch_y) - Sys.Geo.EmitY[index];
+				float r2 = yP2MM(i - 1, Sys.Proj.Ny, Sys.Proj.Pitch_y) - Sys.Geo.EmitY[index];
+				newVal += pow(sumValsHor[i + index * Sys.Proj.Ny] + rSq*pow(r1, 2) - sumValsHor[i + index * Sys.Proj.Ny - 1], 2) + rSq*pow(r2, 2);
+			}
+
+			//compare to current
+			if (newVal < best) {
+				bestRSq = rSq;
+				rSq += step;
+				best = newVal;
+			}
+			else {
+				if (!firstLin)
+					rSq -= step;//revert last move
+
+				step = -step / 2;//find next step
+
+				if (abs(step) < 0.0001)
+					break;
+				else rSq += step;
+			}
+			firstLin = false;
+		}
+
+		for (int j = 0; j < Sys.Proj.Ny; j++) {
+			float r = yP2MM(j, Sys.Proj.Ny, Sys.Proj.Pitch_y) - Sys.Geo.EmitY[index];
+			sumValsHor[j + index * Sys.Proj.Ny] += bestRSq*pow(r, 2);
+		}
+		for (int j = 0; j < Sys.Proj.Nx; j++) {
+			float r = xP2MM(j, Sys.Proj.Nx, Sys.Proj.Pitch_x) - Sys.Geo.EmitX[index];
+			sumValsVert[j + index * Sys.Proj.Nx] += bestRSq*pow(r, 2);
+		}
+	}
+	*/
 
 	float * scales = new float[NumViews];
 
@@ -710,6 +756,16 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * darkFil
 		float scaleStep = 0.01;
 		step = 10;
 		best = FLT_MAX;
+
+		/*for (int j = 0; j < Sys.Proj.Nx; j++) {
+			float r = xP2MM(j, Sys.Proj.Nx, Sys.Proj.Pitch_x) - Sys.Geo.EmitX[i];
+			sumValsVert[j + i * Sys.Proj.Nx] += bestRSq*pow(r, 2);
+		}
+		for (int j = 0; j < Sys.Proj.Ny; j++) {
+			float r = yP2MM(j, Sys.Proj.Ny, Sys.Proj.Pitch_y) - Sys.Geo.EmitY[i];
+			sumValsHor[j + i * Sys.Proj.Ny] += bestRSq*pow(r, 2);
+		}*/
+
 		while (true) {
 			float newVal = graphCost(sumValsVert, sumValsHor, i, offLight, thisScale, 0.0);
 
@@ -746,12 +802,10 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * darkFil
 
 		scales[i] = bestScale;
 		for (int j = 0; j < Sys.Proj.Nx; j++) {
-			float r = xP2MM(j, Sys.Proj.Nx, Sys.Proj.Pitch_x) - Sys.Geo.EmitX[i];
-			sumValsVert[j + i * Sys.Proj.Nx] = sumValsVert[j + i * Sys.Proj.Nx] * bestScale - 0.0*pow(r, 2) + bestOffLight;
+			sumValsVert[j + i * Sys.Proj.Nx] = sumValsVert[j + i * Sys.Proj.Nx] * bestScale + bestOffLight;
 		}
 		for (int j = 0; j < Sys.Proj.Ny; j++) {
-			float r = yP2MM(j, Sys.Proj.Ny, Sys.Proj.Pitch_y) - Sys.Geo.EmitY[i];
-			sumValsHor[j + i * Sys.Proj.Ny] = sumValsHor[j + i * Sys.Proj.Ny] * bestScale - 0.0*pow(r, 2) + bestOffLight;
+			sumValsHor[j + i * Sys.Proj.Ny] = sumValsHor[j + i * Sys.Proj.Ny] * bestScale + bestOffLight;
 			horOff[j + i * Sys.Proj.Ny] -= bestOffLight;
 		}
 	}
@@ -760,7 +814,6 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * darkFil
 	distance = MINDIS;
 	bestDist = MINDIS;
 	best = FLT_MAX;
-	linearRegion = false;
 	firstLin = true;
 
 	while (true) {
@@ -797,7 +850,8 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * darkFil
 			outputfile2 << "C:\\Users\\jdean\\Downloads\\cudaTV\\cudaTV\\correctedHor" << view << ".txt";
 			FILE1.open(outputfile1.str());
 			for (int i = 0; i < Sys.Proj.Nx; i++) {
-				int x = i + Sys.Geo.EmitX[view] * distance / Sys.Geo.EmitZ[view] / constants.PitchPx;
+				//int x = i + Sys.Geo.EmitX[view] * distance / Sys.Geo.EmitZ[view] / constants.PitchPx;
+				int x = i;
 				if(x < Sys.Proj.Nx && x > 0)
 					FILE1 << sumValsVert[x + view * Sys.Proj.Nx] << "\n";
 				else FILE1 << 0.0 << "\n";
@@ -806,7 +860,8 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * darkFil
 
 			FILE2.open(outputfile2.str());
 			for (int i = 0; i < Sys.Proj.Ny; i++) {
-				int x = i + Sys.Geo.EmitY[view] * distance / Sys.Geo.EmitZ[view] / constants.PitchPy;
+				//int x = i + Sys.Geo.EmitY[view] * distance / Sys.Geo.EmitZ[view] / constants.PitchPy;
+				int x = i;
 				if (x < Sys.Proj.Ny && x > 0)
 					FILE2 << sumValsHor[x + view * Sys.Proj.Ny] << "\n";
 				else FILE2 << 0.0 << "\n";
