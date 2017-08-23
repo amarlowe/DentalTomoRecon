@@ -19,6 +19,11 @@
 #include <wx/font.h>
 #include <wx/colour.h>
 #include <wx/settings.h>
+#include <wx/stattext.h>
+#include <wx/checkbox.h>
+#include <wx/button.h>
+#include <wx/slider.h>
+#include <wx/toolbar.h>
 #include <wx/textctrl.h>
 #include <wx/sizer.h>
 #include <wx/panel.h>
@@ -29,10 +34,8 @@
 #include <wx/gauge.h>
 #include <wx/dialog.h>
 #include <wx/listctrl.h>
-#include <wx/button.h>
 #include <wx/statline.h>
 #include <wx/gbsizer.h>
-#include <wx/stattext.h>
 #include <wx/radiobox.h>
 #include <wx/grid.h>
 
@@ -53,6 +56,15 @@ class mainWindow : public wxFrame
 		wxMenu* view;
 		wxMenu* calibration;
 		wxMenu* help;
+		wxToolBar* m_toolBar2;
+		wxStaticText* enhanceLabel;
+		wxCheckBox* xEnhance;
+		wxCheckBox* yEnhance;
+		wxCheckBox* absEnhance;
+		wxButton* resetEnhance;
+		wxStaticText* ratioLabel;
+		wxStaticText* ratioValue;
+		wxSlider* m_slider3;
 		wxPanel* m_panel10;
 		wxStatusBar* m_statusBar1;
 		

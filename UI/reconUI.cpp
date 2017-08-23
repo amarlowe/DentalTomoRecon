@@ -97,7 +97,35 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	
 	this->SetMenuBar( m_menubar1 );
 	
-	m_auinotebook6 = new wxAuiNotebook( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_NB_DEFAULT_STYLE );
+	m_toolBar2 = new wxToolBar( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_HORIZONTAL ); 
+	m_toolBar2->SetBackgroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_MENU ) );
+	
+	enhanceLabel = new wxStaticText( m_toolBar2, wxID_ANY, wxT("Edge Enhancement"), wxDefaultPosition, wxDefaultSize, 0 );
+	enhanceLabel->Wrap( -1 );
+	m_toolBar2->AddControl( enhanceLabel );
+	
+	xEnhance = new wxCheckBox( m_toolBar2, wxID_ANY, wxT("X"), wxDefaultPosition, wxDefaultSize, 0 );
+	m_toolBar2->AddControl( xEnhance );
+	yEnhance = new wxCheckBox( m_toolBar2, wxID_ANY, wxT("Y"), wxDefaultPosition, wxDefaultSize, 0 );
+	m_toolBar2->AddControl( yEnhance );
+	absEnhance = new wxCheckBox( m_toolBar2, wxID_ANY, wxT("Abs"), wxDefaultPosition, wxDefaultSize, 0 );
+	m_toolBar2->AddControl( absEnhance );
+	resetEnhance = new wxButton( m_toolBar2, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxSize( 50,20 ), 0 );
+	m_toolBar2->AddControl( resetEnhance );
+	
+	ratioLabel = new wxStaticText( m_toolBar2, wxID_ANY, wxT("Image/Edge ratio: "), wxDefaultPosition, wxDefaultSize, 0 );
+	ratioLabel->Wrap( -1 );
+	m_toolBar2->AddControl( ratioLabel );
+	ratioValue = new wxStaticText( m_toolBar2, wxID_ANY, wxT("0.0"), wxDefaultPosition, wxDefaultSize, 0 );
+	ratioValue->Wrap( -1 );
+	m_toolBar2->AddControl( ratioValue );
+	m_slider3 = new wxSlider( m_toolBar2, wxID_ANY, 50, 0, 100, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	m_toolBar2->AddControl( m_slider3 );
+	m_toolBar2->Realize();
+	m_mgr.AddPane( m_toolBar2, wxAuiPaneInfo() .Top() .CaptionVisible( false ).CloseButton( false ).PaneBorder( false ).Movable( false ).Dock().Resizable().FloatingSize( wxDefaultSize ).BottomDockable( false ).LeftDockable( false ).RightDockable( false ).Floatable( false ) );
+	
+	
+	m_auinotebook6 = new wxAuiNotebook( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_NB_CLOSE_ON_ALL_TABS|wxAUI_NB_DEFAULT_STYLE|wxNO_BORDER );
 	m_mgr.AddPane( m_auinotebook6, wxAuiPaneInfo() .Left() .CaptionVisible( false ).CloseButton( false ).PaneBorder( false ).Dock().Resizable().FloatingSize( wxDefaultSize ).CentrePane() );
 	
 	m_panel10 = new wxPanel( m_auinotebook6, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL );
