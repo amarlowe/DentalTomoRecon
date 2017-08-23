@@ -156,24 +156,23 @@ __global__ void squareDiff(float *d_Dst, int view, float xOff, float yOff, int p
 	d_Dst[MUL_ADD(y, pitchOut, x)] = pow(tex2D(textError, x - xOff, y - yOff + view*consts.Py) - tex2D(textError, x, y + (NUMVIEWS / 2)*consts.Py), 2);
 }
 
-__global__ void add(float* src1, float* src2, float *d_Dst, float ratio, int pitch, params consts) {
+__global__ void add(float* src1, float* src2, float *d_Dst, int pitch, bool useRatio, bool useAbs, params consts) {
 	const int x = MUL_ADD(blockDim.x, blockIdx.x, threadIdx.x);
 	const int y = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
 
 	if (x >= consts.Px || y >= consts.Py || x < 0 || y < 0)
 		return;
 
-	d_Dst[MUL_ADD(y, pitch, x)] = (src1[MUL_ADD(y, pitch, x)] + src2[MUL_ADD(y, pitch, x)]*ratio) / (abs(ratio) + 1);
-}
-
-__global__ void addLog(float* src1, float* src2, float *d_Dst, float scale1, float scale2, int pitch, params consts) {
-	const int x = MUL_ADD(blockDim.x, blockIdx.x, threadIdx.x);
-	const int y = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
-
-	if (x >= consts.Px || y >= consts.Py || x < 0 || y < 0)
-		return;
-
-	d_Dst[MUL_ADD(y, pitch, x)] = (src1[MUL_ADD(y, pitch, x)] / scale1 + log(abs(src2[MUL_ADD(y, pitch, x)]) + 1) / log(scale2 + 1)) * USHRT_MAX / 2;
+	if (useRatio) {
+		if (useAbs) {
+			d_Dst[MUL_ADD(y, pitch, x)] = (src1[MUL_ADD(y, pitch, x)] + abs(src2[MUL_ADD(y, pitch, x)]) * consts.ratio) / (abs(consts.ratio) + 1);
+		}
+		else {
+			d_Dst[MUL_ADD(y, pitch, x)] = (src1[MUL_ADD(y, pitch, x)] + src2[MUL_ADD(y, pitch, x)] * consts.ratio) / (abs(consts.ratio) + 1);
+		}
+	}
+	else
+		d_Dst[MUL_ADD(y, pitch, x)] = (src1[MUL_ADD(y, pitch, x)] + src2[MUL_ADD(y, pitch, x)]) / 2;
 }
 
 //Display functions
@@ -279,7 +278,7 @@ __global__ void drawSelectionBar(int X, int Y, int wOut, bool vertical) {
 }
 
 //Functions to do initial correction of raw data: log and scatter correction
-__global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, unsigned short *Dark, unsigned short *Gain, params consts){
+__global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, unsigned short *Gain, params consts){
 	//Define pixel location in x and y
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
@@ -296,20 +295,22 @@ __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, uns
 		//float val = (float)Proj[j*consts.Px + i] - (float)Dark[j*consts.Px + i];
 		float val = Proj[j*consts.Px + i];
 
-		//bar noise correction
-		if (i > 1 && i < consts.Px - 1) {
-			float val1 = Proj[j*consts.Px + i - 1];
-			float val2 = Proj[j*consts.Px + i + 1];
-			float val3 = (val1 + val2) / 2;
-			if(abs(val1 - val2) < DIFFTHRESH && abs(val3 - val) > DIFFTHRESH / 2)
-				val = val3;
-		}
-		if (j > 1 && j< consts.Py - 1) {
-			float val1 = Proj[(j-1)*consts.Px + i];
-			float val2 = Proj[(j+1)*consts.Px + i];
-			float val3 = (val1 + val2) / 2;
-			if (abs(val1 - val2) < DIFFTHRESH && abs(val3 - val) > DIFFTHRESH / 2)
-				val = val3;
+		//large noise correction
+		if (consts.useMaxNoise) {
+			if (i > 1 && i < consts.Px - 1) {
+				float val1 = Proj[j*consts.Px + i - 1];
+				float val2 = Proj[j*consts.Px + i + 1];
+				float val3 = (val1 + val2) / 2;
+				if (abs(val1 - val2) < consts.maxNoise && abs(val3 - val) > consts.maxNoise / 2)
+					val = val3;
+			}
+			if (j > 1 && j < consts.Py - 1) {
+				float val1 = Proj[(j - 1)*consts.Px + i];
+				float val2 = Proj[(j + 1)*consts.Px + i];
+				float val3 = (val1 + val2) / 2;
+				if (abs(val1 - val2) < consts.maxNoise && abs(val3 - val) > consts.maxNoise / 2)
+					val = val3;
+			}
 		}
 		if (val < LOWTHRESH) val = 0.0;
 
@@ -510,7 +511,7 @@ __global__ void histogram256Kernel(unsigned int *d_Histogram, T *d_Data, unsigne
 /********************************************************************************************/
 
 //Function to set up the memory on the GPU
-TomoError TomoRecon::initGPU(const char * gainFile, const char * darkFile, const char * mainFile){
+TomoError TomoRecon::initGPU(const char * gainFile, const char * mainFile){
 	//init recon space
 	Sys.Recon.Pitch_x = Sys.Proj.Pitch_x;
 	Sys.Recon.Pitch_y = Sys.Proj.Pitch_y;
@@ -642,7 +643,7 @@ TomoError TomoRecon::initGPU(const char * gainFile, const char * darkFile, const
 	setGaussDer3(tempKernelDer3);
 	cuda(MemcpyAsync(d_gaussDer3, tempKernelDer3, KERNELSIZE * sizeof(float), cudaMemcpyHostToDevice));
 
-	ReadProjections(gainFile, darkFile, mainFile);
+	ReadProjections(gainFile, mainFile);
 
 	cudaMemGetInfo(&avail_mem, &total_mem);
 	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
@@ -650,10 +651,9 @@ TomoError TomoRecon::initGPU(const char * gainFile, const char * darkFile, const
 	return Tomo_OK;
 }
 
-TomoError TomoRecon::ReadProjections(const char * gainFile, const char * darkFile, const char * mainFile) {
+TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFile) {
 	//Read and correct projections
 	unsigned short * RawData = new unsigned short[Sys.Proj.Nx*Sys.Proj.Ny];
-	unsigned short * DarkData = new unsigned short[Sys.Proj.Nx*Sys.Proj.Ny];
 	unsigned short * GainData = new unsigned short[Sys.Proj.Nx*Sys.Proj.Ny];
 
 	float * sumValsVert = new float[NumViews * Sys.Proj.Nx];
@@ -676,21 +676,9 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * darkFil
 	std::string ProjPath = mainFile;
 	std::string GainPath = gainFile;
 	unsigned short * d_Proj;
-	unsigned short * d_Dark;
 	unsigned short * d_Gain;
 	cuda(Malloc((void**)&d_Proj, sizeProj));
-	cuda(Malloc((void**)&d_Dark, sizeProj));
 	cuda(Malloc((void**)&d_Gain, sizeProj));
-
-	//Read dark
-	fopen_s(&fileptr, darkFile, "rb");
-
-	if (fileptr == NULL)
-		return Tomo_file_err;
-
-	fread(DarkData, sizeof(unsigned short), Sys.Proj.Nx * Sys.Proj.Ny, fileptr);
-	fclose(fileptr);
-	cuda(MemcpyAsync(d_Dark, DarkData, sizeProj, cudaMemcpyHostToDevice));
 
 	constants.baseXr = 0;
 	constants.baseYr = 0;
@@ -720,10 +708,10 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * darkFil
 		cuda(MemcpyAsync(d_Proj, RawData, sizeProj, cudaMemcpyHostToDevice));
 		cuda(MemcpyAsync(d_Gain, GainData, sizeProj, cudaMemcpyHostToDevice));
 
-		KERNELCALL2(LogCorrectProj, dimGridProj, dimBlockProj, d_Sino, view, d_Proj, d_Dark, d_Gain, constants);
+		KERNELCALL2(LogCorrectProj, dimGridProj, dimBlockProj, d_Sino, view, d_Proj, d_Gain, constants);
 
-		scanLineDetect(view, d_SumValsVert, sumValsVert + view * Sys.Proj.Nx, vertOff + view * Sys.Proj.Nx, true);
-		scanLineDetect(view, d_SumValsHor, sumValsHor + view * Sys.Proj.Ny, horOff + view * Sys.Proj.Ny, false);
+		scanLineDetect(view, d_SumValsVert, sumValsVert + view * Sys.Proj.Nx, vertOff + view * Sys.Proj.Nx, true, cConstants.scanVertEnable);
+		scanLineDetect(view, d_SumValsHor, sumValsHor + view * Sys.Proj.Ny, horOff + view * Sys.Proj.Ny, false, cConstants.scanHorEnable);
 	}
 
 	float step = 10;
@@ -917,14 +905,12 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * darkFil
 
 	delete[] scales;
 	delete[] RawData;
-	delete[] DarkData;
 	delete[] GainData;
 	delete[] sumValsHor;
 	delete[] sumValsVert;
 	delete[] vertOff;
 	delete[] horOff;
 	cuda(Free(d_Proj));
-	cuda(Free(d_Dark));
 	cuda(Free(d_Gain));
 	cuda(Free(d_SumValsHor));
 	cuda(Free(d_SumValsVert));
@@ -932,7 +918,7 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * darkFil
 	return Tomo_OK;
 }
 
-TomoError TomoRecon::scanLineDetect(int view, float * d_sum, float * sum, float * offset, bool vert) {
+TomoError TomoRecon::scanLineDetect(int view, float * d_sum, float * sum, float * offset, bool vert, bool enable) {
 	int vectorSize;
 	if (vert) vectorSize = Sys.Proj.Nx;
 	else vectorSize = Sys.Proj.Ny;
@@ -1031,7 +1017,9 @@ TomoError TomoRecon::scanLineDetect(int view, float * d_sum, float * sum, float 
 		FILE.open(outputfile.str());
 		for (int i = 0; i < vectorSize; i++) {
 			FILE << sumCorr[i] << "\n";
-			offset[i] = sum[i] - sumCorr[i];
+			if(enable)
+				offset[i] = sum[i] - sumCorr[i];
+			else offset[i] = 0.0;
 			sum[i] = sumCorr[i];
 		}
 		FILE.close();
@@ -1133,34 +1121,33 @@ TomoError TomoRecon::singleFrame() {
 	case no_der:
 		
 		break;
+	case x_mag_enhance:
+		imageKernel(d_gaussDer, d_gauss, buff1);
+		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, true, true, constants);
+		break;
+	case y_mag_enhance:
+		imageKernel(d_gauss, d_gaussDer, buff1);
+		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, true, true, constants);
+		break;
 	case mag_enhance:
 		imageKernel(d_gaussDer, d_gauss, buff1);
-		imageKernel(d_gauss, d_gaussDer, d_Image);
-
-		KERNELCALL2(mag, contBlocks, contThreads, buff1, d_Image, buff1, reconPitchNum, reconPitchNum, constants);
-		cuda(BindTexture2D(NULL, textError, d_Sino, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
-		KERNELCALL2(projectSlice, contBlocks, contThreads, d_Image, distance, constants);
-		cuda(UnbindTexture(textImage));
-
-		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, 5.0, Sys.Recon.Nx, constants);
+		imageKernel(d_gauss, d_gaussDer, buff2);
+		KERNELCALL2(mag, contBlocks, contThreads, buff1, buff2, buff1, reconPitchNum, reconPitchNum, constants);
+		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, true, false, constants);
 		break;
-	case x_enhance: {
+	case x_enhance:
 		imageKernel(d_gaussDer, d_gauss, buff1);
-		//KERNELCALL2(addLog, contBlocks, contThreads, d_Image, buff1, d_Image, getMax(d_Image), getMax(buff1) / 30.0, Sys.Recon.Nx, constants);
-		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, -5.0, Sys.Recon.Nx, constants);
-	}
+		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, true, false, constants);
 		break;
 	case y_enhance:
 		imageKernel(d_gauss, d_gaussDer, buff1);
-		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, -5.0, Sys.Recon.Nx, constants);
+		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, true, false, constants);
 		break;
 	case both_enhance:
-	{
-		imageKernel(d_gaussDer, d_gauss, buff2);
-		imageKernel(d_gauss, d_gaussDer, buff1);
-		KERNELCALL2(add, contBlocks, contThreads, buff1, buff2, buff1, 1.0, Sys.Recon.Nx, constants);
-		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, -5.0, Sys.Recon.Nx, constants);
-	}
+		imageKernel(d_gaussDer, d_gauss, buff1);
+		imageKernel(d_gauss, d_gaussDer, buff2);
+		KERNELCALL2(add, contBlocks, contThreads, buff1, buff2, buff1, Sys.Recon.Nx, false, false, constants);
+		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, true, false, constants);
 		break;
 	case der_x:
 		imageKernel(d_gaussDer, d_gauss, d_Image);

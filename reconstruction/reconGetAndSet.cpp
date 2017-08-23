@@ -169,3 +169,38 @@ TomoError TomoRecon::setDisplay(derivative_t type) {
 	derDisplay = type;
 	return Tomo_OK;
 }
+
+TomoError TomoRecon::setEnhanceRatio(float ratio) {
+	constants.ratio = ratio;
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::enableNoiseMaxFilter(bool enable) {
+	constants.useMaxNoise = enable;
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setNoiseMaxVal(int max) {
+	constants.maxNoise = max;
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::enableScanVert(bool enable) {
+	cConstants.scanVertEnable = enable;
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setScanVertVal(float tau) {
+	cConstants.vertTau = tau;
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::enableScanHor(bool enable) {
+	cConstants.scanHorEnable = enable;
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setScanHorVal(float tau) {
+	cConstants.horTau = tau;
+	return Tomo_OK;
+}

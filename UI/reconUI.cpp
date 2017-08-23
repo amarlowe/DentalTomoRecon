@@ -12,10 +12,13 @@
 mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style ) : wxFrame( parent, id, title, pos, size, style )
 {
 	this->SetSizeHints( wxDefaultSize, wxDefaultSize );
+	this->SetBackgroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_MENU ) );
 	m_mgr.SetManagedWindow(this);
 	m_mgr.SetFlags(wxAUI_MGR_DEFAULT);
 	
-	m_menubar1 = new wxMenuBar( 0 );
+	m_menubar1 = new wxMenuBar( 0|wxNO_BORDER );
+	m_menubar1->SetBackgroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_MENU ) );
+	
 	file = new wxMenu();
 	wxMenuItem* newPage;
 	newPage = new wxMenuItem( file, wxID_NEW, wxString( wxT("New\tCtrl+N") ) , wxEmptyString, wxITEM_NORMAL );
@@ -39,10 +42,6 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	wxMenuItem* gainSelect;
 	gainSelect = new wxMenuItem( config, wxID_ANY, wxString( wxT("Edit Gain Files") ) , wxEmptyString, wxITEM_NORMAL );
 	config->Append( gainSelect );
-	
-	wxMenuItem* darkSelect;
-	darkSelect = new wxMenuItem( config, wxID_ANY, wxString( wxT("Edit Dark Files") ) , wxEmptyString, wxITEM_NORMAL );
-	config->Append( darkSelect );
 	
 	m_menubar1->Append( config, wxT("Config") ); 
 	
@@ -97,32 +96,110 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	
 	this->SetMenuBar( m_menubar1 );
 	
-	m_toolBar2 = new wxToolBar( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_HORIZONTAL ); 
-	m_toolBar2->SetBackgroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_MENU ) );
+	wxString optionBoxChoices[] = { wxT("Navigation"), wxT("Edge Enhancement"), wxT("Scan Line Removal"), wxT("Denoising") };
+	int optionBoxNChoices = sizeof( optionBoxChoices ) / sizeof( wxString );
+	optionBox = new wxChoice( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, optionBoxNChoices, optionBoxChoices, 0 );
+	optionBox->SetSelection( 0 );
+	m_mgr.AddPane( optionBox, wxAuiPaneInfo() .Top() .CaptionVisible( false ).CloseButton( false ).PaneBorder( false ).Movable( false ).Dock().Fixed().BottomDockable( false ).LeftDockable( false ).RightDockable( false ).Floatable( false ).Layer( 10 ) );
 	
-	enhanceLabel = new wxStaticText( m_toolBar2, wxID_ANY, wxT("Edge Enhancement"), wxDefaultPosition, wxDefaultSize, 0 );
-	enhanceLabel->Wrap( -1 );
-	m_toolBar2->AddControl( enhanceLabel );
+	navToolbar = new wxToolBar( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_HORIZONTAL|wxTB_NODIVIDER ); 
+	navToolbar->SetForegroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_CAPTIONTEXT ) );
+	navToolbar->SetBackgroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_MENU ) );
 	
-	xEnhance = new wxCheckBox( m_toolBar2, wxID_ANY, wxT("X"), wxDefaultPosition, wxDefaultSize, 0 );
-	m_toolBar2->AddControl( xEnhance );
-	yEnhance = new wxCheckBox( m_toolBar2, wxID_ANY, wxT("Y"), wxDefaultPosition, wxDefaultSize, 0 );
-	m_toolBar2->AddControl( yEnhance );
-	absEnhance = new wxCheckBox( m_toolBar2, wxID_ANY, wxT("Abs"), wxDefaultPosition, wxDefaultSize, 0 );
-	m_toolBar2->AddControl( absEnhance );
-	resetEnhance = new wxButton( m_toolBar2, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxSize( 50,20 ), 0 );
-	m_toolBar2->AddControl( resetEnhance );
+	distanceLabel = new wxStaticText( navToolbar, wxID_ANY, wxT("Current Distance"), wxDefaultPosition, wxDefaultSize, 0 );
+	distanceLabel->Wrap( -1 );
+	navToolbar->AddControl( distanceLabel );
+	DistanceValue = new wxStaticText( navToolbar, wxID_ANY, wxT("0.0"), wxDefaultPosition, wxDefaultSize, 0 );
+	DistanceValue->Wrap( -1 );
+	navToolbar->AddControl( DistanceValue );
+	navToolbar->Realize();
+	m_mgr.AddPane( navToolbar, wxAuiPaneInfo() .Top() .CaptionVisible( false ).CloseButton( false ).PaneBorder( false ).Movable( false ).Dock().Resizable().FloatingSize( wxDefaultSize ).DockFixed( true ).BottomDockable( false ).TopDockable( false ).LeftDockable( false ).RightDockable( false ).Floatable( false ).Layer( 10 ) );
 	
-	ratioLabel = new wxStaticText( m_toolBar2, wxID_ANY, wxT("Image/Edge ratio: "), wxDefaultPosition, wxDefaultSize, 0 );
+	
+	edgeToolbar = new wxToolBar( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_HORIZONTAL|wxTB_NODIVIDER ); 
+	edgeToolbar->SetForegroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_CAPTIONTEXT ) );
+	edgeToolbar->SetBackgroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_MENU ) );
+	
+	xEnhance = new wxCheckBox( edgeToolbar, wxID_ANY, wxT("X"), wxDefaultPosition, wxDefaultSize, 0 );
+	xEnhance->SetValue(true); 
+	edgeToolbar->AddControl( xEnhance );
+	yEnhance = new wxCheckBox( edgeToolbar, wxID_ANY, wxT("Y"), wxDefaultPosition, wxDefaultSize, 0 );
+	yEnhance->SetValue(true); 
+	edgeToolbar->AddControl( yEnhance );
+	absEnhance = new wxCheckBox( edgeToolbar, wxID_ANY, wxT("Abs"), wxDefaultPosition, wxDefaultSize, 0 );
+	absEnhance->SetValue(true); 
+	edgeToolbar->AddControl( absEnhance );
+	resetEnhance = new wxButton( edgeToolbar, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxSize( 50,20 ), 0 );
+	edgeToolbar->AddControl( resetEnhance );
+	ratioLabel = new wxStaticText( edgeToolbar, wxID_ANY, wxT("Edge/Image ratio: "), wxDefaultPosition, wxDefaultSize, 0 );
 	ratioLabel->Wrap( -1 );
-	m_toolBar2->AddControl( ratioLabel );
-	ratioValue = new wxStaticText( m_toolBar2, wxID_ANY, wxT("0.0"), wxDefaultPosition, wxDefaultSize, 0 );
+	ratioLabel->SetForegroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_CAPTIONTEXT ) );
+	
+	edgeToolbar->AddControl( ratioLabel );
+	ratioValue = new wxStaticText( edgeToolbar, wxID_ANY, wxT("5.0"), wxDefaultPosition, wxDefaultSize, 0 );
 	ratioValue->Wrap( -1 );
-	m_toolBar2->AddControl( ratioValue );
-	m_slider3 = new wxSlider( m_toolBar2, wxID_ANY, 50, 0, 100, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
-	m_toolBar2->AddControl( m_slider3 );
-	m_toolBar2->Realize();
-	m_mgr.AddPane( m_toolBar2, wxAuiPaneInfo() .Top() .CaptionVisible( false ).CloseButton( false ).PaneBorder( false ).Movable( false ).Dock().Resizable().FloatingSize( wxDefaultSize ).BottomDockable( false ).LeftDockable( false ).RightDockable( false ).Floatable( false ) );
+	edgeToolbar->AddControl( ratioValue );
+	enhanceSlider = new wxSlider( edgeToolbar, wxID_ANY, 50, 0, 200, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	edgeToolbar->AddControl( enhanceSlider );
+	edgeToolbar->Realize();
+	m_mgr.AddPane( edgeToolbar, wxAuiPaneInfo() .Top() .CaptionVisible( false ).CloseButton( false ).PaneBorder( false ).Movable( false ).Dock().Resizable().FloatingSize( wxDefaultSize ).DockFixed( true ).BottomDockable( false ).TopDockable( false ).LeftDockable( false ).RightDockable( false ).Floatable( false ).Layer( 10 ) );
+	
+	
+	scanToolbar = new wxToolBar( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_HORIZONTAL|wxTB_NODIVIDER|wxNO_BORDER ); 
+	scanToolbar->SetForegroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_CAPTIONTEXT ) );
+	scanToolbar->SetBackgroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_MENU ) );
+	
+	scanVertEnable = new wxCheckBox( scanToolbar, wxID_ANY, wxT("Scanline vertical correction factor: "), wxDefaultPosition, wxDefaultSize, 0 );
+	scanVertEnable->SetValue(true); 
+	scanToolbar->AddControl( scanVertEnable );
+	scanVertValue = new wxStaticText( scanToolbar, wxID_ANY, wxT("0.25"), wxDefaultPosition, wxDefaultSize, 0 );
+	scanVertValue->Wrap( -1 );
+	scanVertValue->Hide();
+	
+	scanToolbar->AddControl( scanVertValue );
+	resetScanVert = new wxButton( scanToolbar, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxSize( 50,20 ), 0 );
+	scanToolbar->AddControl( resetScanVert );
+	scanVertSlider = new wxSlider( scanToolbar, wxID_ANY, 25, 0, 50, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	scanVertSlider->Hide();
+	
+	scanToolbar->AddControl( scanVertSlider );
+	scanHorEnable = new wxCheckBox( scanToolbar, wxID_ANY, wxT("Scanline horizontal correction factor: "), wxDefaultPosition, wxDefaultSize, 0 );
+	scanToolbar->AddControl( scanHorEnable );
+	scanHorValue = new wxStaticText( scanToolbar, wxID_ANY, wxT("0.1"), wxDefaultPosition, wxDefaultSize, 0 );
+	scanHorValue->Wrap( -1 );
+	scanHorValue->Enable( false );
+	scanHorValue->Hide();
+	
+	scanToolbar->AddControl( scanHorValue );
+	resetScanHor = new wxButton( scanToolbar, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxSize( 50,20 ), 0 );
+	resetScanHor->Enable( false );
+	
+	scanToolbar->AddControl( resetScanHor );
+	scanHorSlider = new wxSlider( scanToolbar, wxID_ANY, 10, 0, 50, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	scanHorSlider->Enable( false );
+	scanHorSlider->Hide();
+	
+	scanToolbar->AddControl( scanHorSlider );
+	scanToolbar->Realize();
+	m_mgr.AddPane( scanToolbar, wxAuiPaneInfo() .Top() .CaptionVisible( false ).CloseButton( false ).PaneBorder( false ).Movable( false ).Dock().Resizable().FloatingSize( wxDefaultSize ).DockFixed( true ).BottomDockable( false ).TopDockable( false ).LeftDockable( false ).RightDockable( false ).Floatable( false ).Layer( 10 ) );
+	
+	
+	noiseToolbar = new wxToolBar( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_HORIZONTAL|wxTB_NODIVIDER ); 
+	noiseToolbar->SetForegroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_CAPTIONTEXT ) );
+	noiseToolbar->SetBackgroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_MENU ) );
+	
+	outlierEnable = new wxCheckBox( noiseToolbar, wxID_ANY, wxT("Large noise hard removal over value:  "), wxDefaultPosition, wxDefaultSize, 0 );
+	outlierEnable->SetValue(true); 
+	noiseToolbar->AddControl( outlierEnable );
+	noiseMaxVal = new wxStaticText( noiseToolbar, wxID_ANY, wxT("30"), wxDefaultPosition, wxDefaultSize, 0 );
+	noiseMaxVal->Wrap( -1 );
+	noiseToolbar->AddControl( noiseMaxVal );
+	resetNoiseMax = new wxButton( noiseToolbar, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxSize( 50,20 ), 0 );
+	noiseToolbar->AddControl( resetNoiseMax );
+	noiseMaxSlider = new wxSlider( noiseToolbar, wxID_ANY, 30, 10, 50, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	noiseToolbar->AddControl( noiseMaxSlider );
+	noiseToolbar->Realize();
+	m_mgr.AddPane( noiseToolbar, wxAuiPaneInfo() .Top() .CaptionVisible( false ).CloseButton( false ).PaneBorder( false ).Movable( false ).Dock().Resizable().FloatingSize( wxDefaultSize ).DockFixed( true ).BottomDockable( false ).TopDockable( false ).LeftDockable( false ).RightDockable( false ).Floatable( false ).Layer( 10 ) );
 	
 	
 	m_auinotebook6 = new wxAuiNotebook( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_NB_CLOSE_ON_ALL_TABS|wxAUI_NB_DEFAULT_STYLE|wxNO_BORDER );
@@ -156,7 +233,6 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	this->Connect( quit->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onQuit ) );
 	this->Connect( configDialog->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onConfig ) );
 	this->Connect( gainSelect->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onGainSelect ) );
-	this->Connect( darkSelect->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onDarkSelect ) );
 	this->Connect( recontructionView->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onReconstructionView ) );
 	this->Connect( projectionView->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onProjectionView ) );
 	this->Connect( logView->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onLogView ) );
@@ -167,6 +243,53 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	this->Connect( testGeo->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onTestGeo ) );
 	this->Connect( autoGeo->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onAutoGeo ) );
 	this->Connect( about->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onAbout ) );
+	optionBox->Connect( wxEVT_COMMAND_CHOICE_SELECTED, wxCommandEventHandler( mainWindow::onToolbarChoice ), NULL, this );
+	xEnhance->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onXEnhance ), NULL, this );
+	yEnhance->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onYEnhance ), NULL, this );
+	absEnhance->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onAbsEnhance ), NULL, this );
+	resetEnhance->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( mainWindow::onResetEnhance ), NULL, this );
+	enhanceSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( mainWindow::onEnhanceRatio ), NULL, this );
+	enhanceSlider->Connect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( mainWindow::onEnhanceRatio ), NULL, this );
+	enhanceSlider->Connect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( mainWindow::onEnhanceRatio ), NULL, this );
+	enhanceSlider->Connect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( mainWindow::onEnhanceRatio ), NULL, this );
+	enhanceSlider->Connect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( mainWindow::onEnhanceRatio ), NULL, this );
+	enhanceSlider->Connect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( mainWindow::onEnhanceRatio ), NULL, this );
+	enhanceSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( mainWindow::onEnhanceRatio ), NULL, this );
+	enhanceSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( mainWindow::onEnhanceRatio ), NULL, this );
+	enhanceSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( mainWindow::onEnhanceRatio ), NULL, this );
+	scanVertEnable->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onScanVertEnable ), NULL, this );
+	resetScanVert->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( mainWindow::onResetScanVert ), NULL, this );
+	scanVertSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( mainWindow::onScanVert ), NULL, this );
+	scanVertSlider->Connect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( mainWindow::onScanVert ), NULL, this );
+	scanVertSlider->Connect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( mainWindow::onScanVert ), NULL, this );
+	scanVertSlider->Connect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( mainWindow::onScanVert ), NULL, this );
+	scanVertSlider->Connect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( mainWindow::onScanVert ), NULL, this );
+	scanVertSlider->Connect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( mainWindow::onScanVert ), NULL, this );
+	scanVertSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( mainWindow::onScanVert ), NULL, this );
+	scanVertSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( mainWindow::onScanVert ), NULL, this );
+	scanVertSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( mainWindow::onScanVert ), NULL, this );
+	scanHorEnable->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onScanHorEnable ), NULL, this );
+	resetScanHor->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( mainWindow::onResetScanHor ), NULL, this );
+	scanHorSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( mainWindow::onScanHor ), NULL, this );
+	scanHorSlider->Connect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( mainWindow::onScanHor ), NULL, this );
+	scanHorSlider->Connect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( mainWindow::onScanHor ), NULL, this );
+	scanHorSlider->Connect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( mainWindow::onScanHor ), NULL, this );
+	scanHorSlider->Connect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( mainWindow::onScanHor ), NULL, this );
+	scanHorSlider->Connect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( mainWindow::onScanHor ), NULL, this );
+	scanHorSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( mainWindow::onScanHor ), NULL, this );
+	scanHorSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( mainWindow::onScanHor ), NULL, this );
+	scanHorSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( mainWindow::onScanHor ), NULL, this );
+	outlierEnable->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onNoiseMaxEnable ), NULL, this );
+	resetNoiseMax->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( mainWindow::onResetNoiseMax ), NULL, this );
+	noiseMaxSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Connect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Connect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Connect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Connect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Connect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
 	m_auinotebook6->Connect( wxEVT_COMMAND_AUINOTEBOOK_PAGE_CHANGED, wxAuiNotebookEventHandler( mainWindow::onPageChange ), NULL, this );
 }
 
@@ -180,7 +303,6 @@ mainWindow::~mainWindow()
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onQuit ) );
 	this->Disconnect( wxID_PREFERENCES, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onConfig ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onGainSelect ) );
-	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onDarkSelect ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onReconstructionView ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onProjectionView ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onLogView ) );
@@ -191,6 +313,53 @@ mainWindow::~mainWindow()
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onTestGeo ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onAutoGeo ) );
 	this->Disconnect( wxID_ABOUT, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onAbout ) );
+	optionBox->Disconnect( wxEVT_COMMAND_CHOICE_SELECTED, wxCommandEventHandler( mainWindow::onToolbarChoice ), NULL, this );
+	xEnhance->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onXEnhance ), NULL, this );
+	yEnhance->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onYEnhance ), NULL, this );
+	absEnhance->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onAbsEnhance ), NULL, this );
+	resetEnhance->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( mainWindow::onResetEnhance ), NULL, this );
+	enhanceSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( mainWindow::onEnhanceRatio ), NULL, this );
+	enhanceSlider->Disconnect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( mainWindow::onEnhanceRatio ), NULL, this );
+	enhanceSlider->Disconnect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( mainWindow::onEnhanceRatio ), NULL, this );
+	enhanceSlider->Disconnect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( mainWindow::onEnhanceRatio ), NULL, this );
+	enhanceSlider->Disconnect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( mainWindow::onEnhanceRatio ), NULL, this );
+	enhanceSlider->Disconnect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( mainWindow::onEnhanceRatio ), NULL, this );
+	enhanceSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( mainWindow::onEnhanceRatio ), NULL, this );
+	enhanceSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( mainWindow::onEnhanceRatio ), NULL, this );
+	enhanceSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( mainWindow::onEnhanceRatio ), NULL, this );
+	scanVertEnable->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onScanVertEnable ), NULL, this );
+	resetScanVert->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( mainWindow::onResetScanVert ), NULL, this );
+	scanVertSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( mainWindow::onScanVert ), NULL, this );
+	scanVertSlider->Disconnect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( mainWindow::onScanVert ), NULL, this );
+	scanVertSlider->Disconnect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( mainWindow::onScanVert ), NULL, this );
+	scanVertSlider->Disconnect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( mainWindow::onScanVert ), NULL, this );
+	scanVertSlider->Disconnect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( mainWindow::onScanVert ), NULL, this );
+	scanVertSlider->Disconnect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( mainWindow::onScanVert ), NULL, this );
+	scanVertSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( mainWindow::onScanVert ), NULL, this );
+	scanVertSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( mainWindow::onScanVert ), NULL, this );
+	scanVertSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( mainWindow::onScanVert ), NULL, this );
+	scanHorEnable->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onScanHorEnable ), NULL, this );
+	resetScanHor->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( mainWindow::onResetScanHor ), NULL, this );
+	scanHorSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( mainWindow::onScanHor ), NULL, this );
+	scanHorSlider->Disconnect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( mainWindow::onScanHor ), NULL, this );
+	scanHorSlider->Disconnect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( mainWindow::onScanHor ), NULL, this );
+	scanHorSlider->Disconnect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( mainWindow::onScanHor ), NULL, this );
+	scanHorSlider->Disconnect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( mainWindow::onScanHor ), NULL, this );
+	scanHorSlider->Disconnect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( mainWindow::onScanHor ), NULL, this );
+	scanHorSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( mainWindow::onScanHor ), NULL, this );
+	scanHorSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( mainWindow::onScanHor ), NULL, this );
+	scanHorSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( mainWindow::onScanHor ), NULL, this );
+	outlierEnable->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onNoiseMaxEnable ), NULL, this );
+	resetNoiseMax->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( mainWindow::onResetNoiseMax ), NULL, this );
+	noiseMaxSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Disconnect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Disconnect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Disconnect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Disconnect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Disconnect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
 	m_auinotebook6->Disconnect( wxEVT_COMMAND_AUINOTEBOOK_PAGE_CHANGED, wxAuiNotebookEventHandler( mainWindow::onPageChange ), NULL, this );
 	
 	m_mgr.UnInit();

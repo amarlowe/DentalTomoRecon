@@ -38,6 +38,12 @@
 
 #define MOUSEWHEELMAG 120
 #define SCROLLFACTOR 10
+#define ENHANCEDEFAULT 5.0f
+#define SCANVERTDEFAULT 0.25f
+#define SCANHORDEFAULT 0.1f
+#define NOISEMAXDEFAULT 30
+#define ENHANCEFACTOR 10.0f
+#define SCANFACTOR 100.0f
 
 typedef enum {
 	Status = 0,
@@ -80,7 +86,7 @@ public:
 // The OpenGL-enabled canvas
 class CudaGLCanvas : public wxGLCanvas{
 public:
-	CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename, 
+	CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString filename, 
 		wxWindowID id = wxID_ANY, int *gl_attrib = NULL, wxSize size = wxDefaultSize);
 
 	virtual ~CudaGLCanvas();
@@ -107,7 +113,7 @@ private:
 
 class GLFrame : public wxPanel {
 public:
-	GLFrame(wxAuiNotebook *frame, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
+	GLFrame(wxAuiNotebook *frame, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString filename,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = wxDEFAULT_FRAME_STYLE);
@@ -124,6 +130,8 @@ public:
 	wxStatusBar* m_status;
 	wxBoxSizer* bSizer = NULL;
 
+	wxString filename;
+
 	wxDECLARE_NO_COPY_CLASS(GLFrame);
 	wxDECLARE_EVENT_TABLE();
 };
@@ -131,7 +139,7 @@ public:
 // The OpenGL-enabled canvas
 class CudaGLInCanvas : public wxGLCanvas {
 public:
-	CudaGLInCanvas(wxWindow *parent, bool vertical, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
+	CudaGLInCanvas(wxWindow *parent, bool vertical, struct SystemControl * Sys, wxString gainFile, wxString filename,
 		wxWindowID id = wxID_ANY, int *gl_attrib = NULL, wxSize size = wxDefaultSize);
 
 	virtual ~CudaGLInCanvas();
@@ -157,7 +165,7 @@ private:
 
 class GLWindow : public wxDialog {
 public:
-	GLWindow(wxWindow *parent, bool vertical, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
+	GLWindow(wxWindow *parent, bool vertical, struct SystemControl * Sys, wxString gainFile, wxString filename,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = wxDEFAULT_FRAME_STYLE);
@@ -191,6 +199,10 @@ public:
 
 class DTRMainWindow : public mainWindow {
 protected:
+	//helpers
+	bool checkForConsole();
+	derivative_t getEnhance();
+
 	// Handlers for mainWindow events.
 	void onNew(wxCommandEvent& event);
 	void onOpen(wxCommandEvent& event);
@@ -198,7 +210,6 @@ protected:
 	void onAbout(wxCommandEvent& event);
 	void onConfig(wxCommandEvent& event);
 	void onGainSelect(wxCommandEvent& event);
-	void onDarkSelect(wxCommandEvent& event);
 	void onProjectionView(wxCommandEvent& event);
 	void onReconstructionView(wxCommandEvent& event);
 	void onLogView(wxCommandEvent& event);
@@ -209,6 +220,23 @@ protected:
 	void onTestGeo(wxCommandEvent& event);
 	void onAutoGeo(wxCommandEvent& event);
 	void onPageChange(wxCommandEvent& event);
+
+	//Toolbar functions
+	void onToolbarChoice(wxCommandEvent& event);
+	void onXEnhance(wxCommandEvent& event);
+	void onYEnhance(wxCommandEvent& event);
+	void onAbsEnhance(wxCommandEvent& event);
+	void onResetEnhance(wxCommandEvent& event);
+	void onEnhanceRatio(wxScrollEvent& event);
+	void onScanVertEnable(wxCommandEvent& event);
+	void onScanVert(wxScrollEvent& event);
+	void onResetScanVert(wxCommandEvent& event);
+	void onScanHorEnable(wxCommandEvent& event);
+	void onScanHor(wxScrollEvent& event);
+	void onResetScanHor(wxCommandEvent& event);
+	void onNoiseMaxEnable(wxCommandEvent& event);
+	void onNoiseMax(wxScrollEvent& event);
+	void onResetNoiseMax(wxCommandEvent& event);
 
 	//constant globals
 	const int NumViews = NUMVIEWS;
@@ -229,5 +257,4 @@ public:
 
 	//User generated filenames
 	wxString gainFilepath;
-	wxString darkFilepath;
 };

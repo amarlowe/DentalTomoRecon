@@ -47,6 +47,9 @@ bool MyApp::OnInit(){
 }
 
 DTRMainWindow::DTRMainWindow(wxWindow* parent) : mainWindow(parent){
+	wxCommandEvent dummy;
+	onToolbarChoice(dummy);
+
 	wxConfigBase *pConfig = wxConfigBase::Get();
 	if (pConfig == NULL)
 		return;
@@ -65,7 +68,52 @@ DTRMainWindow::DTRMainWindow(wxWindow* parent) : mainWindow(parent){
 
 	//Get filepath for last opened/saved file
 	gainFilepath = pConfig->Read(wxT("/gainFilepath"), wxT(""));
-	darkFilepath = pConfig->Read(wxT("/darkFilepath"), wxT(""));
+}
+
+//helpers
+bool DTRMainWindow::checkForConsole() {
+	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
+		//(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
+		return true;
+	}
+	return false;
+}
+
+derivative_t DTRMainWindow::getEnhance() {
+	derivative_t thisDisplay;
+	if (xEnhance->IsChecked()) {
+		if (yEnhance->IsChecked()) {
+			if (absEnhance->IsChecked()) {
+				thisDisplay = mag_enhance;
+			}
+			else {
+				thisDisplay = both_enhance;
+			}
+		}
+		else {
+			if (absEnhance->IsChecked()) {
+				thisDisplay = x_mag_enhance;
+			}
+			else {
+				thisDisplay = x_enhance;
+			}
+		}
+	}
+	else {
+		if (yEnhance->IsChecked()) {
+			if (absEnhance->IsChecked()) {
+				thisDisplay = y_mag_enhance;
+			}
+			else {
+				thisDisplay = y_enhance;
+			}
+		}
+		else {
+			thisDisplay = no_der;
+		}
+	}
+
+	return thisDisplay;
 }
 
 // event handlers
@@ -118,7 +166,7 @@ wxPanel *DTRMainWindow::CreateNewPage(wxString filename) {
 	struct SystemControl Sys;
 	genSys(&Sys);
 	wxStreamToTextRedirector redirect(m_textCtrl8);
-	return new GLFrame(m_auinotebook6, m_statusBar1, &Sys, gainFilepath, darkFilepath, filename);
+	return new GLFrame(m_auinotebook6, m_statusBar1, &Sys, gainFilepath, filename);
 }
 
 void DTRMainWindow::onOpen(wxCommandEvent& event) {
@@ -139,7 +187,7 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	wxString filename(openFileDialog.GetPath());
 	
 	wxStreamToTextRedirector redirect(m_textCtrl8);
-	recon->ReadProjections(gainFilepath.mb_str(), darkFilepath.mb_str(), filename.mb_str());
+	recon->ReadProjections(gainFilepath.mb_str(), filename.mb_str());
 	recon->singleFrame();
 	recon->resetFocus();
 	currentFrame->m_canvas->paint();
@@ -219,6 +267,14 @@ void DTRMainWindow::onContinuous() {
 	wxStreamToTextRedirector redirect(m_textCtrl8);
 	m_statusBar1->SetFieldsCount(5, statusWidths);
 	recon->continuousMode = true;
+	recon->setDisplay(getEnhance());
+	recon->setEnhanceRatio((float)enhanceSlider->GetValue() / ENHANCEFACTOR);
+	recon->enableNoiseMaxFilter(outlierEnable->IsChecked());
+	recon->setNoiseMaxVal(noiseMaxSlider->GetValue());
+	recon->enableScanVert(scanVertEnable->IsChecked());
+	recon->setScanVertVal((float)scanVertSlider->GetValue() / SCANFACTOR);
+	recon->enableScanHor(scanHorEnable->IsChecked());
+	recon->setScanHorVal((float)scanHorSlider->GetValue() / SCANFACTOR);
 
 	recon->singleFrame();
 	currentFrame->m_scrollBar->Show(false);
@@ -257,28 +313,6 @@ void DTRMainWindow::onGainSelect(wxCommandEvent& WXUNUSED(event)) {
 	wxConfigBase::Get()->Write(wxT("/gainFilepath"), gainFilepath);
 }
 
-void DTRMainWindow::onDarkSelect(wxCommandEvent& WXUNUSED(event)) {
-	//Open files with raw extensions
-	char temp[MAX_PATH];
-	strncpy(temp, (const char*)darkFilepath.mb_str(), MAX_PATH - 1);
-	OPENFILENAME ofn;
-	ZeroMemory(&ofn, sizeof(ofn));
-	ofn.lStructSize = sizeof(ofn);
-	ofn.hwndOwner = GetHWND();
-	ofn.lpstrFilter = (LPCWSTR)"Raw files\0*.raw\0All Files\0*.*\0";
-	ofn.lpstrFile = (LPWSTR)temp;
-	ofn.nMaxFile = MAX_PATH;
-	ofn.lpstrTitle = (LPCWSTR)"Select a dark file";
-	ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST;
-
-	GetOpenFileNameA((LPOPENFILENAMEA)&ofn);
-
-	darkFilepath = wxString::FromUTF8(temp);
-
-	//Save filepath for next session
-	wxConfigBase::Get()->Write(wxT("/darkFilePath"), darkFilepath);
-}
-
 void DTRMainWindow::onResList(wxCommandEvent& event) {
 	if (resDialog == NULL) {
 		resDialog = new DTRResDialog(this);
@@ -311,7 +345,7 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 		GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 		TomoRecon* recon = currentFrame->m_canvas->recon;
 
-		if (i != 0) recon->ReadProjections(gainFilepath.mb_str(), darkFilepath.mb_str(), filename.GetFullPath().mb_str());
+		if (i != 0) recon->ReadProjections(gainFilepath.mb_str(), filename.GetFullPath().mb_str());
 
 		recon->setLogView(false);
 
@@ -385,6 +419,270 @@ void DTRMainWindow::onAbout(wxCommandEvent& WXUNUSED(event)){
 void DTRMainWindow::onPageChange(wxCommandEvent& WXUNUSED(event)) {
 	wxString toolTip = m_auinotebook6->GetPageToolTip(m_auinotebook6->GetPageIndex(m_auinotebook6->GetCurrentPage()));
 	(*m_textCtrl8) << toolTip;
+}
+
+//Toolbar Functions
+
+void DTRMainWindow::onToolbarChoice(wxCommandEvent& WXUNUSED(event)) {
+	//Disable all toolbars
+	navToolbar->Show(false);
+	edgeToolbar->Show(false);
+	scanToolbar->Show(false);
+	noiseToolbar->Show(false);
+
+	//enable toolbar by selection
+	switch (optionBox->GetSelection()) {
+	case 0:
+		navToolbar->Show(true);
+		navToolbar->Realize();
+		break;
+	case 1:
+		edgeToolbar->Show(true);
+		edgeToolbar->Realize();
+		break;
+	case 2:
+		scanToolbar->Show(true);
+		scanToolbar->Realize();
+		break;
+	case 3:
+		noiseToolbar->Show(true);
+		noiseToolbar->Realize();
+		break;
+	}
+}
+
+void DTRMainWindow::onXEnhance(wxCommandEvent& WXUNUSED(event)) {
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setDisplay(getEnhance());
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onYEnhance(wxCommandEvent& WXUNUSED(event)) {
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setDisplay(getEnhance());
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onAbsEnhance(wxCommandEvent& WXUNUSED(event)) {
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setDisplay(getEnhance());
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onResetEnhance(wxCommandEvent& WXUNUSED(event)) {
+	ratioValue->SetLabelText(wxString::Format(wxT("%2.1f"), ENHANCEDEFAULT));
+	enhanceSlider->SetValue((int)(ENHANCEDEFAULT * ENHANCEFACTOR));
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setEnhanceRatio(ENHANCEDEFAULT);
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onEnhanceRatio(wxScrollEvent& event) {
+	float value = (float)event.GetPosition() / ENHANCEFACTOR;
+	ratioValue->SetLabelText(wxString::Format(wxT("%2.1f"), value));
+
+	if (checkForConsole()) return;
+	
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setEnhanceRatio(value);
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onScanVertEnable(wxCommandEvent& event) {
+	if (scanVertEnable->IsChecked()) {
+		scanVertValue->Enable(true);
+		resetScanVert->Enable(true);
+		scanVertSlider->Enable(true);
+	}
+	else {
+		scanVertValue->Enable(false);
+		resetScanVert->Enable(false);
+		scanVertSlider->Enable(false);
+	}
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->enableScanVert(scanVertEnable->IsChecked());
+	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onScanVert(wxScrollEvent& event) {
+	float value = event.GetPosition();
+	scanVertValue->SetLabelText(wxString::Format(wxT("%1.2f"), value / SCANFACTOR));
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setScanVertVal(value / SCANFACTOR);
+	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onResetScanVert(wxCommandEvent& event) {
+	scanVertValue->SetLabelText(wxString::Format(wxT("%1.2f"), SCANVERTDEFAULT));
+	scanVertSlider->SetValue(NOISEMAXDEFAULT);
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setScanVertVal(SCANVERTDEFAULT);
+	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onScanHorEnable(wxCommandEvent& event) {
+	if (scanHorEnable->IsChecked()) {
+		scanHorValue->Enable(true);
+		resetScanHor->Enable(true);
+		scanHorSlider->Enable(true);
+	}
+	else {
+		scanHorValue->Enable(false);
+		resetScanHor->Enable(false);
+		scanHorSlider->Enable(false);
+	}
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->enableScanHor(scanHorEnable->IsChecked());
+	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onScanHor(wxScrollEvent& event) {
+	float value = event.GetPosition();
+	scanHorValue->SetLabelText(wxString::Format(wxT("%1.2f"), value / SCANFACTOR));
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setScanHorVal(value / SCANFACTOR);
+	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onResetScanHor(wxCommandEvent& event) {
+	scanHorValue->SetLabelText(wxString::Format(wxT("%1.2f"), SCANHORDEFAULT));
+	scanHorSlider->SetValue(NOISEMAXDEFAULT);
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setScanHorVal(SCANHORDEFAULT);
+	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onNoiseMax(wxScrollEvent& event) {
+	int value = event.GetPosition();
+	noiseMaxVal->SetLabelText(wxString::Format(wxT("%d"), value));
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setNoiseMaxVal(noiseMaxSlider->GetValue());
+	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onResetNoiseMax(wxCommandEvent& WXUNUSED(event)) {
+	noiseMaxVal->SetLabelText(wxString::Format(wxT("%d"), NOISEMAXDEFAULT));
+	noiseMaxSlider->SetValue(NOISEMAXDEFAULT);
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setNoiseMaxVal(noiseMaxSlider->GetValue());
+	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onNoiseMaxEnable(wxCommandEvent& WXUNUSED(event)) {
+	if (outlierEnable->IsChecked()) {
+		noiseMaxVal->Enable(true);
+		resetNoiseMax->Enable(true);
+		noiseMaxSlider->Enable(true);
+	}
+	else {
+		noiseMaxVal->Enable(false);
+		resetNoiseMax->Enable(false);
+		noiseMaxSlider->Enable(false);
+	}
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->enableNoiseMaxFilter(outlierEnable->IsChecked());
+	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint();
 }
 
 DTRMainWindow::~DTRMainWindow() {
@@ -876,7 +1174,7 @@ void DTRResDialog::onAddNew(wxCommandEvent& event) {
 
 	struct SystemControl Sys;
 	((DTRMainWindow*)GetParent())->genSys(&Sys);
-	frame = new GLWindow(this, vertical == wxYES, &Sys, ((DTRMainWindow*)GetParent())->gainFilepath, ((DTRMainWindow*)GetParent())->darkFilepath, openFileDialog.GetPath());
+	frame = new GLWindow(this, vertical == wxYES, &Sys, ((DTRMainWindow*)GetParent())->gainFilepath, openFileDialog.GetPath());
 	int res = frame->ShowModal();
 
 	if (res == wxID_OK) {
@@ -1023,11 +1321,11 @@ EVT_SCROLL(GLFrame::OnScroll)
 EVT_MOUSEWHEEL(GLFrame::OnMousewheel)
 wxEND_EVENT_TABLE()
 
-GLFrame::GLFrame(wxAuiNotebook *frame, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
+GLFrame::GLFrame(wxAuiNotebook *frame, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString filename,
 	const wxPoint& pos, const wxSize& size, long style)
-	: wxPanel(frame, wxID_ANY, pos, size), m_canvas(NULL), m_status(status){
+	: wxPanel(frame, wxID_ANY, pos, size), m_canvas(NULL), m_status(status), filename(filename){
 	//initialize the canvas to this object
-	m_canvas = new CudaGLCanvas(this, status, Sys, gainFile, darkFile, filename, wxID_ANY, NULL, GetClientSize());
+	m_canvas = new CudaGLCanvas(this, status, Sys, gainFile, filename, wxID_ANY, NULL, GetClientSize());
 	m_scrollBar = new wxScrollBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSB_HORIZONTAL);
 	bSizer = new wxBoxSizer(wxVERTICAL);
 
@@ -1098,7 +1396,7 @@ EVT_MOUSEWHEEL(GLWindow::OnMousewheel)
 EVT_CLOSE(GLWindow::onClose)
 wxEND_EVENT_TABLE()
 
-GLWindow::GLWindow(wxWindow *parent, bool vertical, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
+GLWindow::GLWindow(wxWindow *parent, bool vertical, struct SystemControl * Sys, wxString gainFile, wxString filename,
 	const wxPoint& pos, const wxSize& size, long style)
 	: wxDialog(parent, wxID_ANY, wxT("Select autofocus area with ctrl+mouse drag. Hit space once selected."), pos, size, style), m_canvas(NULL) {
 	//Set up sizer to make the canvas take up the entire panel (wxWidgets handles garbage collection)
@@ -1106,7 +1404,7 @@ GLWindow::GLWindow(wxWindow *parent, bool vertical, struct SystemControl * Sys, 
 	bSizer = new wxBoxSizer(wxVERTICAL);
 
 	//initialize the canvas to this object
-	m_canvas = new CudaGLInCanvas(this, vertical, Sys, gainFile, darkFile, filename, wxID_ANY, NULL, GetClientSize());
+	m_canvas = new CudaGLInCanvas(this, vertical, Sys, gainFile, filename, wxID_ANY, NULL, GetClientSize());
 	bSizer->Add(m_canvas, 1, wxEXPAND | wxALL, 5);
 
 	this->SetSizer(bSizer);
@@ -1144,7 +1442,7 @@ EVT_CHAR(CudaGLCanvas::OnChar)
 EVT_MOUSE_EVENTS(CudaGLCanvas::OnMouseEvent)
 wxEND_EVENT_TABLE()
 
-CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename, 
+CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString filename, 
 	wxWindowID id, int* gl_attrib, wxSize size)
 	: wxGLCanvas(parent, id, gl_attrib, wxDefaultPosition, size, wxFULL_REPAINT_ON_RESIZE), m_status(status){
 	// Explicitly create a new rendering context instance for this canvas.
@@ -1153,7 +1451,7 @@ CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemC
 	SetCurrent(*m_glRC);
 
 	recon = new TomoRecon(GetSize().x, GetSize().y, Sys);
-	recon->init((const char*)gainFile.mb_str(), (const char*)darkFile.mb_str(), (const char*)filename.mb_str());
+	recon->init((const char*)gainFile.mb_str(), (const char*)filename.mb_str());
 }
 
 CudaGLCanvas::~CudaGLCanvas(){
@@ -1287,7 +1585,7 @@ EVT_MOUSE_EVENTS(CudaGLInCanvas::OnMouseEvent)
 EVT_CHAR(CudaGLInCanvas::OnChar)
 wxEND_EVENT_TABLE()
 
-CudaGLInCanvas::CudaGLInCanvas(wxWindow *parent, bool vertical, struct SystemControl * Sys, wxString gainFile, wxString darkFile, wxString filename,
+CudaGLInCanvas::CudaGLInCanvas(wxWindow *parent, bool vertical, struct SystemControl * Sys, wxString gainFile, wxString filename,
 	wxWindowID id, int* gl_attrib, wxSize size)
 	: wxGLCanvas(parent, id, gl_attrib, wxDefaultPosition, size, wxFULL_REPAINT_ON_RESIZE) {
 	// Explicitly create a new rendering context instance for this canvas.
@@ -1296,7 +1594,7 @@ CudaGLInCanvas::CudaGLInCanvas(wxWindow *parent, bool vertical, struct SystemCon
 	SetCurrent(*m_glRC);
 
 	recon = new TomoRecon(GetSize().x, GetSize().y, Sys);
-	recon->init((const char*)gainFile.mb_str(), (const char*)darkFile.mb_str(), (const char*)filename.mb_str());
+	recon->init((const char*)gainFile.mb_str(), (const char*)filename.mb_str());
 	recon->setInputVeritcal(vertical);
 }
 

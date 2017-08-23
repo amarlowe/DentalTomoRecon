@@ -19,11 +19,12 @@
 #include <wx/font.h>
 #include <wx/colour.h>
 #include <wx/settings.h>
+#include <wx/choice.h>
 #include <wx/stattext.h>
+#include <wx/toolbar.h>
 #include <wx/checkbox.h>
 #include <wx/button.h>
 #include <wx/slider.h>
-#include <wx/toolbar.h>
 #include <wx/textctrl.h>
 #include <wx/sizer.h>
 #include <wx/panel.h>
@@ -56,15 +57,32 @@ class mainWindow : public wxFrame
 		wxMenu* view;
 		wxMenu* calibration;
 		wxMenu* help;
-		wxToolBar* m_toolBar2;
-		wxStaticText* enhanceLabel;
+		wxChoice* optionBox;
+		wxToolBar* navToolbar;
+		wxStaticText* distanceLabel;
+		wxStaticText* DistanceValue;
+		wxToolBar* edgeToolbar;
 		wxCheckBox* xEnhance;
 		wxCheckBox* yEnhance;
 		wxCheckBox* absEnhance;
 		wxButton* resetEnhance;
 		wxStaticText* ratioLabel;
 		wxStaticText* ratioValue;
-		wxSlider* m_slider3;
+		wxSlider* enhanceSlider;
+		wxToolBar* scanToolbar;
+		wxCheckBox* scanVertEnable;
+		wxStaticText* scanVertValue;
+		wxButton* resetScanVert;
+		wxSlider* scanVertSlider;
+		wxCheckBox* scanHorEnable;
+		wxStaticText* scanHorValue;
+		wxButton* resetScanHor;
+		wxSlider* scanHorSlider;
+		wxToolBar* noiseToolbar;
+		wxCheckBox* outlierEnable;
+		wxStaticText* noiseMaxVal;
+		wxButton* resetNoiseMax;
+		wxSlider* noiseMaxSlider;
 		wxPanel* m_panel10;
 		wxStatusBar* m_statusBar1;
 		
@@ -76,7 +94,6 @@ class mainWindow : public wxFrame
 		virtual void onQuit( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onConfig( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onGainSelect( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onDarkSelect( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onReconstructionView( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onProjectionView( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onLogView( wxCommandEvent& event ) { event.Skip(); }
@@ -87,6 +104,21 @@ class mainWindow : public wxFrame
 		virtual void onTestGeo( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onAutoGeo( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onAbout( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onToolbarChoice( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onXEnhance( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onYEnhance( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onAbsEnhance( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onResetEnhance( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onEnhanceRatio( wxScrollEvent& event ) { event.Skip(); }
+		virtual void onScanVertEnable( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onResetScanVert( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onScanVert( wxScrollEvent& event ) { event.Skip(); }
+		virtual void onScanHorEnable( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onResetScanHor( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onScanHor( wxScrollEvent& event ) { event.Skip(); }
+		virtual void onNoiseMaxEnable( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onResetNoiseMax( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onNoiseMax( wxScrollEvent& event ) { event.Skip(); }
 		virtual void onPageChange( wxAuiNotebookEvent& event ) { event.Skip(); }
 		
 	

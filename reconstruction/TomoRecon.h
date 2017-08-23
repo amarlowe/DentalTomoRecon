@@ -39,7 +39,6 @@
 //Projection correction parameters
 #define LOWTHRESH 80.0f
 #define HIGHTHRESH 0.98f
-#define DIFFTHRESH 30.0f
 
 //Autofocus parameters
 #define STARTSTEP 1.0f
@@ -108,6 +107,8 @@ typedef enum {
 
 typedef enum {
 	no_der,
+	x_mag_enhance,
+	y_mag_enhance,
 	mag_enhance,
 	x_enhance,
 	y_enhance,
@@ -211,9 +212,16 @@ struct params {
 	int baseYr = -1;
 	int currXr = -1;
 	int currYr = -1;
+
+	//User parameters
+	float ratio = 0.0;
+	bool useMaxNoise;
+	int maxNoise = 30;
 };
 
 struct CPUParams {
+	bool scanVertEnable;
+	bool scanHorEnable;
 	float vertTau = 0.25;
 	float horTau = 0.1;
 	int iterations = 40;
@@ -235,10 +243,10 @@ public:
 	TomoRecon(int x, int y, struct SystemControl * Sys);
 	~TomoRecon();
 
-	TomoError init(const char * gainFile, const char * darkFile, const char * mainFile);
+	TomoError init(const char * gainFile, const char * mainFile);
 
 	//High level functions for command line call
-	TomoError ReadProjections(const char * gainFile, const char * darkFile, const char * mainFile);
+	TomoError ReadProjections(const char * gainFile, const char * mainFile);
 	TomoError FreeGPUMemory(void);
 
 	TomoError setReconBox(int index);
@@ -288,6 +296,13 @@ public:
 	TomoError resetZoom();
 	derivative_t getDisplay();
 	TomoError setDisplay(derivative_t type);
+	TomoError setEnhanceRatio(float ratio);
+	TomoError enableNoiseMaxFilter(bool enable);
+	TomoError setNoiseMaxVal(int max);
+	TomoError enableScanVert(bool enable);
+	TomoError setScanVertVal(float tau);
+	TomoError enableScanHor(bool enable);
+	TomoError setScanHorVal(float tau);
 
 	/* Input Functions to read data into the program                      */	BOOL CheckFilePathForRepeatScans(std::string BasePathIn);
 	int GetNumberOfScans(std::string BasePathIn);
@@ -350,7 +365,7 @@ private:
 
 	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Functions to Initialize the GPU and set up the reconstruction normalization
-	TomoError initGPU(const char * gainFile, const char * darkFile, const char * mainFile);
+	TomoError initGPU(const char * gainFile, const char * mainFile);
 	TomoError setNOOP(float kernel[KERNELSIZE]);
 	TomoError setGauss(float kernel[KERNELSIZE]);
 	TomoError setGaussDer(float kernel[KERNELSIZE]);
@@ -367,7 +382,7 @@ private:
 	//Kernel call helpers
 	float focusHelper();
 	TomoError imageKernel(float xK[KERNELSIZE], float yK[KERNELSIZE], float * output);
-	TomoError scanLineDetect(int view, float * d_sum, float * sum, float * offset, bool vert);
+	TomoError scanLineDetect(int view, float * d_sum, float * sum, float * offset, bool vert, bool enable);
 	float graphCost(float * vertGraph, float * horGraph, int view = -1, float offset = 0.0, float lightScale = 1.0, float rsq = 0.0);
 	float getMax(float * d_Image);
 

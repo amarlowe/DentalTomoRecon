@@ -71,6 +71,7 @@ TomoRecon
 - Redo read-raw-projections for speed, stability, and color correction accuracy
 - Correct for scan lines
 - Switch to single buffer as the output, calculate pitch widths from pixel ratios
+- Built toolbars for user parameters
 
 --------------Bugs---------------------
 - additional lines included on increasing z size

@@ -20,11 +20,11 @@ TomoRecon::~TomoRecon() {
 	delete[] Sys.Geo.EmitZ;
 }
 
-TomoError TomoRecon::init(const char * gainFile, const char * darkFile, const char * mainFile) {
+TomoError TomoRecon::init(const char * gainFile, const char * mainFile) {
 	NumViews = NUMVIEWS;
 
 	//Step 4. Set up the GPU for Reconstruction
-	tomo_err_throw(initGPU(gainFile, darkFile, mainFile));
+	tomo_err_throw(initGPU(gainFile, mainFile));
 
 	zoom = 0;
 	xOff = 0;
