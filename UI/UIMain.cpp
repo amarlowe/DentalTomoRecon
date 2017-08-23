@@ -206,6 +206,7 @@ void DTRMainWindow::onResetFocus(wxCommandEvent& WXUNUSED(event)) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->resetFocus();
+	//recon->resetLight();
 
 	currentFrame->m_canvas->paint();
 }
@@ -1216,8 +1217,8 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
 		if (recon->selBoxReady()) {
 			//if they're greater than 0, the box was clicked and dragged successfully
 			recon->autoFocus(true);
-			paint();
-			while (recon->autoFocus(false) == Tomo_OK) paint();
+			//paint();
+			while (recon->autoFocus(false) == Tomo_OK);// paint();
 			
 			//cleanup
 			recon->resetSelBox();
@@ -1232,7 +1233,20 @@ void CudaGLCanvas::OnChar(wxKeyEvent& event){
 	if (event.GetKeyCode() == 32) {
 		switch (recon->getDisplay()) {
 		case no_der:
-			recon->setDisplay(der_x);
+			recon->setDisplay(x_enhance);
+			break;
+		case x_enhance:
+			recon->setDisplay(mag_enhance);
+			break;
+		case mag_enhance:
+			recon->setDisplay(y_enhance);
+			break;
+		case y_enhance:
+			recon->setDisplay(both_enhance);
+			break;
+		case both_enhance:
+			recon->setDisplay(no_der);
+			//recon->setDisplay(der_x);
 			break;
 		case der_x:
 			recon->setDisplay(der_y);

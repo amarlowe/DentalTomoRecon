@@ -60,7 +60,7 @@
 #define MAXTHREADS 1024
 
 //Kernel options
-#define SIGMA 1.0f
+#define SIGMA 1.5f
 #define KERNELRADIUS 5
 #define KERNELSIZE (2*KERNELRADIUS + 1)
 
@@ -108,6 +108,10 @@ typedef enum {
 
 typedef enum {
 	no_der,
+	mag_enhance,
+	x_enhance,
+	y_enhance,
+	both_enhance,
 	der_x,
 	der_y,
 	der2_x,
@@ -365,6 +369,7 @@ private:
 	TomoError imageKernel(float xK[KERNELSIZE], float yK[KERNELSIZE], float * output);
 	TomoError scanLineDetect(int view, float * d_sum, float * sum, float * offset, bool vert);
 	float graphCost(float * vertGraph, float * horGraph, int view = -1, float offset = 0.0, float lightScale = 1.0, float rsq = 0.0);
+	float getMax(float * d_Image);
 
 	//Coordinate conversions
 	TomoError P2R(int* rX, int* rY, int pX, int pY, int view);
@@ -386,7 +391,8 @@ private:
 	float * d_gaussDer3;
 
 	//Derivative buffers
-	float * xDer;
+	float * buff1;
+	float * buff2;
 
 	//Kernel call parameters
 	size_t sizeIM;

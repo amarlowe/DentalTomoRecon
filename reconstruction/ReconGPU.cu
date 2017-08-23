@@ -136,6 +136,16 @@ __global__ void squareMag(float *d_Dst, float *src1, float *src2, int pitchIn, i
 	d_Dst[MUL_ADD(y, pitchOut, x)] = pow(src1[MUL_ADD(y, pitchIn, x)],2) + pow(src2[MUL_ADD(y, pitchIn, x)],2);
 }
 
+__global__ void mag(float *d_Dst, float *src1, float *src2, int pitchIn, int pitchOut, params consts) {
+	const int x = MUL_ADD(blockDim.x, blockIdx.x, threadIdx.x);
+	const int y = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
+
+	if (x >= consts.Rx || y >= consts.Ry || x < 0 || y < 0)
+		return;
+
+	d_Dst[MUL_ADD(y, pitchOut, x)] = sqrt(pow(src1[MUL_ADD(y, pitchIn, x)], 2) + pow(src2[MUL_ADD(y, pitchIn, x)], 2));
+}
+
 __global__ void squareDiff(float *d_Dst, int view, float xOff, float yOff, int pitchOut, params consts) {
 	const int x = MUL_ADD(blockDim.x, blockIdx.x, threadIdx.x);
 	const int y = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
@@ -144,6 +154,26 @@ __global__ void squareDiff(float *d_Dst, int view, float xOff, float yOff, int p
 		return;
 	
 	d_Dst[MUL_ADD(y, pitchOut, x)] = pow(tex2D(textError, x - xOff, y - yOff + view*consts.Py) - tex2D(textError, x, y + (NUMVIEWS / 2)*consts.Py), 2);
+}
+
+__global__ void add(float* src1, float* src2, float *d_Dst, float ratio, int pitch, params consts) {
+	const int x = MUL_ADD(blockDim.x, blockIdx.x, threadIdx.x);
+	const int y = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
+
+	if (x >= consts.Px || y >= consts.Py || x < 0 || y < 0)
+		return;
+
+	d_Dst[MUL_ADD(y, pitch, x)] = (src1[MUL_ADD(y, pitch, x)] + src2[MUL_ADD(y, pitch, x)]*ratio) / (abs(ratio) + 1);
+}
+
+__global__ void addLog(float* src1, float* src2, float *d_Dst, float scale1, float scale2, int pitch, params consts) {
+	const int x = MUL_ADD(blockDim.x, blockIdx.x, threadIdx.x);
+	const int y = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
+
+	if (x >= consts.Px || y >= consts.Py || x < 0 || y < 0)
+		return;
+
+	d_Dst[MUL_ADD(y, pitch, x)] = (src1[MUL_ADD(y, pitch, x)] / scale1 + log(abs(src2[MUL_ADD(y, pitch, x)]) + 1) / log(scale2 + 1)) * USHRT_MAX / 2;
 }
 
 //Display functions
@@ -166,7 +196,7 @@ __global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, float scal
 		sum = abs(sum);
 	}
 
-	if (!derDisplay && consts.log) {
+	if (consts.log) {
 		if (sum != 0) {
 			float correctedMax = logf(USHRT_MAX);
 			sum = (correctedMax - logf(sum + 1)) / correctedMax * USHRT_MAX;
@@ -185,14 +215,16 @@ __global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, float scal
 	else {
 		rgbx.na = UCHAR_MAX;
 		if (negative) {
-			rgbx.r = 0;
-			rgbx.g = 0;
+			rgbx.r = UCHAR_MAX;// 0;
+			rgbx.g = UCHAR_MAX;// 0;
+			rgbx.b = UCHAR_MAX;// sum;
 		}
 		else {
 			rgbx.r = sum;
 			rgbx.g = sum;
+			rgbx.b = sum;
 		}
-		rgbx.b = sum;
+		
 	}
 
 	surf2Dwrite(rgbx.b32,
@@ -465,7 +497,7 @@ __global__ void histogram256Kernel(unsigned int *d_Histogram, T *d_Data, unsigne
 
 	float data = abs(d_Data[MUL_ADD(j, consts.ReconPitchNum, i)]);//whatever it currently is, cast it to ushort
 	if (consts.log) {
-		if (data != 0) {
+		if (data > 0) {
 			float correctedMax = logf(USHRT_MAX);
 			data = (correctedMax - logf(data + 1)) / correctedMax * USHRT_MAX;
 		}
@@ -580,7 +612,8 @@ TomoError TomoRecon::initGPU(const char * gainFile, const char * darkFile, const
 	constants.ProjPitchNum = pitch;
 
 	//Setup derivative buffers
-	cuda(Malloc(&xDer, sizeIM * sizeof(float)));
+	cuda(Malloc(&buff1, sizeIM * sizeof(float)));
+	cuda(Malloc(&buff2, sizeIM * sizeof(float)));
 
 	//Set up all kernels
 	cuda(Malloc(&d_noop, KERNELSIZE * sizeof(float)));
@@ -842,7 +875,7 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * darkFil
 	for (int view = 0; view < NumViews; view++) {
 		float scale = maxVal/scales[view];
 		cuda(Memcpy(d_MaxVal, &scale, sizeof(float), cudaMemcpyHostToDevice));
-		
+		/*
 		{
 			std::ofstream FILE1, FILE2;
 			std::stringstream outputfile1, outputfile2;
@@ -867,7 +900,7 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * darkFil
 				else FILE2 << 0.0 << "\n";
 			}
 			FILE2.close();
-		}
+		}*/
 
 		cuda(MemcpyAsync(d_SumValsVert, vertOff + view * Sys.Proj.Nx, Sys.Proj.Nx * sizeof(float), cudaMemcpyHostToDevice));
 		cuda(MemcpyAsync(d_SumValsHor, horOff + view * Sys.Proj.Ny, Sys.Proj.Ny * sizeof(float), cudaMemcpyHostToDevice));
@@ -1017,7 +1050,8 @@ TomoError TomoRecon::FreeGPUMemory(void){
 	cuda(Free(d_Image));
 	cuda(Free(d_Error));
 	cuda(Free(d_Sino));
-	cuda(Free(xDer));
+	cuda(Free(buff1));
+	cuda(Free(buff2));
 
 	cuda(Free(constants.d_Beamx));
 	cuda(Free(constants.d_Beamy));
@@ -1097,6 +1131,36 @@ TomoError TomoRecon::singleFrame() {
 
 	switch (derDisplay) {
 	case no_der:
+		
+		break;
+	case mag_enhance:
+		imageKernel(d_gaussDer, d_gauss, buff1);
+		imageKernel(d_gauss, d_gaussDer, d_Image);
+
+		KERNELCALL2(mag, contBlocks, contThreads, buff1, d_Image, buff1, reconPitchNum, reconPitchNum, constants);
+		cuda(BindTexture2D(NULL, textError, d_Sino, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
+		KERNELCALL2(projectSlice, contBlocks, contThreads, d_Image, distance, constants);
+		cuda(UnbindTexture(textImage));
+
+		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, 5.0, Sys.Recon.Nx, constants);
+		break;
+	case x_enhance: {
+		imageKernel(d_gaussDer, d_gauss, buff1);
+		//KERNELCALL2(addLog, contBlocks, contThreads, d_Image, buff1, d_Image, getMax(d_Image), getMax(buff1) / 30.0, Sys.Recon.Nx, constants);
+		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, -5.0, Sys.Recon.Nx, constants);
+	}
+		break;
+	case y_enhance:
+		imageKernel(d_gauss, d_gaussDer, buff1);
+		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, -5.0, Sys.Recon.Nx, constants);
+		break;
+	case both_enhance:
+	{
+		imageKernel(d_gaussDer, d_gauss, buff2);
+		imageKernel(d_gauss, d_gaussDer, buff1);
+		KERNELCALL2(add, contBlocks, contThreads, buff1, buff2, buff1, 1.0, Sys.Recon.Nx, constants);
+		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, -5.0, Sys.Recon.Nx, constants);
+	}
 		break;
 	case der_x:
 		imageKernel(d_gaussDer, d_gauss, d_Image);
@@ -1105,10 +1169,10 @@ TomoError TomoRecon::singleFrame() {
 		imageKernel(d_gauss, d_gaussDer, d_Image);
 		break;
 	case square_mag:
-		imageKernel(d_gaussDer, d_gauss, xDer);
+		imageKernel(d_gaussDer, d_gauss, buff1);
 		imageKernel(d_gauss, d_gaussDer, d_Image);
 
-		KERNELCALL2(squareMag, contBlocks, contThreads, d_Image, xDer, d_Image, reconPitchNum, reconPitchNum, constants);
+		KERNELCALL2(squareMag, contBlocks, contThreads, d_Image, buff1, d_Image, reconPitchNum, reconPitchNum, constants);
 		break;
 	case slice_diff:
 	{
@@ -1140,6 +1204,7 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 	static bool linearRegion;
 	static bool firstLin = true;
 	static float bestDist;
+	static derivative_t oldDisplay;
 
 	if (firstRun) {
 		step = STARTSTEP;
@@ -1147,6 +1212,7 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 		bestDist = MINDIS;
 		best = 0;
 		linearRegion = false;
+		oldDisplay = derDisplay;
 		derDisplay = square_mag;
 		singleFrame();
 
@@ -1186,7 +1252,7 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 			step = -step / 2;
 
 			if (abs(step) < LASTSTEP) {
-				derDisplay = no_der;
+				derDisplay = oldDisplay;
 				singleFrame();
 				unsigned int histogram[HIST_BIN_COUNT];
 				int threshold = Sys.Recon.Nx * Sys.Recon.Ny / AUTOTHRESHOLD;
@@ -1629,6 +1695,31 @@ float TomoRecon::graphCost(float * vertGraph, float * horGraph, int view, float 
 	}
 
 	return sum;
+}
+
+float TomoRecon::getMax(float * d_Im) {
+	constants.baseXr = 3 * Sys.Recon.Nx / 4;
+	constants.baseYr = 3 * Sys.Recon.Ny / 4;
+	constants.currXr = Sys.Recon.Nx / 4;
+	constants.currYr = Sys.Recon.Ny / 4;
+
+	unsigned int histogram[HIST_BIN_COUNT];
+	int threshold = Sys.Recon.Nx * Sys.Recon.Ny / AUTOTHRESHOLD;
+	getHistogram(d_Im, reconPitch*Sys.Recon.Ny, histogram);
+
+	int i;
+	for (i = HIST_BIN_COUNT - 1; i >= 0; i--) {
+		unsigned int count = histogram[i];
+		if (count > threshold) break;
+	}
+	if (i < 0) i = HIST_BIN_COUNT;
+
+	constants.baseXr = -1;
+	constants.baseYr = -1;
+	constants.currXr = -1;
+	constants.currYr = -1;
+
+	return i * UCHAR_MAX;
 }
 
 /****************************************************************************/

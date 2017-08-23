@@ -70,15 +70,19 @@ TomoError TomoRecon::setGaussDer(float kernel[KERNELSIZE]) {
 	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
 		float temp = -i * factor * exp(-pow((float)i, 2) / denom);
 		kernel[i + KERNELRADIUS] = temp;
-		sum += temp;
+		if(i < 0) sum += temp;
 	}
 
-	//must make sum = 0
-	sum /= KERNELSIZE;
+	//must make sum = 1
+	sum -= 1;
+	sum /= KERNELRADIUS;
 
 	//subtracting sum/variables is constrained optimization of gaussian
-	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++)
-		kernel[i + KERNELRADIUS] -= sum;
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
+		if (i < 0) kernel[i + KERNELRADIUS] -= sum;
+		else if(i > 0) kernel[i + KERNELRADIUS] += sum;
+	}
+
 
 	return Tomo_OK;
 }
