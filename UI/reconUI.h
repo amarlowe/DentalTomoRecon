@@ -37,7 +37,6 @@
 #include <wx/listctrl.h>
 #include <wx/statline.h>
 #include <wx/gbsizer.h>
-#include <wx/radiobox.h>
 #include <wx/grid.h>
 
 ///////////////////////////////////////////////////////////////////////////
@@ -60,6 +59,7 @@ class mainWindow : public wxFrame
 		wxToolBar* navToolbar;
 		wxStaticText* distanceLabel;
 		wxTextCtrl* distanceValue;
+		wxStaticText* distanceUnits;
 		wxButton* autoFocus;
 		wxStaticText* stepLabel;
 		wxStaticText* stepVal;
@@ -148,6 +148,7 @@ class mainWindow : public wxFrame
 		virtual void onResetNoiseMax( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onNoiseMax( wxScrollEvent& event ) { event.Skip(); }
 		virtual void onPageChange( wxAuiNotebookEvent& event ) { event.Skip(); }
+		virtual void onPageClose( wxAuiNotebookEvent& event ) { event.Skip(); }
 		
 	
 	public:
@@ -231,14 +232,6 @@ class configDialog : public wxFrame
 	private:
 	
 	protected:
-		wxStaticText* m_staticText3;
-		wxTextCtrl* sliceThickness;
-		wxPanel* m_panel4;
-		wxPanel* m_panel5;
-		wxStaticText* m_staticText6;
-		wxRadioBox* orientation;
-		wxStaticText* m_staticText5;
-		wxRadioBox* rotationEnabled;
 		wxStaticText* m_staticText13;
 		wxStaticText* m_staticText9;
 		wxTextCtrl* pixelWidth;
@@ -256,6 +249,7 @@ class configDialog : public wxFrame
 		wxButton* cancel;
 		
 		// Virtual event handlers, overide them in your derived class
+		virtual void onConfigChar( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onLoad( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onSave( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onOK( wxCommandEvent& event ) { event.Skip(); }
@@ -264,7 +258,7 @@ class configDialog : public wxFrame
 	
 	public:
 		
-		configDialog( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Reconstruction Configuration"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 1343,361 ), long style = wxDEFAULT_FRAME_STYLE|wxTAB_TRAVERSAL );
+		configDialog( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Reconstruction Configuration"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 1343,248 ), long style = wxDEFAULT_FRAME_STYLE|wxTAB_TRAVERSAL );
 		
 		~configDialog();
 	

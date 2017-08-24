@@ -69,6 +69,7 @@ protected:
 	void onSave(wxCommandEvent& event);
 	void onOK(wxCommandEvent& event);
 	void onCancel(wxCommandEvent& event);
+	void onConfigChar(wxCommandEvent& event);
 
 	TomoError ParseLegacyTxt(std::string FilePath);
 	TomoError ParseJSONFile(std::string FilePath);
@@ -224,7 +225,8 @@ protected:
 	void onRunTest(wxCommandEvent& event);
 	void onTestGeo(wxCommandEvent& event);
 	void onAutoGeo(wxCommandEvent& event);
-	void onPageChange(wxCommandEvent& event);
+	void onPageChange(wxAuiNotebookEvent& event);
+	void onPageClose(wxAuiNotebookEvent& event);
 
 	//Toolbar functions
 

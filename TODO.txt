@@ -1,20 +1,16 @@
 TomoRecon
 
 -------------Features------------------
-- Switch between inputs in form using tab and/or enter
 - Confirm cancel or load when values have been edited
 - Check values for input before allowing running, prompt a visit to config
 - Make MAC compiltible (hopefully not)
 - Save configuration settings on project file/directory instead of registry to make them project specific
-- "Set default" options for configuration and any other setting we can come up with
 - Replace each failure state with it's own error type and dialoag (or pass a string)
 - Look into upres using the mutltiple viewing angles
 - Confirm overwrite on save if file already exists
-- Add Units to all number descriptions in settings 
 - Make an automated test bench for algorithm changes
 - Correct for dead pixels (not necessarily on all projection inputs)
 - Gui tools for translating scales into real world measurments
-- Edit lighting and contrast panel
 - Image annotations
 - Remove focus artifacts, only show in focus areas
 - Use autofocus to generate relative geometries
@@ -22,12 +18,10 @@ TomoRecon
 - Make input selections a wizard
 - Correct for non-xy shifts in the detector
 - Save projection images after processing
+- Save all toolbar settings for session end
 
 --------------Bugs---------------------
-- Disable console close button
-- Close behavior breaks when the console is the selected tab
 - Throw all tomo errors instead of crashing the program
-- Changing config after opening image set does not update
 - Histogram lighting has some issues (see rmi single)
 
 -------------Completed------------------
@@ -72,6 +66,9 @@ TomoRecon
 - Correct for scan lines
 - Switch to single buffer as the output, calculate pitch widths from pixel ratios
 - Built toolbars for user parameters
+- Edit lighting and contrast panel
+- Switch between inputs in form using tab and/or enter
+- Add Units to all number descriptions in settings 
 
 --------------Bugs---------------------
 - additional lines included on increasing z size
@@ -101,3 +98,6 @@ TomoRecon
 - GPU memory leaks abound
 - White artifacts around reconstruction corners
 - Flip causes pictures to go negative, not sure if we should fix/detect
+- Disable console close button
+- Close behavior breaks when the console is the selected tab
+- Changing config after opening image set does not update

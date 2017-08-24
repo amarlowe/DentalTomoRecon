@@ -421,9 +421,19 @@ void DTRMainWindow::onAbout(wxCommandEvent& WXUNUSED(event)){
 		this);
 }
 
-void DTRMainWindow::onPageChange(wxCommandEvent& WXUNUSED(event)) {
-	wxString toolTip = m_auinotebook6->GetPageToolTip(m_auinotebook6->GetPageIndex(m_auinotebook6->GetCurrentPage()));
-	(*m_textCtrl8) << toolTip;
+void DTRMainWindow::onPageChange(wxAuiNotebookEvent& event) {
+	event.Skip();//Required to actually switch the tab
+	int temp = event.GetSelection();
+	if (temp == 0) {
+		m_auinotebook6->SetWindowStyle(NULL);
+		return;
+	}
+	m_auinotebook6->SetWindowStyle(wxAUI_NB_DEFAULT_STYLE);
+	return;
+}
+
+void DTRMainWindow::onPageClose(wxAuiNotebookEvent& event) {
+	if (checkForConsole()) event.Veto();
 }
 
 //Toolbar Functions
@@ -882,9 +892,6 @@ DTRConfigDialog::DTRConfigDialog(wxWindow* parent) : configDialog(parent){
 	//load all values from previously saved settings
 	wxConfigBase *pConfig = wxConfigBase::Get();
 
-	orientation->SetSelection(pConfig->ReadLong(wxT("/orientation"), 0l) == 0l ? 0 : 1);
-	rotationEnabled->SetSelection(pConfig->ReadLong(wxT("/rotationEnabled"), 0l) == 0l ? 0 : 1);
-	sliceThickness->SetValue(wxString::Format(wxT("%.1f"), pConfig->ReadDouble(wxT("/sliceThickness"), 0.5f)));
 	pixelWidth->SetValue(wxString::Format(wxT("%d"), pConfig->ReadLong(wxT("/pixelWidth"), 1915l)));
 	pixelHeight->SetValue(wxString::Format(wxT("%d"), pConfig->ReadLong(wxT("/pixelHeight"), 1440l)));
 	pitchHeight->SetValue(wxString::Format(wxT("%.4f"), pConfig->ReadDouble(wxT("/pitchHeight"), 0.0185f)));
@@ -934,9 +941,6 @@ TomoError DTRConfigDialog::ParseJSONFile(std::string FilePath) {
 
 	//Populate form using parsed values
 	//TODO: shittons of error checking
-	orientation->SetSelection(cJSON_GetObjectItem(root, "orientation")->type == cJSON_False ? 0 : 1);
-	rotationEnabled->SetSelection(cJSON_GetObjectItem(root, "rotationEnabled")->type == cJSON_False ? 0 : 1);
-	sliceThickness->SetValue(wxString::Format(wxT("%.1f"), cJSON_GetObjectItem(root, "sliceThickness")->valuedouble));
 	pixelWidth->SetValue(wxString::Format(wxT("%d"), cJSON_GetObjectItem(root, "pixelWidth")->valueint));
 	pixelHeight->SetValue(wxString::Format(wxT("%d"), cJSON_GetObjectItem(root, "pixelHeight")->valueint));
 	pitchHeight->SetValue(wxString::Format(wxT("%.4f"), cJSON_GetObjectItem(root, "pitchHeight")->valuedouble));
@@ -1005,7 +1009,6 @@ TomoError DTRConfigDialog::ParseLegacyTxt(std::string FilePath) {
 	count = 0; num = 0;
 	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
 	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-	sliceThickness->SetValue(wxString::Format(wxT("%.1f"), atof(data_in)));
 	for (int i = 0; i < 12; i++) data_in[i] = '\0';
 	count = 0; num = 0;
 
@@ -1039,7 +1042,6 @@ TomoError DTRConfigDialog::ParseLegacyTxt(std::string FilePath) {
 	//Skip the next two lines and read the third to see direction of data
 	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
 	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-	rotationEnabled->SetSelection(atoi(data_in) == 0 ? 0 : 1);
 	for (int i = 0; i < 12; i++) data_in[i] = '\0';
 	count = 0; num = 0;
 
@@ -1064,7 +1066,6 @@ TomoError DTRConfigDialog::ParseLegacyTxt(std::string FilePath) {
 	// Skip the next two lines and read the third to check orientation
 	file.getline(data, 1024); file.getline(data, 1024); file.getline(data, 1024);
 	do { data_in[num] = data[count]; count++; num++; } while (data[count] != '\t' && num < 12);
-	orientation->SetSelection(atoi(data_in) == 0 ? 0 : 1);
 	for (int i = 0; i < 12; i++) data_in[i] = '\0';
 	count = 0; num = 0;
 
@@ -1099,13 +1100,7 @@ void DTRConfigDialog::onSave(wxCommandEvent& event) {
 	double parsedDouble;
 	long parsedInt = 0;
 	cJSON *root = cJSON_CreateObject();
-	if (orientation->GetSelection() == 0) cJSON_AddFalseToObject(root, "orientation");
-	else cJSON_AddTrueToObject(root, "orientation");
-	if (rotationEnabled->GetSelection() == 0) cJSON_AddFalseToObject(root, "rotationEnabled");
-	else cJSON_AddTrueToObject(root, "rotationEnabled");
 
-	sliceThickness->GetLineText(0).ToDouble(&parsedDouble);
-	cJSON_AddNumberToObject(root, "sliceThickness", parsedDouble);
 	pitchHeight->GetLineText(0).ToDouble(&parsedDouble);
 	cJSON_AddNumberToObject(root, "pitchHeight", parsedDouble);
 	pitchWidth->GetLineText(0).ToDouble(&parsedDouble);
@@ -1150,17 +1145,6 @@ TomoError DTRConfigDialog::checkInputs() {
 	double parsedDouble;
 	long parsedInt = 0;
 	wxConfigBase *pConfig = wxConfigBase::Get();
-
-	pConfig->Write(wxT("/orientation"), orientation->GetSelection() == 0 ? 0l : 1l);
-	pConfig->Write(wxT("/rotationEnabled"), rotationEnabled->GetSelection() == 0 ? 0l : 1l);
-
-	if (!sliceThickness->GetLineText(0).ToDouble(&parsedDouble)) {
-		wxMessageBox(wxT("Invalid input in text box: \"Thickness of reconstruciton slice\"."),
-			wxT("Invlaid input"),
-			wxICON_STOP | wxOK);
-		return Tomo_input_err;
-	}
-	else pConfig->Write(wxT("/sliceThickness"), parsedDouble);
 
 	if (!pixelWidth->GetLineText(0).ToLong(&parsedInt) || parsedInt <= 0) {
 		wxMessageBox(wxT("Invalid input in text box: \"Height (pixels)\".\nMust be a whole number greater than 0."),
@@ -1212,6 +1196,25 @@ TomoError DTRConfigDialog::checkInputs() {
 void DTRConfigDialog::onCancel(wxCommandEvent& WXUNUSED(event)) {
 	((DTRMainWindow*)GetParent())->cfgDialog = NULL;
 	Close(true);
+}
+
+void DTRConfigDialog::onConfigChar(wxCommandEvent& event) {
+	wxTextCtrl* caller = (wxTextCtrl*)event.GetEventObject();
+	if (caller == pixelWidth) {
+		pixelHeight->SetFocus();
+		pixelHeight->SelectAll();
+	}
+	if (caller == pixelHeight) {
+		pitchHeight->SetFocus();
+		pitchHeight->SelectAll();
+	}
+	if (caller == pitchHeight) {
+		pitchWidth->SetFocus();
+		pitchWidth->SelectAll();
+	}
+	if (caller == pitchWidth) {
+		m_grid1->SetFocus();
+	}
 }
 
 DTRConfigDialog::~DTRConfigDialog() {

@@ -90,8 +90,11 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	distanceLabel = new wxStaticText( navToolbar, wxID_ANY, wxT("Current Distance"), wxDefaultPosition, wxDefaultSize, 0 );
 	distanceLabel->Wrap( -1 );
 	navToolbar->AddControl( distanceLabel );
-	distanceValue = new wxTextCtrl( navToolbar, wxID_ANY, wxT("0.0"), wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER );
+	distanceValue = new wxTextCtrl( navToolbar, wxID_ANY, wxT("0.0"), wxDefaultPosition, wxSize( 50,-1 ), wxTE_PROCESS_ENTER );
 	navToolbar->AddControl( distanceValue );
+	distanceUnits = new wxStaticText( navToolbar, wxID_ANY, wxT("mm"), wxDefaultPosition, wxDefaultSize, 0 );
+	distanceUnits->Wrap( -1 );
+	navToolbar->AddControl( distanceUnits );
 	autoFocus = new wxButton( navToolbar, wxID_ANY, wxT("Auto-focus"), wxDefaultPosition, wxDefaultSize, 0 );
 	navToolbar->AddControl( autoFocus );
 	stepLabel = new wxStaticText( navToolbar, wxID_ANY, wxT("Step size:"), wxDefaultPosition, wxDefaultSize, 0 );
@@ -235,7 +238,7 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	m_mgr.AddPane( noiseToolbar, wxAuiPaneInfo() .Top() .CaptionVisible( false ).CloseButton( false ).PaneBorder( false ).Movable( false ).Dock().Resizable().FloatingSize( wxDefaultSize ).DockFixed( true ).BottomDockable( false ).TopDockable( false ).LeftDockable( false ).RightDockable( false ).Floatable( false ).Layer( 10 ) );
 	
 	
-	m_auinotebook6 = new wxAuiNotebook( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_NB_DEFAULT_STYLE|wxNO_BORDER );
+	m_auinotebook6 = new wxAuiNotebook( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0|wxNO_BORDER );
 	m_mgr.AddPane( m_auinotebook6, wxAuiPaneInfo() .Left() .CaptionVisible( false ).CloseButton( false ).PaneBorder( false ).Dock().Resizable().FloatingSize( wxDefaultSize ).CentrePane() );
 	
 	m_panel10 = new wxPanel( m_auinotebook6, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL );
@@ -363,7 +366,8 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	noiseMaxSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
 	noiseMaxSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
 	noiseMaxSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
-	m_auinotebook6->Connect( wxEVT_COMMAND_AUINOTEBOOK_PAGE_CHANGED, wxAuiNotebookEventHandler( mainWindow::onPageChange ), NULL, this );
+	m_auinotebook6->Connect( wxEVT_COMMAND_AUINOTEBOOK_PAGE_CHANGING, wxAuiNotebookEventHandler( mainWindow::onPageChange ), NULL, this );
+	m_auinotebook6->Connect( wxEVT_COMMAND_AUINOTEBOOK_PAGE_CLOSE, wxAuiNotebookEventHandler( mainWindow::onPageClose ), NULL, this );
 }
 
 mainWindow::~mainWindow()
@@ -473,7 +477,8 @@ mainWindow::~mainWindow()
 	noiseMaxSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
 	noiseMaxSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
 	noiseMaxSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
-	m_auinotebook6->Disconnect( wxEVT_COMMAND_AUINOTEBOOK_PAGE_CHANGED, wxAuiNotebookEventHandler( mainWindow::onPageChange ), NULL, this );
+	m_auinotebook6->Disconnect( wxEVT_COMMAND_AUINOTEBOOK_PAGE_CHANGING, wxAuiNotebookEventHandler( mainWindow::onPageChange ), NULL, this );
+	m_auinotebook6->Disconnect( wxEVT_COMMAND_AUINOTEBOOK_PAGE_CLOSE, wxAuiNotebookEventHandler( mainWindow::onPageClose ), NULL, this );
 	
 	m_mgr.UnInit();
 	
@@ -598,39 +603,6 @@ configDialog::configDialog( wxWindow* parent, wxWindowID id, const wxString& tit
 	fgSizer2->SetFlexibleDirection( wxVERTICAL );
 	fgSizer2->SetNonFlexibleGrowMode( wxFLEX_GROWMODE_SPECIFIED );
 	
-	m_staticText3 = new wxStaticText( this, wxID_ANY, wxT("Thickness of reconstruction slice"), wxDefaultPosition, wxDefaultSize, 0 );
-	m_staticText3->Wrap( 200 );
-	fgSizer2->Add( m_staticText3, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	sliceThickness = new wxTextCtrl( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0 );
-	fgSizer2->Add( sliceThickness, 1, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	m_panel4 = new wxPanel( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL );
-	fgSizer2->Add( m_panel4, 1, wxEXPAND | wxALL, 5 );
-	
-	m_panel5 = new wxPanel( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL );
-	fgSizer2->Add( m_panel5, 1, wxEXPAND | wxALL, 5 );
-	
-	m_staticText6 = new wxStaticText( this, wxID_ANY, wxT("Orientation"), wxDefaultPosition, wxDefaultSize, 0 );
-	m_staticText6->Wrap( 200 );
-	fgSizer2->Add( m_staticText6, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	wxString orientationChoices[] = { wxT("Right"), wxT("Left") };
-	int orientationNChoices = sizeof( orientationChoices ) / sizeof( wxString );
-	orientation = new wxRadioBox( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, orientationNChoices, orientationChoices, 1, wxRA_SPECIFY_COLS );
-	orientation->SetSelection( 1 );
-	fgSizer2->Add( orientation, 1, wxALL|wxEXPAND|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	m_staticText5 = new wxStaticText( this, wxID_ANY, wxT("Rotate Direction"), wxDefaultPosition, wxDefaultSize, 0 );
-	m_staticText5->Wrap( 200 );
-	fgSizer2->Add( m_staticText5, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	wxString rotationEnabledChoices[] = { wxT("Standard"), wxT("Flip") };
-	int rotationEnabledNChoices = sizeof( rotationEnabledChoices ) / sizeof( wxString );
-	rotationEnabled = new wxRadioBox( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, rotationEnabledNChoices, rotationEnabledChoices, 1, wxRA_SPECIFY_COLS );
-	rotationEnabled->SetSelection( 1 );
-	fgSizer2->Add( rotationEnabled, 1, wxALL|wxEXPAND|wxALIGN_CENTER_VERTICAL, 5 );
-	
 	m_staticText13 = new wxStaticText( this, wxID_ANY, wxT("Detector information"), wxDefaultPosition, wxDefaultSize, 0 );
 	m_staticText13->Wrap( -1 );
 	fgSizer2->Add( m_staticText13, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
@@ -642,28 +614,28 @@ configDialog::configDialog( wxWindow* parent, wxWindowID id, const wxString& tit
 	m_staticText9->Wrap( -1 );
 	gSizer2->Add( m_staticText9, 0, wxALL, 5 );
 	
-	pixelWidth = new wxTextCtrl( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0 );
+	pixelWidth = new wxTextCtrl( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER );
 	gSizer2->Add( pixelWidth, 0, wxALL, 5 );
 	
 	m_staticText10 = new wxStaticText( this, wxID_ANY, wxT("Width (pixels)"), wxDefaultPosition, wxDefaultSize, 0 );
 	m_staticText10->Wrap( -1 );
 	gSizer2->Add( m_staticText10, 0, wxALL, 5 );
 	
-	pixelHeight = new wxTextCtrl( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0 );
+	pixelHeight = new wxTextCtrl( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER );
 	gSizer2->Add( pixelHeight, 0, wxALL, 5 );
 	
-	m_staticText11 = new wxStaticText( this, wxID_ANY, wxT("Pitch height"), wxDefaultPosition, wxDefaultSize, 0 );
+	m_staticText11 = new wxStaticText( this, wxID_ANY, wxT("Pitch height (mm)"), wxDefaultPosition, wxDefaultSize, 0 );
 	m_staticText11->Wrap( -1 );
 	gSizer2->Add( m_staticText11, 0, wxALL, 5 );
 	
-	pitchHeight = new wxTextCtrl( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0 );
+	pitchHeight = new wxTextCtrl( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER );
 	gSizer2->Add( pitchHeight, 0, wxALL, 5 );
 	
-	m_staticText12 = new wxStaticText( this, wxID_ANY, wxT("Pitch width"), wxDefaultPosition, wxDefaultSize, 0 );
+	m_staticText12 = new wxStaticText( this, wxID_ANY, wxT("Pitch width (mm)"), wxDefaultPosition, wxDefaultSize, 0 );
 	m_staticText12->Wrap( -1 );
 	gSizer2->Add( m_staticText12, 0, wxALL, 5 );
 	
-	pitchWidth = new wxTextCtrl( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0 );
+	pitchWidth = new wxTextCtrl( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER );
 	gSizer2->Add( pitchWidth, 0, wxALL, 5 );
 	
 	
@@ -721,6 +693,10 @@ configDialog::configDialog( wxWindow* parent, wxWindowID id, const wxString& tit
 	this->Centre( wxBOTH );
 	
 	// Connect Events
+	pixelWidth->Connect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( configDialog::onConfigChar ), NULL, this );
+	pixelHeight->Connect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( configDialog::onConfigChar ), NULL, this );
+	pitchHeight->Connect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( configDialog::onConfigChar ), NULL, this );
+	pitchWidth->Connect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( configDialog::onConfigChar ), NULL, this );
 	loadConfig->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( configDialog::onLoad ), NULL, this );
 	saveConfig->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( configDialog::onSave ), NULL, this );
 	ok->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( configDialog::onOK ), NULL, this );
@@ -730,6 +706,10 @@ configDialog::configDialog( wxWindow* parent, wxWindowID id, const wxString& tit
 configDialog::~configDialog()
 {
 	// Disconnect Events
+	pixelWidth->Disconnect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( configDialog::onConfigChar ), NULL, this );
+	pixelHeight->Disconnect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( configDialog::onConfigChar ), NULL, this );
+	pitchHeight->Disconnect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( configDialog::onConfigChar ), NULL, this );
+	pitchWidth->Disconnect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( configDialog::onConfigChar ), NULL, this );
 	loadConfig->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( configDialog::onLoad ), NULL, this );
 	saveConfig->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( configDialog::onSave ), NULL, this );
 	ok->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( configDialog::onOK ), NULL, this );

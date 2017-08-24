@@ -13,7 +13,7 @@ TomoRecon::TomoRecon(int x, int y, struct SystemControl * Sys) : interop(x, y), 
 
 TomoRecon::~TomoRecon() {
 	cudaDeviceSynchronize();
-	cuda(StreamDestroy(stream));
+	//cuda(StreamDestroy(stream));
 	FreeGPUMemory();
 	delete[] Sys.Geo.EmitX;
 	delete[] Sys.Geo.EmitY;
