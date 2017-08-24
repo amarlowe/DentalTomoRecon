@@ -356,6 +356,7 @@ __global__ void projectSlice(float * IM, float distance, params consts) {
 
 	for (int view = 0; view < NUMVIEWS; view++) {
 		float dz = distance / consts.d_Beamz[view];
+		if (consts.orientation) dz = -dz;//z changes sign when flipped in the x direction
 		float x = xMM2P((xR2MM(i, consts.Rx, consts.PitchRx) + consts.d_Beamx[view] * dz) / (1 + dz), consts.Px, consts.PitchPx);
 		float y = yMM2P((yR2MM(j, consts.Ry, consts.PitchRy) + consts.d_Beamy[view] * dz) / (1 + dz), consts.Py, consts.PitchPy);
 
@@ -832,26 +833,9 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 	}
 
 	step = STARTSTEP;
-	distance = MINDIS;
 	bestDist = MINDIS;
 	best = FLT_MAX;
 	firstLin = true;
-
-	while (true) {
-		float newVal = graphCost(sumValsVert, sumValsHor);
-
-		if (newVal < best) {
-			best = newVal;
-			bestDist = distance;
-		}
-
-		distance += step;
-
-		if (distance > MAXDIS) {
-			distance = bestDist;
-			break;
-		}
-	}
 
 	//Normalize projection image lighting
 	float maxVal, minVal;
@@ -1202,11 +1186,6 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 		oldDisplay = derDisplay;
 		derDisplay = square_mag;
 		singleFrame();
-
-		unsigned int histogram[HIST_BIN_COUNT];
-		int threshold = Sys.Recon.Nx * Sys.Recon.Ny / AUTOTHRESHOLD;
-		getHistogram(d_Image, reconPitch*Sys.Recon.Ny, histogram);
-		autoLight(histogram, threshold, &constants.minVal, &constants.maxVal);
 	}
 
 	float newVal = focusHelper();
@@ -1241,10 +1220,6 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 			if (abs(step) < LASTSTEP) {
 				derDisplay = oldDisplay;
 				singleFrame();
-				unsigned int histogram[HIST_BIN_COUNT];
-				int threshold = Sys.Recon.Nx * Sys.Recon.Ny / AUTOTHRESHOLD;
-				getHistogram(d_Image, reconPitch*Sys.Recon.Ny, histogram);
-				autoLight(histogram, threshold, &constants.minVal, &constants.maxVal);
 				return Tomo_Done;
 			}
 			else distance += step;
@@ -1318,10 +1293,21 @@ TomoError TomoRecon::autoGeo(bool firstRun) {
 }
 
 TomoError TomoRecon::autoLight(unsigned int histogram[HIST_BIN_COUNT], int threshold, float * minVal, float * maxVal) {
+	int innerThresh = threshold;
+	bool emptyHist = false;
+	if (histogram == NULL) {
+		emptyHist = true;
+		histogram = new unsigned int[HIST_BIN_COUNT];
+		getHistogram(d_Image, reconPitch*Sys.Recon.Ny, histogram);
+		innerThresh = Sys.Recon.Nx * Sys.Recon.Ny / AUTOTHRESHOLD;
+		minVal = &constants.minVal;
+		maxVal = &constants.maxVal;
+	}
+
 	int i;
 	for (i = 0; i < HIST_BIN_COUNT; i++) {
 		unsigned int count = histogram[i];
-		if (count > threshold) break;
+		if (count > innerThresh) break;
 	}
 	if (i >= HIST_BIN_COUNT) i = 0;
 	*minVal = i * UCHAR_MAX;
@@ -1329,11 +1315,13 @@ TomoError TomoRecon::autoLight(unsigned int histogram[HIST_BIN_COUNT], int thres
 	//go from the reverse direction for maxval
 	for (i = HIST_BIN_COUNT - 1; i >= 0; i--) {
 		unsigned int count = histogram[i];
-		if (count > threshold) break;
+		if (count > innerThresh) break;
 	}
 	if (i < 0) i = HIST_BIN_COUNT;
 	*maxVal = i * UCHAR_MAX;
 	if (*minVal == *maxVal) *maxVal += UCHAR_MAX;
+
+	if (emptyHist) delete[] histogram;
 
 	return Tomo_OK;
 }
@@ -1497,12 +1485,7 @@ TomoError TomoRecon::testTolerances(std::vector<toleranceData> &data, bool first
 		if(vertical) derDisplay = der2_x;
 		else derDisplay = der2_y;
 		singleFrame();
-
-		unsigned int histogram[HIST_BIN_COUNT];
-		int threshold = Sys.Recon.Nx * Sys.Recon.Ny / AUTOTHRESHOLD;
-		getHistogram(d_Image, reconPitch*Sys.Recon.Ny, histogram);
-		autoLight(histogram, threshold, &constants.minVal, &constants.maxVal);
-
+		autoLight();
 		iter = data.begin();
 		return Tomo_OK;
 	}
@@ -1598,10 +1581,7 @@ TomoError TomoRecon::resetLight() {
 	constants.currXr = Sys.Recon.Nx / 4;
 	constants.currYr = Sys.Recon.Ny / 4;
 
-	unsigned int histogram[HIST_BIN_COUNT];
-	int threshold = Sys.Recon.Nx * Sys.Recon.Ny / AUTOTHRESHOLD;
-	getHistogram(d_Image, reconPitch*Sys.Recon.Ny, histogram);
-	autoLight(histogram, threshold, &constants.minVal, &constants.maxVal);
+	autoLight();
 
 	constants.baseXr = -1;
 	constants.baseYr = -1;

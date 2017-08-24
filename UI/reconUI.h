@@ -21,11 +21,11 @@
 #include <wx/settings.h>
 #include <wx/choice.h>
 #include <wx/stattext.h>
-#include <wx/toolbar.h>
-#include <wx/checkbox.h>
+#include <wx/textctrl.h>
 #include <wx/button.h>
 #include <wx/slider.h>
-#include <wx/textctrl.h>
+#include <wx/checkbox.h>
+#include <wx/toolbar.h>
 #include <wx/sizer.h>
 #include <wx/panel.h>
 #include <wx/aui/auibook.h>
@@ -54,20 +54,40 @@ class mainWindow : public wxFrame
 		wxMenuBar* m_menubar1;
 		wxMenu* file;
 		wxMenu* config;
-		wxMenu* view;
 		wxMenu* calibration;
 		wxMenu* help;
 		wxChoice* optionBox;
 		wxToolBar* navToolbar;
 		wxStaticText* distanceLabel;
-		wxStaticText* DistanceValue;
+		wxTextCtrl* distanceValue;
+		wxButton* autoFocus;
+		wxStaticText* stepLabel;
+		wxStaticText* stepVal;
+		wxStaticText* stepUnits;
+		wxSlider* stepSlider;
+		wxButton* autoLight;
+		wxStaticText* windowLabel;
+		wxStaticText* windowVal;
+		wxSlider* windowSlider;
+		wxStaticText* levelLabel;
+		wxStaticText* levelVal;
+		wxSlider* levelSlider;
+		wxStaticText* zoomLabel;
+		wxStaticText* zoomVal;
+		wxStaticText* zoomUnits;
+		wxSlider* zoomSlider;
+		wxButton* autoAll;
+		wxCheckBox* vertFlip;
+		wxCheckBox* horFlip;
+		wxCheckBox* logView;
+		wxCheckBox* projectionView;
 		wxToolBar* edgeToolbar;
 		wxCheckBox* xEnhance;
 		wxCheckBox* yEnhance;
 		wxCheckBox* absEnhance;
-		wxButton* resetEnhance;
 		wxStaticText* ratioLabel;
 		wxStaticText* ratioValue;
+		wxButton* resetEnhance;
 		wxSlider* enhanceSlider;
 		wxToolBar* scanToolbar;
 		wxCheckBox* scanVertEnable;
@@ -94,10 +114,6 @@ class mainWindow : public wxFrame
 		virtual void onQuit( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onConfig( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onGainSelect( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onReconstructionView( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onProjectionView( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onLogView( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onResetFocus( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onResList( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onContList( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onRunTest( wxCommandEvent& event ) { event.Skip(); }
@@ -105,6 +121,18 @@ class mainWindow : public wxFrame
 		virtual void onAutoGeo( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onAbout( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onToolbarChoice( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onDistance( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onAutoFocus( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onStepSlider( wxScrollEvent& event ) { event.Skip(); }
+		virtual void onAutoLight( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onWindowSlider( wxScrollEvent& event ) { event.Skip(); }
+		virtual void onLevelSlider( wxScrollEvent& event ) { event.Skip(); }
+		virtual void onZoomSlider( wxScrollEvent& event ) { event.Skip(); }
+		virtual void onAutoAll( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onVertFlip( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onHorFlip( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onLogView( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onProjectionView( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onXEnhance( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onYEnhance( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onAbsEnhance( wxCommandEvent& event ) { event.Skip(); }

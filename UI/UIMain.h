@@ -43,12 +43,12 @@
 #define SCANHORDEFAULT 0.1f
 #define NOISEMAXDEFAULT 30
 #define ENHANCEFACTOR 10.0f
+#define WINLVLFACTOR 255
+#define STEPFACTOR	10.0f
 #define SCANFACTOR 100.0f
 
 typedef enum {
 	Status = 0,
-	zPosition,
-	scaleNum,
 	xOffset,
 	yOffset
 } status_t;
@@ -96,10 +96,18 @@ public:
 	void OnMouseEvent(wxMouseEvent& event);
 	void OnScroll(int index);
 
-	void paint();
+	void paint(bool disChanged = false, wxTextCtrl* dis = NULL, wxSlider* zoom = NULL, wxStaticText* zLbl = NULL,
+		wxSlider* window = NULL, wxStaticText* wLbl = NULL, wxSlider* level = NULL, wxStaticText* lLbl = NULL);
 
 	TomoRecon* recon;
 	wxStatusBar* m_status;
+	wxTextCtrl* distanceControl;
+	wxSlider* zoomSlider;
+	wxStaticText* zoomLabel;
+	wxSlider* windowSlider;
+	wxStaticText* windowLabel;
+	wxSlider* levelSlider;
+	wxStaticText* levelLabel;
 
 private:
 	int imageIndex = 0;
@@ -210,9 +218,6 @@ protected:
 	void onAbout(wxCommandEvent& event);
 	void onConfig(wxCommandEvent& event);
 	void onGainSelect(wxCommandEvent& event);
-	void onProjectionView(wxCommandEvent& event);
-	void onReconstructionView(wxCommandEvent& event);
-	void onLogView(wxCommandEvent& event);
 	void onResetFocus(wxCommandEvent& event);
 	void onResList(wxCommandEvent& event);
 	void onContList(wxCommandEvent& event);
@@ -222,18 +227,38 @@ protected:
 	void onPageChange(wxCommandEvent& event);
 
 	//Toolbar functions
+
+	//Navigation
+	void onDistance(wxCommandEvent& event);
+	void onAutoFocus(wxCommandEvent& event);
+	void onStepSlider(wxScrollEvent& event);
+	void onAutoLight(wxCommandEvent& event);
+	void onWindowSlider(wxScrollEvent& event);
+	void onLevelSlider(wxScrollEvent& event);
+	void onZoomSlider(wxScrollEvent& event);
+	void onAutoAll(wxCommandEvent& event);
+	void onVertFlip(wxCommandEvent& event);
+	void onHorFlip(wxCommandEvent& event);
+	void onLogView(wxCommandEvent& event);
+	void onProjectionView(wxCommandEvent& event);
+
+	//Edge enhancement
 	void onToolbarChoice(wxCommandEvent& event);
 	void onXEnhance(wxCommandEvent& event);
 	void onYEnhance(wxCommandEvent& event);
 	void onAbsEnhance(wxCommandEvent& event);
 	void onResetEnhance(wxCommandEvent& event);
 	void onEnhanceRatio(wxScrollEvent& event);
+
+	//Scanline correction
 	void onScanVertEnable(wxCommandEvent& event);
 	void onScanVert(wxScrollEvent& event);
 	void onResetScanVert(wxCommandEvent& event);
 	void onScanHorEnable(wxCommandEvent& event);
 	void onScanHor(wxScrollEvent& event);
 	void onResetScanHor(wxCommandEvent& event);
+
+	//Denoising
 	void onNoiseMaxEnable(wxCommandEvent& event);
 	void onNoiseMax(wxScrollEvent& event);
 	void onResetNoiseMax(wxCommandEvent& event);

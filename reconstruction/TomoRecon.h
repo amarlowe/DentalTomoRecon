@@ -262,7 +262,7 @@ public:
 	TomoError singleFrame();
 	TomoError autoFocus(bool firstRun);
 	TomoError autoGeo(bool firstRun);
-	TomoError autoLight(unsigned int histogram[HIST_BIN_COUNT], int threshold, float * minVal, float * maxVal);
+	TomoError autoLight(unsigned int histogram[HIST_BIN_COUNT] = NULL, int threshold = NULL, float * minVal = NULL, float * maxVal = NULL);
 	TomoError readPhantom(float * resolution);
 	TomoError initTolerances(std::vector<toleranceData> &data, int numTests, std::vector<float> offsets);
 	TomoError testTolerances(std::vector<toleranceData> &data, bool firstRun);
@@ -278,9 +278,12 @@ public:
 	float getDistance();
 	TomoError setDistance(float distance);
 	TomoError stepDistance(int steps);
+	TomoError setStep(float dis);
 	TomoError resetLight();
 	TomoError resetFocus();
 	TomoError setLogView(bool useLog);
+	TomoError setVertFlip(bool flip);
+	TomoError setHorFlip(bool flip);
 	bool getLogView();
 	TomoError setInputVeritcal(bool vertical);
 	TomoError setActiveProjection(int index);
@@ -292,10 +295,12 @@ public:
 	TomoError resetSelBox();
 	bool selBoxReady();
 	TomoError appendZoom(int amount);
+	int getZoom();
 	TomoError setZoom(int value);
 	TomoError resetZoom();
 	derivative_t getDisplay();
 	TomoError setDisplay(derivative_t type);
+	TomoError setDataDisplay(sourceData data);
 	TomoError setEnhanceRatio(float ratio);
 	TomoError enableNoiseMaxFilter(bool enable);
 	TomoError setNoiseMaxVal(int max);

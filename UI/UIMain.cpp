@@ -190,6 +190,7 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	recon->ReadProjections(gainFilepath.mb_str(), filename.mb_str());
 	recon->singleFrame();
 	recon->resetFocus();
+	recon->resetLight();
 	currentFrame->m_canvas->paint();
 }
 
@@ -198,11 +199,8 @@ void DTRMainWindow::onQuit(wxCommandEvent& WXUNUSED(event)){
 	Close();
 }
 
-void DTRMainWindow::onProjectionView(wxCommandEvent& WXUNUSED(event)) {
-	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
-		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
-		return;
-	}
+/*void DTRMainWindow::onProjectionView(wxCommandEvent& WXUNUSED(event)) {
+	if (checkForConsole()) return;
 
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
@@ -212,9 +210,9 @@ void DTRMainWindow::onProjectionView(wxCommandEvent& WXUNUSED(event)) {
 	recon->singleFrame();
 	recon->resetLight();
 	currentFrame->m_canvas->paint();
-}
+}*/
 
-void DTRMainWindow::onReconstructionView(wxCommandEvent& WXUNUSED(event)) {
+/*void DTRMainWindow::onReconstructionView(wxCommandEvent& WXUNUSED(event)) {
 	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
 		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
 		return;
@@ -228,13 +226,10 @@ void DTRMainWindow::onReconstructionView(wxCommandEvent& WXUNUSED(event)) {
 	recon->singleFrame();
 	recon->resetLight();
 	currentFrame->m_canvas->paint();
-}
+}*/
 
-void DTRMainWindow::onLogView(wxCommandEvent& WXUNUSED(event)) {
-	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
-		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
-		return;
-	}
+/*void DTRMainWindow::onLogView(wxCommandEvent& WXUNUSED(event)) {
+	if (checkForConsole()) return;
 
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
@@ -242,19 +237,16 @@ void DTRMainWindow::onLogView(wxCommandEvent& WXUNUSED(event)) {
 	recon->setLogView(!recon->getLogView());
 	recon->resetLight();
 	currentFrame->m_canvas->paint();
-}
+}*/
 
 void DTRMainWindow::onResetFocus(wxCommandEvent& WXUNUSED(event)) {
-	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
-		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
-		return;
-	}
+	if (checkForConsole()) return;
 
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->resetFocus();
-	//recon->resetLight();
+	recon->resetLight();
 
 	currentFrame->m_canvas->paint();
 }
@@ -262,10 +254,10 @@ void DTRMainWindow::onResetFocus(wxCommandEvent& WXUNUSED(event)) {
 void DTRMainWindow::onContinuous() {
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
-	int statusWidths[] = { -4, -1, -1, -1, -1 };
+	int statusWidths[] = { -4, -1, -1 };
 
 	wxStreamToTextRedirector redirect(m_textCtrl8);
-	m_statusBar1->SetFieldsCount(5, statusWidths);
+	m_statusBar1->SetFieldsCount(3, statusWidths);
 	recon->continuousMode = true;
 	recon->setDisplay(getEnhance());
 	recon->setEnhanceRatio((float)enhanceSlider->GetValue() / ENHANCEFACTOR);
@@ -275,13 +267,26 @@ void DTRMainWindow::onContinuous() {
 	recon->setScanVertVal((float)scanVertSlider->GetValue() / SCANFACTOR);
 	recon->enableScanHor(scanHorEnable->IsChecked());
 	recon->setScanHorVal((float)scanHorSlider->GetValue() / SCANFACTOR);
+	if (projectionView->IsChecked()) {
+		recon->setDataDisplay(projections);
+		currentFrame->showScrollBar();
+	}
+	else {
+		recon->setDataDisplay(reconstruction);
+		currentFrame->hideScrollBar();
+	}
+	recon->setLogView(logView->IsChecked());
+	recon->setHorFlip(horFlip->IsChecked());
+	recon->setVertFlip(vertFlip->IsChecked());
 
+	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
-	currentFrame->m_scrollBar->Show(false);
 
 	recon->resetFocus();
+	recon->resetLight();
 
-	currentFrame->m_canvas->paint();
+	//Initialize all text fields for canvas
+	currentFrame->m_canvas->paint(false, distanceValue, zoomSlider, zoomVal, windowSlider, windowVal, levelSlider, levelVal);
 }
 
 void DTRMainWindow::onConfig(wxCommandEvent& WXUNUSED(event)) {
@@ -423,6 +428,176 @@ void DTRMainWindow::onPageChange(wxCommandEvent& WXUNUSED(event)) {
 
 //Toolbar Functions
 
+//Navigation
+void DTRMainWindow::onDistance(wxCommandEvent& event) {
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+	
+	double distVal;
+	distanceValue->GetValue().ToCDouble(&distVal);
+	recon->setDistance((float)distVal);
+	recon->singleFrame();
+	currentFrame->m_canvas->paint(true);
+}
+
+void DTRMainWindow::onAutoFocus(wxCommandEvent& event) {
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	if (recon->selBoxReady()) {
+		//if they're greater than 0, the box was clicked and dragged successfully
+		recon->autoFocus(true);
+		while (recon->autoFocus(false) == Tomo_OK);
+	}
+	else recon->resetFocus();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onStepSlider(wxScrollEvent& event) {
+	float value = event.GetPosition();
+	stepVal->SetLabelText(wxString::Format(wxT("%1.1f"), value / STEPFACTOR));
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setStep(value / STEPFACTOR);
+}
+
+void DTRMainWindow::onAutoLight(wxCommandEvent& event) {
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	if (recon->selBoxReady()) {
+		//if they're greater than 0, the box was clicked and dragged successfully
+		recon->autoLight();
+	}
+	else recon->resetLight();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onWindowSlider(wxScrollEvent& event) {
+	int value = event.GetPosition();
+	windowVal->SetLabelText(wxString::Format(wxT("%d"), value * WINLVLFACTOR));
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setLight(levelSlider->GetValue() * WINLVLFACTOR, value * WINLVLFACTOR);
+	currentFrame->m_canvas->paint(true);
+}
+
+void DTRMainWindow::onLevelSlider(wxScrollEvent& event) {
+	int value = event.GetPosition();
+	levelVal->SetLabelText(wxString::Format(wxT("%d"), value * WINLVLFACTOR));
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setLight(value * WINLVLFACTOR, windowSlider->GetValue() * WINLVLFACTOR);
+	currentFrame->m_canvas->paint(true);
+}
+
+void DTRMainWindow::onZoomSlider(wxScrollEvent& event) {
+	float value = event.GetPosition();
+	zoomVal->SetLabelText(wxString::Format(wxT("%5.2f"), pow(ZOOMFACTOR, value)));
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setZoom(value);
+	currentFrame->m_canvas->paint(true);
+}
+
+void DTRMainWindow::onAutoAll(wxCommandEvent& event) {
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	if (recon->selBoxReady()) {
+		//if they're greater than 0, the box was clicked and dragged successfully
+		recon->autoFocus(true);
+		while (recon->autoFocus(false) == Tomo_OK);
+		recon->autoLight();
+	}
+	else {
+		recon->resetFocus();
+		recon->resetLight();
+	}
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onVertFlip(wxCommandEvent& event) {
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setVertFlip(vertFlip->IsChecked());
+	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onHorFlip(wxCommandEvent& event) {
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setHorFlip(horFlip->IsChecked());
+	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onLogView(wxCommandEvent& event) {
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setLogView(logView->IsChecked());
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onProjectionView(wxCommandEvent& event) {
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	if (projectionView->IsChecked()) {
+		recon->dataDisplay = projections;
+		currentFrame->showScrollBar();
+	}
+	else {
+		recon->dataDisplay = reconstruction;
+		currentFrame->hideScrollBar();
+	}
+	
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint();
+}
+
+//Edge enhancement
 void DTRMainWindow::onToolbarChoice(wxCommandEvent& WXUNUSED(event)) {
 	//Disable all toolbars
 	navToolbar->Show(false);
@@ -517,6 +692,7 @@ void DTRMainWindow::onEnhanceRatio(wxScrollEvent& event) {
 	currentFrame->m_canvas->paint();
 }
 
+//Scanline correcction
 void DTRMainWindow::onScanVertEnable(wxCommandEvent& event) {
 	if (scanVertEnable->IsChecked()) {
 		scanVertValue->Enable(true);
@@ -537,7 +713,6 @@ void DTRMainWindow::onScanVertEnable(wxCommandEvent& event) {
 	recon->enableScanVert(scanVertEnable->IsChecked());
 	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
-	recon->resetLight();
 	currentFrame->m_canvas->paint();
 }
 
@@ -553,7 +728,6 @@ void DTRMainWindow::onScanVert(wxScrollEvent& event) {
 	recon->setScanVertVal(value / SCANFACTOR);
 	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
-	recon->resetLight();
 	currentFrame->m_canvas->paint();
 }
 
@@ -569,7 +743,6 @@ void DTRMainWindow::onResetScanVert(wxCommandEvent& event) {
 	recon->setScanVertVal(SCANVERTDEFAULT);
 	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
-	recon->resetLight();
 	currentFrame->m_canvas->paint();
 }
 
@@ -593,7 +766,6 @@ void DTRMainWindow::onScanHorEnable(wxCommandEvent& event) {
 	recon->enableScanHor(scanHorEnable->IsChecked());
 	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
-	recon->resetLight();
 	currentFrame->m_canvas->paint();
 }
 
@@ -609,7 +781,6 @@ void DTRMainWindow::onScanHor(wxScrollEvent& event) {
 	recon->setScanHorVal(value / SCANFACTOR);
 	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
-	recon->resetLight();
 	currentFrame->m_canvas->paint();
 }
 
@@ -625,10 +796,10 @@ void DTRMainWindow::onResetScanHor(wxCommandEvent& event) {
 	recon->setScanHorVal(SCANHORDEFAULT);
 	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
-	recon->resetLight();
 	currentFrame->m_canvas->paint();
 }
 
+//Denoising
 void DTRMainWindow::onNoiseMax(wxScrollEvent& event) {
 	int value = event.GetPosition();
 	noiseMaxVal->SetLabelText(wxString::Format(wxT("%d"), value));
@@ -641,7 +812,6 @@ void DTRMainWindow::onNoiseMax(wxScrollEvent& event) {
 	recon->setNoiseMaxVal(noiseMaxSlider->GetValue());
 	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
-	recon->resetLight();
 	currentFrame->m_canvas->paint();
 }
 
@@ -657,7 +827,6 @@ void DTRMainWindow::onResetNoiseMax(wxCommandEvent& WXUNUSED(event)) {
 	recon->setNoiseMaxVal(noiseMaxSlider->GetValue());
 	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
-	recon->resetLight();
 	currentFrame->m_canvas->paint();
 }
 
@@ -681,7 +850,6 @@ void DTRMainWindow::onNoiseMaxEnable(wxCommandEvent& WXUNUSED(event)) {
 	recon->enableNoiseMaxFilter(outlierEnable->IsChecked());
 	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
-	recon->resetLight();
 	currentFrame->m_canvas->paint();
 }
 
@@ -1472,13 +1640,32 @@ void CudaGLCanvas::OnPaint(wxPaintEvent& WXUNUSED(event)){
 	paint();
 }
 
-void CudaGLCanvas::paint() {
+void CudaGLCanvas::paint(bool disChanged, wxTextCtrl* dis, wxSlider* zoom, wxStaticText* zLbl,
+	wxSlider* window, wxStaticText* wLbl, wxSlider* level, wxStaticText* lLbl) {
+	if (dis != NULL) distanceControl = dis;
+	if (zoom != NULL) zoomSlider = zoom;
+	if (zLbl != NULL) zoomLabel = zLbl;
+	if (window != NULL) windowSlider = window;
+	if (wLbl != NULL) windowLabel = wLbl;
+	if (level != NULL) levelSlider = level;
+	if (lLbl != NULL) levelLabel = lLbl;
 	SetCurrent(*m_glRC);//tells opengl which buffers to use, mutliple windows fail without this
 
-	m_status->SetStatusText(wxString::Format(wxT("Zoom: %.2fx"), pow(ZOOMFACTOR, recon->zoom)), scaleNum);
+	if (!disChanged) {
+		unsigned int window, level;
+		recon->getLight(&level, &window);
+		distanceControl->SetValue(wxString::Format(wxT("%.2f"), recon->getDistance()));
+		zoomSlider->SetValue(recon->getZoom());
+		windowSlider->SetValue(window / WINLVLFACTOR);
+		levelSlider->SetValue(level / WINLVLFACTOR);
+		zoomLabel->SetLabelText(wxString::Format(wxT("%.2f"), pow(ZOOMFACTOR, recon->zoom)));
+		windowLabel->SetLabelText(wxString::Format(wxT("%d"), window));
+		levelLabel->SetLabelText(wxString::Format(wxT("%d"), level));
+	}
+
 	m_status->SetStatusText(wxString::Format(wxT("X offset: %d px."), recon->xOff), xOffset);
 	m_status->SetStatusText(wxString::Format(wxT("Y offset: %d px."), recon->yOff), yOffset);
-	m_status->SetStatusText(wxString::Format(wxT("Detector distance: %.2f mm."), recon->distance), zPosition);
+
 
 	recon->draw(GetSize().x, GetSize().y);
 
@@ -1500,6 +1687,7 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
 		
 		if (event.m_controlDown)
 			recon->setSelBoxStart(this_x, this_y);
+		else recon->resetSelBox();
 	}
 
 	if (event.LeftIsDown())	{
@@ -1511,7 +1699,7 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
 		}
 	}
 
-	if (event.LeftUp()) {
+	/*if (event.LeftUp()) {
 		if (recon->selBoxReady()) {
 			//if they're greater than 0, the box was clicked and dragged successfully
 			recon->autoFocus(true);
@@ -1521,7 +1709,7 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
 			//cleanup
 			recon->resetSelBox();
 		}
-	}
+	}*/
 
 	paint();
 }

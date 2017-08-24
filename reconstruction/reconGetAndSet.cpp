@@ -39,6 +39,16 @@ TomoError TomoRecon::setLogView(bool useLog) {
 	return Tomo_OK;
 }
 
+TomoError TomoRecon::setVertFlip(bool flip) {
+	constants.flip = flip;
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setHorFlip(bool flip) {
+	constants.orientation = flip;
+	return Tomo_OK;
+}
+
 float TomoRecon::getDistance() {
 	return distance;
 }
@@ -50,6 +60,11 @@ TomoError TomoRecon::setDistance(float dist) {
 
 TomoError TomoRecon::stepDistance(int steps) {
 	distance += Sys.Geo.ZPitch * steps;
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setStep(float dis) {
+	Sys.Geo.ZPitch = dis;
 	return Tomo_OK;
 }
 
@@ -150,6 +165,10 @@ TomoError TomoRecon::appendZoom(int amount) {
 	return Tomo_OK;
 }
 
+int TomoRecon::getZoom() {
+	return zoom;
+}
+
 TomoError TomoRecon::setZoom(int value) {
 	zoom = value;
 	if (zoom < 0) zoom = 0;
@@ -167,6 +186,11 @@ derivative_t TomoRecon::getDisplay() {
 
 TomoError TomoRecon::setDisplay(derivative_t type) {
 	derDisplay = type;
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setDataDisplay(sourceData data) {
+	dataDisplay = data;
 	return Tomo_OK;
 }
 
