@@ -315,6 +315,9 @@ public:
 	int GetNumProjectionViews(std::string BasePathIn);
 	TomoError GetGainAverages(const char * gainFile);
 
+	//DICOM writing functions
+	TomoError SaveDataAsDICOM(std::string BaseFileIn, int slices);
+
 	/********************************************************************************************/
 	/* Variables																				*/
 	/********************************************************************************************/
@@ -395,6 +398,14 @@ private:
 	TomoError P2R(int* rX, int* rY, int pX, int pY, int view);
 	TomoError R2P(int* pX, int* pY, int rX, int rY, int view);
 	TomoError I2D(int* dX, int* dY, int iX, int iY);
+
+	//DICOM writing helpers
+	void ConvertImage();
+	void CreatePatientandSetSystem(struct PatientInfo * Patient, struct SystemSettings * Set);
+	void CreateScanInsitution(struct ExamInstitution * Institute);
+	void FreeStrings(struct PatientInfo * Patient, struct ExamInstitution * Institute);
+	TomoError WriteDICOMFullData(std::string Path, int slices);
+	TomoError WriteDICOMHeader(struct SystemSettings * Set, struct PatientInfo * Patient, struct ExamInstitution * Inst, std::string Path, int Nz, int slice);
 
 	//Define data buffer
 	float * d_Image;

@@ -711,8 +711,9 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 
 		KERNELCALL2(LogCorrectProj, dimGridProj, dimBlockProj, d_Sino, view, d_Proj, d_Gain, constants);
 
-		scanLineDetect(view, d_SumValsVert, sumValsVert + view * Sys.Proj.Nx, vertOff + view * Sys.Proj.Nx, true, cConstants.scanVertEnable);
 		scanLineDetect(view, d_SumValsHor, sumValsHor + view * Sys.Proj.Ny, horOff + view * Sys.Proj.Ny, false, cConstants.scanHorEnable);
+		scanLineDetect(view, d_SumValsVert, sumValsVert + view * Sys.Proj.Nx, vertOff + view * Sys.Proj.Nx, true, cConstants.scanVertEnable);
+		
 	}
 
 	float step = 10;
@@ -721,50 +722,6 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 	float rSq = 0.0;
 	bool firstLin = true;
 	float bestDist;
-	/*
-	for (int index = 0; index < NumViews; index++) {
-		firstLin = true;
-		step = 1;
-		best = FLT_MAX;
-		while (true) {
-			float newVal = 0.0;
-
-			//Total variation as error
-			for (int i = 1; i < Sys.Proj.Ny; i++) {
-				float r1 = yP2MM(i, Sys.Proj.Ny, Sys.Proj.Pitch_y) - Sys.Geo.EmitY[index];
-				float r2 = yP2MM(i - 1, Sys.Proj.Ny, Sys.Proj.Pitch_y) - Sys.Geo.EmitY[index];
-				newVal += pow(sumValsHor[i + index * Sys.Proj.Ny] + rSq*pow(r1, 2) - sumValsHor[i + index * Sys.Proj.Ny - 1], 2) + rSq*pow(r2, 2);
-			}
-
-			//compare to current
-			if (newVal < best) {
-				bestRSq = rSq;
-				rSq += step;
-				best = newVal;
-			}
-			else {
-				if (!firstLin)
-					rSq -= step;//revert last move
-
-				step = -step / 2;//find next step
-
-				if (abs(step) < 0.0001)
-					break;
-				else rSq += step;
-			}
-			firstLin = false;
-		}
-
-		for (int j = 0; j < Sys.Proj.Ny; j++) {
-			float r = yP2MM(j, Sys.Proj.Ny, Sys.Proj.Pitch_y) - Sys.Geo.EmitY[index];
-			sumValsHor[j + index * Sys.Proj.Ny] += bestRSq*pow(r, 2);
-		}
-		for (int j = 0; j < Sys.Proj.Nx; j++) {
-			float r = xP2MM(j, Sys.Proj.Nx, Sys.Proj.Pitch_x) - Sys.Geo.EmitX[index];
-			sumValsVert[j + index * Sys.Proj.Nx] += bestRSq*pow(r, 2);
-		}
-	}
-	*/
 
 	float * scales = new float[NumViews];
 
@@ -778,15 +735,6 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 		float scaleStep = 0.01;
 		step = 10;
 		best = FLT_MAX;
-
-		/*for (int j = 0; j < Sys.Proj.Nx; j++) {
-			float r = xP2MM(j, Sys.Proj.Nx, Sys.Proj.Pitch_x) - Sys.Geo.EmitX[i];
-			sumValsVert[j + i * Sys.Proj.Nx] += bestRSq*pow(r, 2);
-		}
-		for (int j = 0; j < Sys.Proj.Ny; j++) {
-			float r = yP2MM(j, Sys.Proj.Ny, Sys.Proj.Pitch_y) - Sys.Geo.EmitY[i];
-			sumValsHor[j + i * Sys.Proj.Ny] += bestRSq*pow(r, 2);
-		}*/
 
 		while (true) {
 			float newVal = graphCost(sumValsVert, sumValsHor, i, offLight, thisScale, 0.0);
@@ -898,6 +846,39 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 	cuda(Free(d_Gain));
 	cuda(Free(d_SumValsHor));
 	cuda(Free(d_SumValsVert));
+
+	return Tomo_OK;
+}
+
+
+TomoError TomoRecon::WriteDICOMFullData(std::string Path, int slices) {
+	//Set up the basic path to the raw projection data
+	FILE * ReconData = fopen(Path.c_str(), "ab");
+
+	//Open the path and read data to buffer
+	
+	if (ReconData == NULL)
+		return Tomo_DICOM_err;
+
+	float * RawData = new float[reconPitch / sizeof(float)*Sys.Proj.Ny];
+	unsigned short * output = new unsigned short[reconPitch / sizeof(float)*Sys.Proj.Ny];
+
+	//Create the reconstruction volume around the current location
+	float oldDistance = distance;
+	distance -= slices / 2 * Sys.Geo.ZPitch;
+	for (int i = 0; i < slices; i++) {
+		singleFrame();
+		distance += Sys.Geo.ZPitch;
+		cudaMemcpy(RawData, d_Image, reconPitch*Sys.Recon.Ny, cudaMemcpyDeviceToHost);
+		for (int j = 0; j < reconPitch / sizeof(float)*Sys.Proj.Ny; j++) output[j] = (unsigned short)RawData[j];
+		fwrite(output, sizeof(unsigned short), reconPitch / sizeof(float)*Sys.Proj.Ny, ReconData);
+	}
+	
+	distance = oldDistance;
+	singleFrame();
+	fclose(ReconData);
+	delete[] RawData;
+	delete[] output;
 
 	return Tomo_OK;
 }

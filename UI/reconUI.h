@@ -111,6 +111,7 @@ class mainWindow : public wxFrame
 		virtual void onKeyUp( wxKeyEvent& event ) { event.Skip(); }
 		virtual void onNew( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onOpen( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onSave( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onQuit( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onConfig( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onGainSelect( wxCommandEvent& event ) { event.Skip(); }

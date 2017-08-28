@@ -215,6 +215,7 @@ protected:
 	// Handlers for mainWindow events.
 	void onNew(wxCommandEvent& event);
 	void onOpen(wxCommandEvent& event);
+	void onSave(wxCommandEvent& event);
 	void onQuit(wxCommandEvent& event);
 	void onAbout(wxCommandEvent& event);
 	void onConfig(wxCommandEvent& event);

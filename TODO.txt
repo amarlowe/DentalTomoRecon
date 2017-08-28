@@ -19,10 +19,10 @@ TomoRecon
 - Correct for non-xy shifts in the detector
 - Save projection images after processing
 - Save all toolbar settings for session end
+- Name tabs based on filename, check for duplicates
 
 --------------Bugs---------------------
 - Throw all tomo errors instead of crashing the program
-- Histogram lighting has some issues (see rmi single)
 
 -------------Completed------------------
 -------------Features------------------
@@ -101,3 +101,4 @@ TomoRecon
 - Disable console close button
 - Close behavior breaks when the console is the selected tab
 - Changing config after opening image set does not update
+- Histogram lighting has some issues (see rmi single)

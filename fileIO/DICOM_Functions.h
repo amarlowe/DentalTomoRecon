@@ -237,17 +237,15 @@ std::stringstream SetDentalFileMetaInfo(struct DateAndTimeStamp * TimeStamp)
 	return (MetaDataStream);
 }
 
-std::stringstream SetStartOfPixelInfo(struct SystemControl * Sys, int Nz)
+std::stringstream SetStartOfPixelInfo(size_t sizeIm)
 {
 	std::stringstream PixelStream;
-
-	int SizeIM = Sys->Recon->Nx * Sys->Recon->Ny * Nz * sizeof(unsigned short);
 
 	PixelStream << ConvertIntToHex(32736, 2).str();
 	PixelStream << ConvertIntToHex(16, 2).str();
 	PixelStream << 'O' << 'W';
 	PixelStream << ConvertIntToHex(0, 2).str();
-	PixelStream << ConvertIntToHex(SizeIM, 4).str();
+	PixelStream << ConvertIntToHex(sizeIm, 4).str();
 
 	return (PixelStream);
 }

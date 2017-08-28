@@ -17,6 +17,7 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	m_mgr.SetFlags(wxAUI_MGR_DEFAULT);
 	
 	m_menubar1 = new wxMenuBar( 0|wxNO_BORDER );
+	m_menubar1->SetForegroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_WINDOW ) );
 	m_menubar1->SetBackgroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_MENU ) );
 	
 	file = new wxMenu();
@@ -27,6 +28,10 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	wxMenuItem* open;
 	open = new wxMenuItem( file, wxID_OPEN, wxString( wxT("Open\tCtrl+O") ) , wxEmptyString, wxITEM_NORMAL );
 	file->Append( open );
+	
+	wxMenuItem* save;
+	save = new wxMenuItem( file, wxID_ANY, wxString( wxT("Save") ) + wxT('\t') + wxT("Ctrl+S"), wxEmptyString, wxITEM_NORMAL );
+	file->Append( save );
 	
 	wxMenuItem* quit;
 	quit = new wxMenuItem( file, wxID_ANY, wxString( wxT("Exit\tAlt-X") ) , wxEmptyString, wxITEM_NORMAL );
@@ -124,7 +129,7 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	levelVal = new wxStaticText( navToolbar, wxID_ANY, wxT("10000"), wxDefaultPosition, wxDefaultSize, 0 );
 	levelVal->Wrap( -1 );
 	navToolbar->AddControl( levelVal );
-	levelSlider = new wxSlider( navToolbar, wxID_ANY, 0, 0, 255, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	levelSlider = new wxSlider( navToolbar, wxID_ANY, 39, 0, 255, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
 	navToolbar->AddControl( levelSlider );
 	zoomLabel = new wxStaticText( navToolbar, wxID_ANY, wxT("Zoom:"), wxDefaultPosition, wxDefaultSize, 0 );
 	zoomLabel->Wrap( -1 );
@@ -266,6 +271,7 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	this->Connect( wxEVT_KEY_UP, wxKeyEventHandler( mainWindow::onKeyUp ) );
 	this->Connect( newPage->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onNew ) );
 	this->Connect( open->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onOpen ) );
+	this->Connect( save->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onSave ) );
 	this->Connect( quit->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onQuit ) );
 	this->Connect( configDialog->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onConfig ) );
 	this->Connect( gainSelect->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onGainSelect ) );
@@ -377,6 +383,7 @@ mainWindow::~mainWindow()
 	this->Disconnect( wxEVT_KEY_UP, wxKeyEventHandler( mainWindow::onKeyUp ) );
 	this->Disconnect( wxID_NEW, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onNew ) );
 	this->Disconnect( wxID_OPEN, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onOpen ) );
+	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onSave ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onQuit ) );
 	this->Disconnect( wxID_PREFERENCES, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onConfig ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onGainSelect ) );

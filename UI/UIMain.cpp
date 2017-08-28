@@ -194,50 +194,27 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	currentFrame->m_canvas->paint();
 }
 
+void DTRMainWindow::onSave(wxCommandEvent& event) {
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	wxFileDialog saveFileDialog(this, _("Select a file to save as."), "", "",
+		"Dicom File (*.dcm)|*.dcm", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+
+	if (saveFileDialog.ShowModal() == wxID_CANCEL)
+		return;
+
+	m_statusBar1->SetStatusText(_("Saving data as DICOM..."));
+	recon->SaveDataAsDICOM(saveFileDialog.GetPath().ToStdString(), 45);
+	m_statusBar1->SetStatusText(_("DICOM saved!"));
+}
+
 void DTRMainWindow::onQuit(wxCommandEvent& WXUNUSED(event)){
 	// true is to force the frame to close
 	Close();
 }
-
-/*void DTRMainWindow::onProjectionView(wxCommandEvent& WXUNUSED(event)) {
-	if (checkForConsole()) return;
-
-	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
-	TomoRecon* recon = currentFrame->m_canvas->recon;
-
-	recon->dataDisplay = projections;
-	currentFrame->showScrollBar();
-	recon->singleFrame();
-	recon->resetLight();
-	currentFrame->m_canvas->paint();
-}*/
-
-/*void DTRMainWindow::onReconstructionView(wxCommandEvent& WXUNUSED(event)) {
-	if (m_auinotebook6->GetCurrentPage() == m_panel10) {
-		(*m_textCtrl8) << "Currently in console, cannot run. Open a new dataset with \"new\" (ctrl + n).\n";
-		return;
-	}
-
-	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
-	TomoRecon* recon = currentFrame->m_canvas->recon;
-
-	recon->dataDisplay = reconstruction;
-	currentFrame->hideScrollBar();
-	recon->singleFrame();
-	recon->resetLight();
-	currentFrame->m_canvas->paint();
-}*/
-
-/*void DTRMainWindow::onLogView(wxCommandEvent& WXUNUSED(event)) {
-	if (checkForConsole()) return;
-
-	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
-	TomoRecon* recon = currentFrame->m_canvas->recon;
-
-	recon->setLogView(!recon->getLogView());
-	recon->resetLight();
-	currentFrame->m_canvas->paint();
-}*/
 
 void DTRMainWindow::onResetFocus(wxCommandEvent& WXUNUSED(event)) {
 	if (checkForConsole()) return;
