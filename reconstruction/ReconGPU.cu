@@ -216,9 +216,16 @@ __global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, float scal
 	else {
 		rgbx.na = UCHAR_MAX;
 		if (negative) {
-			rgbx.r = UCHAR_MAX;// 0;
-			rgbx.g = UCHAR_MAX;// 0;
-			rgbx.b = UCHAR_MAX;// sum;
+			if (consts.showNegative) {
+				rgbx.r = 0;
+				rgbx.g = 0;
+				rgbx.b = sum;
+			}
+			else {
+				rgbx.r = UCHAR_MAX;
+				rgbx.g = UCHAR_MAX;
+				rgbx.b = UCHAR_MAX;
+			}
 		}
 		else {
 			rgbx.r = sum;
@@ -1335,14 +1342,17 @@ TomoError TomoRecon::readPhantom(float * resolution) {
 		int startX = min(constants.baseXr, constants.currXr);
 		int endX = max(constants.baseXr, constants.currXr);
 		int thisY = lowYr;//Get beginning y val from tick mark
-		while (thisY >= upYr) {//y counts down
+		bool ascend = upYr > lowYr;
+		int increment = ascend ? 1 : -1;
+		while ((!ascend && thisY >= upYr) || (ascend && thisY <= upYr)) {//y counts down
 			int thisX = startX;
 			int negCross = 0;
 			bool negativeSpace = false;
 			float negAcc = 0;
 			while (thisX < endX) {
+				float val = h_xDer2[thisY * reconPitchNum + thisX];
+				h_xDer2[thisY * reconPitchNum + thisX] = val / 10.0f;
 				if (negativeSpace) {
-					float val = h_xDer2[thisY * reconPitchNum + thisX];
 					if (val > 0) {
 						negativeSpace = false;
 						if (negAcc < -INTENSITYTHRESH) {
@@ -1354,7 +1364,6 @@ TomoError TomoRecon::readPhantom(float * resolution) {
 					}
 				}
 				else {
-					float val = h_xDer2[thisY * reconPitchNum + thisX];
 					if (val < 0) {
 						negativeSpace = true;
 						negAcc = val;
@@ -1363,14 +1372,15 @@ TomoError TomoRecon::readPhantom(float * resolution) {
 				thisX++;
 			}
 			if (negCross < LINEPAIRS) {
-				thisY++;
+				thisY -= increment;
 				break;
 			}
-			thisY--;
+			thisY += increment;
 		}
 		*resolution = phanScale / (thisY - lowYr + phanScale / LOWERBOUND);
-		free(h_xDer2);
 		
+		cuda(Memcpy(d_Image, h_xDer2, reconPitch*Sys.Recon.Ny, cudaMemcpyHostToDevice));
+		free(h_xDer2);
 	}
 	else {
 		float phanScale = (lowXr - upXr) / (1 / LOWERBOUND - 1 / UPPERBOUND);
@@ -1380,14 +1390,17 @@ TomoError TomoRecon::readPhantom(float * resolution) {
 		int startY = min(constants.baseYr, constants.currYr);
 		int endY = max(constants.baseYr, constants.currYr);
 		int thisX = lowXr;//Get beginning y val from tick mark
-		while (thisX >= upXr) {//y counts down
+		bool ascend = upXr > lowXr;
+		int increment = ascend ? 1 : -1;
+		while ((!ascend && thisX >= upXr) || (ascend && thisX <= upXr)) {//y counts down
 			int thisY = startY;
 			int negCross = 0;
 			bool negativeSpace = false;
 			float negAcc = 0;
 			while (thisY < endY) {
+				float val = h_yDer2[thisY * reconPitchNum + thisX];
+				h_yDer2[thisY * reconPitchNum + thisX] = val / 10.0f;
 				if (negativeSpace) {
-					float val = h_yDer2[thisY * reconPitchNum + thisX];
 					if (val > 0) {
 						negativeSpace = false;
 						if (negAcc < -INTENSITYTHRESH) {
@@ -1399,7 +1412,6 @@ TomoError TomoRecon::readPhantom(float * resolution) {
 					}
 				}
 				else {
-					float val = h_yDer2[thisY * reconPitchNum + thisX];
 					if (val < 0) {
 						negativeSpace = true;
 						negAcc = val;
@@ -1408,12 +1420,14 @@ TomoError TomoRecon::readPhantom(float * resolution) {
 				thisY++;
 			}
 			if (negCross < LINEPAIRS) {
-				thisX++;
+				thisX -= increment;
 				break;
 			}
-			thisX--;
+			thisX += increment;
 		}
 		*resolution = phanScale / (thisX - lowXr + phanScale / LOWERBOUND);
+
+		cuda(Memcpy(d_Image, h_yDer2, reconPitch*Sys.Recon.Ny, cudaMemcpyHostToDevice));
 		free(h_yDer2);
 	}
 

@@ -118,9 +118,8 @@ derivative_t DTRMainWindow::getEnhance() {
 
 // event handlers
 void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
-	static int s_pageAdded = 1;
-	(*m_textCtrl8) << "Opening new tab titled: \"" << (int)s_pageAdded << "\"\n";
-
+	//static int s_pageAdded = 1;
+	
 	//Step 1: Get and example file for get the path
 	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
 		"Raw File (*.raw)|*.raw", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
@@ -129,8 +128,13 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 		return;
 
 	wxString filename(openFileDialog.GetPath());
+	wxFileName file = filename;
+	wxArrayString dirs = file.GetDirs();
+	wxString name = dirs[file.GetDirCount() - 1];
 
-	m_auinotebook6->AddPage(CreateNewPage(filename), wxString::Format(wxT("%u"), s_pageAdded++), true);
+	(*m_textCtrl8) << "Opening new tab titled: \"" << name << "\"\n";
+
+	m_auinotebook6->AddPage(CreateNewPage(filename), name, true);
 	onContinuous();
 }
 
@@ -332,19 +336,26 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 		GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 		TomoRecon* recon = currentFrame->m_canvas->recon;
 
-		if (i != 0) recon->ReadProjections(gainFilepath.mb_str(), filename.GetFullPath().mb_str());
-
-		recon->setLogView(false);
+		if (i == 0) {
+			recon->continuousMode = true;
+			recon->setDisplay(no_der);
+			recon->enableNoiseMaxFilter(false);
+			recon->enableScanVert(false);
+			recon->enableScanHor(false);
+			recon->setDataDisplay(reconstruction);
+			recon->setLogView(false);
+			recon->setHorFlip(false);
+			recon->setVertFlip(true);
+			recon->setShowNegative(true);
+		}
+		recon->ReadProjections(gainFilepath.mb_str(), filename.GetFullPath().mb_str());
+		recon->singleFrame();
+		recon->resetLight();
 
 		if (data.empty()) recon->initTolerances(data, 1, offsets);
 
-		recon->setSelBoxStart(pConfig->Read(wxString::Format(wxT("/resPhanBoxLxF%d"), i), 0l), pConfig->Read(wxString::Format(wxT("/resPhanBoxLyF%d"), i), 0l));
-		recon->setSelBoxEnd(pConfig->Read(wxString::Format(wxT("/resPhanBoxUxF%d"), i), 0l), pConfig->Read(wxString::Format(wxT("/resPhanBoxUyF%d"), i), 0l));
-		
-		/*recon->baseX = pConfig->Read(wxString::Format(wxT("/resPhanBoxLxF%d"), i), 0l);
-		recon->baseY = pConfig->Read(wxString::Format(wxT("/resPhanBoxLyF%d"), i), 0l);
-		recon->currX = pConfig->Read(wxString::Format(wxT("/resPhanBoxUxF%d"), i), 0l);
-		recon->currY = pConfig->Read(wxString::Format(wxT("/resPhanBoxUyF%d"), i), 0l);*/
+		recon->setSelBoxProj(pConfig->Read(wxString::Format(wxT("/resPhanBoxLxF%d"), i), 0l), pConfig->Read(wxString::Format(wxT("/resPhanBoxUxF%d"), i), 0l), 
+			pConfig->Read(wxString::Format(wxT("/resPhanBoxLyF%d"), i), 0l), pConfig->Read(wxString::Format(wxT("/resPhanBoxUyF%d"), i), 0l));
 		recon->lowX = pConfig->Read(wxString::Format(wxT("/resPhanLowx%d"), i), 0l);
 		recon->lowY = pConfig->Read(wxString::Format(wxT("/resPhanLowy%d"), i), 0l);
 		recon->upX = pConfig->Read(wxString::Format(wxT("/resPhanUpx%d"), i), 0l);
@@ -368,6 +379,7 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 		recon->setReconBox(0);
 
 		recon->singleFrame();
+		recon->autoLight();
 		currentFrame->m_canvas->paint();
 
 		int output = 0;
@@ -383,6 +395,9 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 			output++;
 		}
 		FILE.close();
+
+		recon->autoLight();
+		currentFrame->m_canvas->paint();
 	}
 }
 
@@ -406,11 +421,32 @@ void DTRMainWindow::onAbout(wxCommandEvent& WXUNUSED(event)){
 void DTRMainWindow::onPageChange(wxAuiNotebookEvent& event) {
 	event.Skip();//Required to actually switch the tab
 	int temp = event.GetSelection();
-	if (temp == 0) {
+	if (temp == 0) {//console selected
+		//disable close button and all options that are not applied on new window open
 		m_auinotebook6->SetWindowStyle(NULL);
+		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export")), false);
+		distanceValue->Enable(false);
+		autoFocus->Enable(false);
+		autoLight->Enable(false);
+		windowSlider->Enable(false);
+		levelSlider->Enable(false);
+		zoomSlider->Enable(false);
+		autoAll->Enable(false);
 		return;
 	}
+	//re-enable all controls
 	m_auinotebook6->SetWindowStyle(wxAUI_NB_DEFAULT_STYLE);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export")), true);
+	distanceValue->Enable();
+	autoFocus->Enable();
+	autoLight->Enable();
+	windowSlider->Enable();
+	levelSlider->Enable();
+	zoomSlider->Enable();
+	autoAll->Enable();
+
+	//set all control values when switching tabs
+	//TODO
 	return;
 }
 
@@ -1344,25 +1380,21 @@ void DTRResDialog::onAddNew(wxCommandEvent& event) {
 	
 	{
 		TomoRecon* recon = frame->m_canvas->recon;
-		int statusWidths[] = { -4, -1, -1 };
 
 		recon->continuousMode = true;
 		recon->setDisplay(no_der);
-		recon->enableNoiseMaxFilter(true);
-		recon->setNoiseMaxVal(NOISEMAXDEFAULT);
+		recon->enableNoiseMaxFilter(false);
 		recon->enableScanVert(false);
 		recon->enableScanHor(false);
 		recon->setDataDisplay(projections);
 		recon->setLogView(true);
 		recon->setHorFlip(false);
-		recon->setVertFlip(false);
+		recon->setVertFlip(true);
 
 		recon->ReadProjections(((DTRMainWindow*)GetParent())->gainFilepath.mb_str(), openFileDialog.GetPath().mb_str());
 		recon->singleFrame();
 
 		recon->resetLight();
-
-		//frame->m_canvas->paint();
 	}
 
 	int res = frame->ShowModal();
@@ -1374,24 +1406,23 @@ void DTRResDialog::onAddNew(wxCommandEvent& event) {
 		if (index == wxNOT_FOUND)
 			index = m_listCtrl->InsertItem(0, file);
 
-		float scale = frame->m_canvas->recon->scale;
-		float xOff = frame->m_canvas->recon->xOff;
-		float yOff = frame->m_canvas->recon->yOff;
-		float innerOffx = (frame->m_canvas->recon->width - Sys.Proj.Nx / scale) / 2;
-		float innerOffy = (frame->m_canvas->recon->height - Sys.Proj.Ny / scale) / 2;
-		m_listCtrl->SetItem(index, 1, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->baseX - innerOffx) * scale + xOff)));
-		m_listCtrl->SetItem(index, 2, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->baseY - innerOffy) * scale + yOff)));
-		m_listCtrl->SetItem(index, 3, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->currX - innerOffx) * scale + xOff)));
-		m_listCtrl->SetItem(index, 4, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->currY - innerOffy) * scale + yOff)));
-		m_listCtrl->SetItem(index, 5, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->lowX - innerOffx) * scale + xOff)));
-		m_listCtrl->SetItem(index, 6, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->lowY - innerOffy) * scale + yOff)));
-		m_listCtrl->SetItem(index, 7, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->upX - innerOffx) * scale + xOff)));
-		m_listCtrl->SetItem(index, 8, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->upY - innerOffy) * scale + yOff)));
+		int x1, y1, x2, y2, lowX, lowY, upX, upY;
+		frame->m_canvas->recon->getSelBoxRaw(&x1, &x2, &y1, &y2);
+		frame->m_canvas->recon->getUpperTickRaw(&upX, &upY);
+		frame->m_canvas->recon->getLowerTickRaw(&lowX, &lowY);
+		m_listCtrl->SetItem(index, 1, wxString::Format(wxT("%d"), x1));
+		m_listCtrl->SetItem(index, 2, wxString::Format(wxT("%d"), y1));
+		m_listCtrl->SetItem(index, 3, wxString::Format(wxT("%d"), x2));
+		m_listCtrl->SetItem(index, 4, wxString::Format(wxT("%d"), y2));
+		m_listCtrl->SetItem(index, 5, wxString::Format(wxT("%d"), lowX));
+		m_listCtrl->SetItem(index, 6, wxString::Format(wxT("%d"), lowY));
+		m_listCtrl->SetItem(index, 7, wxString::Format(wxT("%d"), upX));
+		m_listCtrl->SetItem(index, 8, wxString::Format(wxT("%d"), upY));
 		m_listCtrl->SetItem(index, 9, vertical == wxYES ? wxT("Yes") : wxT("No"));
-		m_listCtrl->SetItem(index, 10, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->constants.baseXr - innerOffx) * scale + xOff)));
-		m_listCtrl->SetItem(index, 11, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->constants.baseYr - innerOffy) * scale + yOff)));
-		m_listCtrl->SetItem(index, 12, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->constants.currXr - innerOffx) * scale + xOff)));
-		m_listCtrl->SetItem(index, 13, wxString::Format(wxT("%d"), (int)((frame->m_canvas->recon->constants.currYr - innerOffy) * scale + yOff)));
+		m_listCtrl->SetItem(index, 10, wxString::Format(wxT("%d"), frame->m_canvas->x1));
+		m_listCtrl->SetItem(index, 11, wxString::Format(wxT("%d"), frame->m_canvas->y1));
+		m_listCtrl->SetItem(index, 12, wxString::Format(wxT("%d"), frame->m_canvas->x2));
+		m_listCtrl->SetItem(index, 13, wxString::Format(wxT("%d"), frame->m_canvas->y2));
 	}
 }
 
@@ -1724,18 +1755,6 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
 		}
 	}
 
-	/*if (event.LeftUp()) {
-		if (recon->selBoxReady()) {
-			//if they're greater than 0, the box was clicked and dragged successfully
-			recon->autoFocus(true);
-			//paint();
-			while (recon->autoFocus(false) == Tomo_OK);// paint();
-			
-			//cleanup
-			recon->resetSelBox();
-		}
-	}*/
-
 	paint();
 }
 
@@ -1842,19 +1861,15 @@ void CudaGLInCanvas::OnMouseEvent(wxMouseEvent& event) {
 			switch (state) {
 			case box1:
 			case box2:
-				recon->baseX = this_x;
-				recon->baseY = this_y;
+				recon->setSelBoxStart(this_x, this_y);
 				break;
 			case lower:
-				recon->lowX = this_x;
-				recon->lowY = this_y;
+				recon->setLowerTick(this_x, this_y);
 				break;
 			case upper:
-				recon->upX = this_x;
-				recon->upY = this_y;
+				recon->setUpperTick(this_x, this_y);
 				break;
 			}
-			paint();
 		}
 		last_x = this_x;
 		last_y = this_y;
@@ -1867,25 +1882,23 @@ void CudaGLInCanvas::OnMouseEvent(wxMouseEvent& event) {
 				switch (state) {
 				case box1:
 				case box2:
-					recon->currX = this_x;
-					recon->currY = this_y;
+					recon->setSelBoxEnd(this_x, this_y);
 					break;
 				case lower:
-					recon->lowX = this_x;
-					recon->lowY = this_y;
+					recon->setLowerTick(this_x, this_y);
 					break;
 				case upper:
-					recon->upX = this_x;
-					recon->upY = this_y;
+					recon->setUpperTick(this_x, this_y);
 					break;
 				}
 			}
 			else {
 				recon->setOffsets(last_x_off - (this_x - last_x), last_y_off - (this_y - last_y));
 			}
-			paint();
 		}
 	}
+
+	paint();
 }
 
 void CudaGLInCanvas::OnChar(wxKeyEvent& event) {
@@ -1893,38 +1906,34 @@ void CudaGLInCanvas::OnChar(wxKeyEvent& event) {
 	if (event.GetKeyCode() == 32) {//32=space, enter is a system dialog reserved key
 		switch (state) {
 		case box1:
-			if (recon->baseX >= 0 && recon->currX >= 0) {
+			if (recon->selBoxReady()) {
 				state = box2;
 				((GLWindow*)GetParent())->SetTitle(wxT("Select area of interest in the phantom with ctrl + mouse drag.Hit space once selected."));
 
-				//transfer box data to temporary storage internal to recon
-				recon->constants.baseXr = recon->baseX;
-				recon->constants.baseYr = recon->baseY;
-				recon->constants.currXr = recon->currX;
-				recon->constants.currYr = recon->currY;
-				recon->baseX = -1;
-				recon->baseY = -1;
-				recon->currX = -1;
-				recon->currY = -1;
+				//transfer box data to temporary storage
+				recon->getSelBoxRaw(&x1, &x2, &y1, &y2);
+				recon->resetSelBox();
 			}
 		case box2:
-			if (recon->baseX >= 0 && recon->currX >= 0) {
+			if (recon->selBoxReady()) {
 				state = lower;
 				((GLWindow*)GetParent())->SetTitle(wxT("Choose the lower bound on line pairs with ctrl+click. Hit space when done."));
 			}
 			break;
 		case lower:
-			if (recon->lowX >= 0) {
+			if (recon->lowerTickReady()) {
 				state = upper;
 				((GLWindow*)GetParent())->SetTitle(wxT("Choose the upper bound on line pairs with ctrl+click. Hit space when done."));
 			}
 			break;
 		case upper:
-			if (recon->upX >= 0) {
+			if (recon->upperTickReady()) {
 				//Close up and save (handled in parents)
 				((GLWindow*)GetParent())->EndModal(wxID_OK);
 			}
 			break;
 		}
 	}
+
+	paint();
 }

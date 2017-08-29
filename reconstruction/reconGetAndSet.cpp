@@ -139,6 +139,83 @@ TomoError TomoRecon::setSelBoxEnd(int x, int y) {
 	return Tomo_OK;
 }
 
+//Get selection box with recon-space coordinates
+TomoError TomoRecon::getSelBoxRaw(int* x1, int* x2, int* y1, int* y2) {
+	*x1 = constants.baseXr;
+	*x2 = constants.currXr;
+	*y1 = constants.baseYr;
+	*y2 = constants.currYr;
+
+	return Tomo_OK;
+}
+
+//Set selection box directly to recon-space coordinates
+TomoError TomoRecon::setSelBoxProj(int x1, int x2, int y1, int y2) {
+	int this_x = x1;
+	int this_y = y1;
+	checkBoundaries(&this_x, &this_y);
+	baseX = this_x;
+	baseY = this_y;
+
+	this_x = x2;
+	this_y = y2;
+	checkBoundaries(&this_x, &this_y);
+	currX = this_x;
+	currY = this_y;
+
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setUpperTick(int x, int y) {
+	int this_x = D2I(x, true);
+	int this_y = D2I(y, false);
+	checkBoundaries(&this_x, &this_y);
+	upXr = this_x;
+	upYr = this_y;
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setLowerTick(int x, int y) {
+	int this_x = D2I(x, true);
+	int this_y = D2I(y, false);
+	checkBoundaries(&this_x, &this_y);
+	lowXr = this_x;
+	lowYr = this_y;
+	return Tomo_OK;
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setUpperTickProj(int x, int y) {
+	int this_x = x;
+	int this_y = y;
+	checkBoundaries(&this_x, &this_y);
+	upX = this_x;
+	upY = this_y;
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setLowerTickProj(int x, int y) {
+	int this_x = x;
+	int this_y = y;
+	checkBoundaries(&this_x, &this_y);
+	lowX = this_x;
+	lowY = this_y;
+	return Tomo_OK;
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::getUpperTickRaw(int* x, int* y) {
+	*x = upXr;
+	*y = upYr;
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::getLowerTickRaw(int* x, int* y) {
+	*x = lowXr;
+	*y = lowYr;
+	return Tomo_OK;
+}
+
 inline TomoError TomoRecon::checkBoundaries(int * x, int * y) {
 	if (*x > Sys.Recon.Nx) *x = Sys.Recon.Nx;
 	if (*x < 0) *x = 0;
@@ -157,6 +234,14 @@ TomoError TomoRecon::resetSelBox() {
 
 bool TomoRecon::selBoxReady() {
 	return constants.baseXr >= 0 && constants.currXr >= 0;
+}
+
+bool TomoRecon::upperTickReady() {
+	return upXr >= 0 && upYr >= 0;
+}
+
+bool TomoRecon::lowerTickReady() {
+	return lowXr >= 0 && lowYr >= 0;
 }
 
 TomoError TomoRecon::appendZoom(int amount) {
@@ -226,5 +311,10 @@ TomoError TomoRecon::enableScanHor(bool enable) {
 
 TomoError TomoRecon::setScanHorVal(float tau) {
 	cConstants.horTau = tau;
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setShowNegative(bool showNegative) {
+	constants.showNegative = showNegative;
 	return Tomo_OK;
 }

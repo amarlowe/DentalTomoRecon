@@ -64,11 +64,6 @@ interop::~interop() {
 }
 
 void interop::resize(int x, int y) {
-	size_t avail_mem;
-	size_t total_mem;
-	cudaMemGetInfo(&avail_mem, &total_mem);
-	std::cout << "Available memory (interop resize): " << avail_mem << "/" << total_mem << "\n";
-
 	// save new size
 	width = x;
 	height = y;
@@ -90,9 +85,6 @@ void interop::resize(int x, int y) {
 
 	// unmap graphics resources
 	cuda(GraphicsUnmapResources(1, &cgr, 0));
-
-	cudaMemGetInfo(&avail_mem, &total_mem);
-	std::cout << "Available memory (end interop resize): " << avail_mem << "/" << total_mem << "\n";
 }
 
 void interop::display(int x, int y){

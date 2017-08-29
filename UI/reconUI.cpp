@@ -32,6 +32,7 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	wxMenuItem* save;
 	save = new wxMenuItem( file, wxID_ANY, wxString( wxT("Export") ) + wxT('\t') + wxT("Ctrl+S"), wxEmptyString, wxITEM_NORMAL );
 	file->Append( save );
+	save->Enable( false );
 	
 	wxMenuItem* quit;
 	quit = new wxMenuItem( file, wxID_ANY, wxString( wxT("Exit\tAlt-X") ) , wxEmptyString, wxITEM_NORMAL );
@@ -58,10 +59,12 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	wxMenuItem* contList;
 	contList = new wxMenuItem( calibration, wxID_ANY, wxString( wxT("Set Contrast Phantom") ) , wxEmptyString, wxITEM_NORMAL );
 	calibration->Append( contList );
+	contList->Enable( false );
 	
 	wxMenuItem* runTest;
 	runTest = new wxMenuItem( calibration, wxID_ANY, wxString( wxT("Run Tests") ) , wxEmptyString, wxITEM_NORMAL );
 	calibration->Append( runTest );
+	runTest->Enable( false );
 	
 	wxMenuItem* testGeo;
 	testGeo = new wxMenuItem( calibration, wxID_ANY, wxString( wxT("Test Geometries") ) , wxEmptyString, wxITEM_NORMAL );
@@ -70,6 +73,7 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	wxMenuItem* autoGeo;
 	autoGeo = new wxMenuItem( calibration, wxID_ANY, wxString( wxT("Auto-detect Geometry") ) , wxEmptyString, wxITEM_NORMAL );
 	calibration->Append( autoGeo );
+	autoGeo->Enable( false );
 	
 	m_menubar1->Append( calibration, wxT("Calibration") ); 
 	
@@ -96,11 +100,15 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	distanceLabel->Wrap( -1 );
 	navToolbar->AddControl( distanceLabel );
 	distanceValue = new wxTextCtrl( navToolbar, wxID_ANY, wxT("0.0"), wxDefaultPosition, wxSize( 50,-1 ), wxTE_PROCESS_ENTER );
+	distanceValue->Enable( false );
+	
 	navToolbar->AddControl( distanceValue );
 	distanceUnits = new wxStaticText( navToolbar, wxID_ANY, wxT("mm"), wxDefaultPosition, wxDefaultSize, 0 );
 	distanceUnits->Wrap( -1 );
 	navToolbar->AddControl( distanceUnits );
 	autoFocus = new wxButton( navToolbar, wxID_ANY, wxT("Auto-focus"), wxDefaultPosition, wxDefaultSize, 0 );
+	autoFocus->Enable( false );
+	
 	navToolbar->AddControl( autoFocus );
 	stepLabel = new wxStaticText( navToolbar, wxID_ANY, wxT("Step size:"), wxDefaultPosition, wxDefaultSize, 0 );
 	stepLabel->Wrap( -1 );
@@ -114,6 +122,8 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	stepSlider = new wxSlider( navToolbar, wxID_ANY, 5, 1, 10, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
 	navToolbar->AddControl( stepSlider );
 	autoLight = new wxButton( navToolbar, wxID_ANY, wxT("Auto W+L"), wxDefaultPosition, wxDefaultSize, 0 );
+	autoLight->Enable( false );
+	
 	navToolbar->AddControl( autoLight );
 	windowLabel = new wxStaticText( navToolbar, wxID_ANY, wxT("Window:"), wxDefaultPosition, wxDefaultSize, 0 );
 	windowLabel->Wrap( -1 );
@@ -122,6 +132,8 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	windowVal->Wrap( -1 );
 	navToolbar->AddControl( windowVal );
 	windowSlider = new wxSlider( navToolbar, wxID_ANY, 255, 1, 255, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	windowSlider->Enable( false );
+	
 	navToolbar->AddControl( windowSlider );
 	levelLabel = new wxStaticText( navToolbar, wxID_ANY, wxT("Level:"), wxDefaultPosition, wxDefaultSize, 0 );
 	levelLabel->Wrap( -1 );
@@ -130,6 +142,8 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	levelVal->Wrap( -1 );
 	navToolbar->AddControl( levelVal );
 	levelSlider = new wxSlider( navToolbar, wxID_ANY, 39, 0, 255, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	levelSlider->Enable( false );
+	
 	navToolbar->AddControl( levelSlider );
 	zoomLabel = new wxStaticText( navToolbar, wxID_ANY, wxT("Zoom:"), wxDefaultPosition, wxDefaultSize, 0 );
 	zoomLabel->Wrap( -1 );
@@ -141,8 +155,12 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	zoomUnits->Wrap( -1 );
 	navToolbar->AddControl( zoomUnits );
 	zoomSlider = new wxSlider( navToolbar, wxID_ANY, 0, 0, 20, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	zoomSlider->Enable( false );
+	
 	navToolbar->AddControl( zoomSlider );
 	autoAll = new wxButton( navToolbar, wxID_ANY, wxT("Auto Focus and Light"), wxDefaultPosition, wxDefaultSize, 0 );
+	autoAll->Enable( false );
+	
 	navToolbar->AddControl( autoAll );
 	vertFlip = new wxCheckBox( navToolbar, wxID_ANY, wxT("Flip Vertical"), wxDefaultPosition, wxDefaultSize, 0 );
 	navToolbar->AddControl( vertFlip );

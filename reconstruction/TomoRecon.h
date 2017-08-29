@@ -50,7 +50,7 @@
 
 //Phantom reader parameters
 #define LINEPAIRS 5
-#define INTENSITYTHRESH 300
+#define INTENSITYTHRESH 100
 #define UPPERBOUND 20.0f
 #define LOWERBOUND 4.0f
 
@@ -206,6 +206,7 @@ struct params {
 	//Display parameters
 	float minVal = 0.0;
 	float maxVal = USHRT_MAX;
+	bool showNegative = false;
 
 	//selection box parameters
 	int baseXr = -1;
@@ -292,6 +293,16 @@ public:
 	void getOffsets(int * xOff, int * yOff);
 	TomoError setSelBoxStart(int x, int y);
 	TomoError setSelBoxEnd(int x, int y);
+	TomoError getSelBoxRaw(int* x1, int* x2, int* y1, int* y2);
+	TomoError setSelBoxProj(int x1, int x2, int y1, int y2);
+	TomoError setUpperTick(int x, int y);
+	TomoError setLowerTick(int x, int y);
+	TomoError setUpperTickProj(int x, int y);
+	TomoError setLowerTickProj(int x, int y);
+	TomoError getUpperTickRaw(int* x, int* y);
+	TomoError getLowerTickRaw(int* x, int* y);
+	bool upperTickReady();
+	bool lowerTickReady();
 	TomoError resetSelBox();
 	bool selBoxReady();
 	TomoError appendZoom(int amount);
@@ -308,6 +319,7 @@ public:
 	TomoError setScanVertVal(float tau);
 	TomoError enableScanHor(bool enable);
 	TomoError setScanHorVal(float tau);
+	TomoError setShowNegative(bool showNegative);
 
 	/* Input Functions to read data into the program                      */	BOOL CheckFilePathForRepeatScans(std::string BasePathIn);
 	int GetNumberOfScans(std::string BasePathIn);

@@ -173,6 +173,8 @@ public:
 	TomoRecon* recon;
 	input_t state = box1;
 
+	int x1, x2, y1, y2;
+
 private:
 	int imageIndex = 0;
 	int reconIndex = 0;
