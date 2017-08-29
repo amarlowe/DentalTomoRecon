@@ -41,11 +41,12 @@
 #define ENHANCEDEFAULT 5.0f
 #define SCANVERTDEFAULT 0.25f
 #define SCANHORDEFAULT 0.1f
-#define NOISEMAXDEFAULT 30
+#define NOISEMAXDEFAULT 700
 #define ENHANCEFACTOR 10.0f
 #define WINLVLFACTOR 255
 #define STEPFACTOR	10.0f
 #define SCANFACTOR 100.0f
+#define MAXSLICE 150
 
 typedef enum {
 	Status = 0,
@@ -61,6 +62,16 @@ typedef enum {
 } input_t;
 
 bool first = true;
+
+class DTRSliceSave : public sliceDialog {
+protected:
+	void onSliceValue(wxCommandEvent& event);
+public:
+	DTRSliceSave(wxWindow* parent);
+	~DTRSliceSave();
+
+	long value = 0;
+};
 
 class DTRConfigDialog : public configDialog {
 protected:

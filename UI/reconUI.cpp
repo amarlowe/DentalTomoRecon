@@ -30,7 +30,7 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	file->Append( open );
 	
 	wxMenuItem* save;
-	save = new wxMenuItem( file, wxID_ANY, wxString( wxT("Save") ) + wxT('\t') + wxT("Ctrl+S"), wxEmptyString, wxITEM_NORMAL );
+	save = new wxMenuItem( file, wxID_ANY, wxString( wxT("Export") ) + wxT('\t') + wxT("Ctrl+S"), wxEmptyString, wxITEM_NORMAL );
 	file->Append( save );
 	
 	wxMenuItem* quit;
@@ -232,12 +232,12 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	outlierEnable = new wxCheckBox( noiseToolbar, wxID_ANY, wxT("Large noise hard removal over value:  "), wxDefaultPosition, wxDefaultSize, 0 );
 	outlierEnable->SetValue(true); 
 	noiseToolbar->AddControl( outlierEnable );
-	noiseMaxVal = new wxStaticText( noiseToolbar, wxID_ANY, wxT("30"), wxDefaultPosition, wxDefaultSize, 0 );
+	noiseMaxVal = new wxStaticText( noiseToolbar, wxID_ANY, wxT("700"), wxDefaultPosition, wxDefaultSize, 0 );
 	noiseMaxVal->Wrap( -1 );
 	noiseToolbar->AddControl( noiseMaxVal );
 	resetNoiseMax = new wxButton( noiseToolbar, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxSize( 50,20 ), 0 );
 	noiseToolbar->AddControl( resetNoiseMax );
-	noiseMaxSlider = new wxSlider( noiseToolbar, wxID_ANY, 30, 10, 50, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	noiseMaxSlider = new wxSlider( noiseToolbar, wxID_ANY, 700, 300, 800, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
 	noiseToolbar->AddControl( noiseMaxSlider );
 	noiseToolbar->Realize();
 	m_mgr.AddPane( noiseToolbar, wxAuiPaneInfo() .Top() .CaptionVisible( false ).CloseButton( false ).PaneBorder( false ).Movable( false ).Dock().Resizable().FloatingSize( wxDefaultSize ).DockFixed( true ).BottomDockable( false ).TopDockable( false ).LeftDockable( false ).RightDockable( false ).Floatable( false ).Layer( 10 ) );
@@ -577,7 +577,7 @@ resDialog::~resDialog()
 	
 }
 
-MyDialog3::MyDialog3( wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style ) : wxDialog( parent, id, title, pos, size, style )
+sliceDialog::sliceDialog( wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style ) : wxDialog( parent, id, title, pos, size, style )
 {
 	this->SetSizeHints( wxDefaultSize, wxDefaultSize );
 	
@@ -586,18 +586,28 @@ MyDialog3::MyDialog3( wxWindow* parent, wxWindowID id, const wxString& title, co
 	gbSizer1->SetFlexibleDirection( wxBOTH );
 	gbSizer1->SetNonFlexibleGrowMode( wxFLEX_GROWMODE_SPECIFIED );
 	
+	slicesLabel = new wxStaticText( this, wxID_ANY, wxT("Number of slices to save:"), wxDefaultPosition, wxDefaultSize, 0 );
+	slicesLabel->Wrap( -1 );
+	gbSizer1->Add( slicesLabel, wxGBPosition( 0, 0 ), wxGBSpan( 1, 1 ), wxALL, 5 );
 	
-	gbSizer1->Add( 0, 0, wxGBPosition( 0, 3 ), wxGBSpan( 1, 1 ), wxEXPAND, 5 );
+	sliceValue = new wxTextCtrl( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER );
+	gbSizer1->Add( sliceValue, wxGBPosition( 0, 1 ), wxGBSpan( 1, 1 ), wxALL, 5 );
 	
 	
 	this->SetSizer( gbSizer1 );
 	this->Layout();
 	
 	this->Centre( wxBOTH );
+	
+	// Connect Events
+	sliceValue->Connect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( sliceDialog::onSliceValue ), NULL, this );
 }
 
-MyDialog3::~MyDialog3()
+sliceDialog::~sliceDialog()
 {
+	// Disconnect Events
+	sliceValue->Disconnect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( sliceDialog::onSliceValue ), NULL, this );
+	
 }
 
 configDialog::configDialog( wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style ) : wxFrame( parent, id, title, pos, size, style )

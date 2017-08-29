@@ -69,6 +69,7 @@ TomoRecon
 - Edit lighting and contrast panel
 - Switch between inputs in form using tab and/or enter
 - Add Units to all number descriptions in settings 
+- Save recon as DICOM from reconstruction mode
 
 --------------Bugs---------------------
 - additional lines included on increasing z size

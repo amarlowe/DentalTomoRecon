@@ -112,14 +112,16 @@ TomoError TomoRecon::WriteDICOMHeader(struct SystemSettings * Set, struct Patien
 	FILE << TAG28->Write_DICOM_Header_Tag(BITS_STORED, 2, ConvertIntToHex(16, 2).str()).str();
 	FILE << TAG28->Write_DICOM_Header_Tag(HIGH_BIT, 2, ConvertIntToHex(15, 2).str()).str();
 	FILE << TAG28->Write_DICOM_Header_Tag(PIXEL_REP, 2, ConvertIntToHex(1, 2).str()).str();
-	FILE << TAG28->Write_DICOM_Header_Tag(WIN_CENTER, NumToStr<int>(USHRT_MAX / 2).length(), NumToStr<int>(USHRT_MAX / 2)).str();//Sys->Recon->Mean
-	FILE << TAG28->Write_DICOM_Header_Tag(WIN_WIDTH, NumToStr<int>(USHRT_MAX).length(), NumToStr<int>(USHRT_MAX)).str();//Sys->Recon->Width
+	//FILE << TAG28->Write_DICOM_Header_Tag(WIN_CENTER, NumToStr<int>(constants.minVal + constants.maxVal / 2).length(), NumToStr<int>(constants.minVal + constants.maxVal / 2)).str();//Sys->Recon->Mean
+	//FILE << TAG28->Write_DICOM_Header_Tag(WIN_WIDTH, NumToStr<int>(constants.maxVal).length(), NumToStr<int>(constants.maxVal)).str();//Sys->Recon->Width
+	FILE << TAG28->Write_DICOM_Header_Tag(WIN_CENTER, NumToStr<int>(SHRT_MAX / 2).length(), NumToStr<int>(SHRT_MAX / 2)).str();//Sys->Recon->Mean
+	FILE << TAG28->Write_DICOM_Header_Tag(WIN_WIDTH, NumToStr<int>(SHRT_MAX).length(), NumToStr<int>(SHRT_MAX)).str();//Sys->Recon->Width
 	FILE << TAG28->Write_DICOM_Header_Tag(RESCALE_INTERCEPT, 1, "0").str();
 	FILE << TAG28->Write_DICOM_Header_Tag(RESCALE_SLOPE, 1, "1").str();
 	free(TAG28);
 
 	//Define the Pixel information 
-	FILE << SetStartOfPixelInfo(reconPitch/sizeof(float)*sizeof(unsigned short)*Sys.Recon.Ny).str();
+	FILE << SetStartOfPixelInfo(reconPitch/sizeof(float)*sizeof(unsigned short)*Sys.Recon.Ny*Nz).str();
 
 	FILE.close();
 

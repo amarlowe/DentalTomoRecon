@@ -210,18 +210,24 @@ class resDialog : public wxDialog
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-/// Class MyDialog3
+/// Class sliceDialog
 ///////////////////////////////////////////////////////////////////////////////
-class MyDialog3 : public wxDialog 
+class sliceDialog : public wxDialog 
 {
 	private:
 	
 	protected:
+		wxStaticText* slicesLabel;
+		wxTextCtrl* sliceValue;
+		
+		// Virtual event handlers, overide them in your derived class
+		virtual void onSliceValue( wxCommandEvent& event ) { event.Skip(); }
+		
 	
 	public:
 		
-		MyDialog3( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxEmptyString, const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 619,499 ), long style = wxDEFAULT_DIALOG_STYLE ); 
-		~MyDialog3();
+		sliceDialog( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Hit enter when finished"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 318,68 ), long style = wxDEFAULT_DIALOG_STYLE ); 
+		~sliceDialog();
 	
 };
 

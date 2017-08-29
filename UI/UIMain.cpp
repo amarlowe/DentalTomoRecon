@@ -206,8 +206,13 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 	if (saveFileDialog.ShowModal() == wxID_CANCEL)
 		return;
 
+	DTRSliceSave* sliceSv = new DTRSliceSave(this);
+	if (sliceSv->ShowModal() == wxCANCEL) return;
+
+	long val = sliceSv->value;
+	if (val <= 0 || val > MAXSLICE) return;
 	m_statusBar1->SetStatusText(_("Saving data as DICOM..."));
-	recon->SaveDataAsDICOM(saveFileDialog.GetPath().ToStdString(), 45);
+	recon->SaveDataAsDICOM(saveFileDialog.GetPath().ToStdString(), val);
 	m_statusBar1->SetStatusText(_("DICOM saved!"));
 }
 
@@ -720,7 +725,7 @@ void DTRMainWindow::onScanVert(wxScrollEvent& event) {
 
 void DTRMainWindow::onResetScanVert(wxCommandEvent& event) {
 	scanVertValue->SetLabelText(wxString::Format(wxT("%1.2f"), SCANVERTDEFAULT));
-	scanVertSlider->SetValue(NOISEMAXDEFAULT);
+	scanVertSlider->SetValue(SCANVERTDEFAULT * SCANFACTOR);
 
 	if (checkForConsole()) return;
 
@@ -773,7 +778,7 @@ void DTRMainWindow::onScanHor(wxScrollEvent& event) {
 
 void DTRMainWindow::onResetScanHor(wxCommandEvent& event) {
 	scanHorValue->SetLabelText(wxString::Format(wxT("%1.2f"), SCANHORDEFAULT));
-	scanHorSlider->SetValue(NOISEMAXDEFAULT);
+	scanHorSlider->SetValue(SCANHORDEFAULT * SCANFACTOR);
 
 	if (checkForConsole()) return;
 
@@ -859,6 +864,19 @@ DTRMainWindow::~DTRMainWindow() {
 		pConfig->Write(wxT("/dialog/max"), 0);
 
 	cuda(DeviceReset());//only reset here where we know all windows are finished
+}
+
+//Save dialog box handling
+DTRSliceSave::DTRSliceSave(wxWindow* parent) : sliceDialog(parent) {
+}
+
+void DTRSliceSave::onSliceValue(wxCommandEvent& WXUNUSED(event)) {
+	sliceValue->GetLineText(0).ToLong(&value);
+	Close(true);
+}
+
+DTRSliceSave::~DTRSliceSave() {
+
 }
 
 // ----------------------------------------------------------------------------
@@ -1323,6 +1341,30 @@ void DTRResDialog::onAddNew(wxCommandEvent& event) {
 	struct SystemControl Sys;
 	((DTRMainWindow*)GetParent())->genSys(&Sys);
 	frame = new GLWindow(this, vertical == wxYES, &Sys, ((DTRMainWindow*)GetParent())->gainFilepath, openFileDialog.GetPath());
+	
+	{
+		TomoRecon* recon = frame->m_canvas->recon;
+		int statusWidths[] = { -4, -1, -1 };
+
+		recon->continuousMode = true;
+		recon->setDisplay(no_der);
+		recon->enableNoiseMaxFilter(true);
+		recon->setNoiseMaxVal(NOISEMAXDEFAULT);
+		recon->enableScanVert(false);
+		recon->enableScanHor(false);
+		recon->setDataDisplay(projections);
+		recon->setLogView(true);
+		recon->setHorFlip(false);
+		recon->setVertFlip(false);
+
+		recon->ReadProjections(((DTRMainWindow*)GetParent())->gainFilepath.mb_str(), openFileDialog.GetPath().mb_str());
+		recon->singleFrame();
+
+		recon->resetLight();
+
+		//frame->m_canvas->paint();
+	}
+
 	int res = frame->ShowModal();
 
 	if (res == wxID_OK) {
@@ -1558,6 +1600,9 @@ GLWindow::GLWindow(wxWindow *parent, bool vertical, struct SystemControl * Sys, 
 	this->SetSizer(bSizer);
 	this->Layout();
 	bSizer->Fit(this);
+
+	Show(true);
+	Raise();
 }
 
 GLWindow::~GLWindow() {

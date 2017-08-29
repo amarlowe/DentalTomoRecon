@@ -37,8 +37,6 @@ void reconGlutInit(int *argc, char **argv) {
 }
 
 interop::interop(int x, int y) {
-	width = x;
-	height = y;
 	glewInit();
 
 	gl(ColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE));
@@ -53,6 +51,8 @@ interop::interop(int x, int y) {
 	// attach rbo to fbo
 	gl(BindFramebuffer(GL_FRAMEBUFFER, fb));
 	gl(NamedFramebufferRenderbuffer((GLuint)fb, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, (GLuint)rb));
+
+	resize(x, y);
 }
 
 interop::~interop() {

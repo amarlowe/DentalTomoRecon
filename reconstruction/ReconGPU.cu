@@ -165,10 +165,12 @@ __global__ void add(float* src1, float* src2, float *d_Dst, int pitch, bool useR
 
 	if (useRatio) {
 		if (useAbs) {
-			d_Dst[MUL_ADD(y, pitch, x)] = (src1[MUL_ADD(y, pitch, x)] + abs(src2[MUL_ADD(y, pitch, x)]) * consts.ratio) / (abs(consts.ratio) + 1);
+			float val = consts.log ? abs(src2[MUL_ADD(y, pitch, x)]) : USHRT_MAX - abs(src2[MUL_ADD(y, pitch, x)]);
+			d_Dst[MUL_ADD(y, pitch, x)] = (src1[MUL_ADD(y, pitch, x)] + val * consts.ratio) / (abs(consts.ratio) + 1);
 		}
 		else {
-			d_Dst[MUL_ADD(y, pitch, x)] = (src1[MUL_ADD(y, pitch, x)] + src2[MUL_ADD(y, pitch, x)] * consts.ratio) / (abs(consts.ratio) + 1);
+			float val = consts.log ? src2[MUL_ADD(y, pitch, x)] : USHRT_MAX - src2[MUL_ADD(y, pitch, x)];
+			d_Dst[MUL_ADD(y, pitch, x)] = (src1[MUL_ADD(y, pitch, x)] + val * consts.ratio) / (abs(consts.ratio) + 1);
 		}
 	}
 	else
@@ -201,7 +203,7 @@ __global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, float scal
 			sum = (correctedMax - logf(sum + 1)) / correctedMax * USHRT_MAX;
 		}
 	}
-	sum = (sum - consts.minVal) / consts.maxVal * UCHAR_MAX;
+	sum = (sum - consts.minVal) / (consts.maxVal - consts.minVal) * UCHAR_MAX;
 	saturate = sum > UCHAR_MAX;
 
 	union pxl_rgbx_24 rgbx;
@@ -295,23 +297,6 @@ __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, uns
 		//float val = (float)Proj[j*consts.Px + i] - (float)Dark[j*consts.Px + i];
 		float val = Proj[j*consts.Px + i];
 
-		//large noise correction
-		if (consts.useMaxNoise) {
-			if (i > 1 && i < consts.Px - 1) {
-				float val1 = Proj[j*consts.Px + i - 1];
-				float val2 = Proj[j*consts.Px + i + 1];
-				float val3 = (val1 + val2) / 2;
-				if (abs(val1 - val2) < consts.maxNoise && abs(val3 - val) > consts.maxNoise / 2)
-					val = val3;
-			}
-			if (j > 1 && j < consts.Py - 1) {
-				float val1 = Proj[(j - 1)*consts.Px + i];
-				float val2 = Proj[(j + 1)*consts.Px + i];
-				float val3 = (val1 + val2) / 2;
-				if (abs(val1 - val2) < consts.maxNoise && abs(val3 - val) > consts.maxNoise / 2)
-					val = val3;
-			}
-		}
 		if (val < LOWTHRESH) val = 0.0;
 
 		val /= Gain[j*consts.Px + i];
@@ -321,6 +306,29 @@ __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, uns
 		//if (val / Gain[j*consts.Px + i] > HIGHTHRESH) val = 0.0;
 
 		Sino[(y + view*consts.Py)*consts.ProjPitchNum + x] = val;
+
+		//large noise correction
+		if (consts.useMaxNoise) {
+			//Get a second round to aviod gain correction issues
+			__syncthreads();
+
+			if (x > 1 && x < consts.Px - 1) {
+				float val1 = Sino[(y + view*consts.Py)*consts.ProjPitchNum + x - 1];
+				float val2 = Sino[(y + view*consts.Py)*consts.ProjPitchNum + x + 1];
+				float val3 = (val1 + val2) / 2;
+				if (abs(val1 - val2) < 2 * consts.maxNoise && abs(val3 - val) > consts.maxNoise)
+					val = val3;
+			}
+			if (y > 1 && y < consts.Py - 1) {
+				float val1 = Sino[(y - 1 + view*consts.Py)*consts.ProjPitchNum + x];
+				float val2 = Sino[(y + 1 + view*consts.Py)*consts.ProjPitchNum + x];
+				float val3 = (val1 + val2) / 2;
+				if (abs(val1 - val2) < 2 * consts.maxNoise && abs(val3 - val) > consts.maxNoise)
+					val = val3;
+			}
+
+			Sino[(y + view*consts.Py)*consts.ProjPitchNum + x] = val;
+		}
 	}
 }
 
@@ -504,6 +512,8 @@ __global__ void histogram256Kernel(unsigned int *d_Histogram, T *d_Data, unsigne
 			data = (correctedMax - logf(data + 1)) / correctedMax * USHRT_MAX;
 		}
 	}
+	if (data > USHRT_MAX) data = USHRT_MAX;
+	if (data < 0.0f) return;// data = 0.0f;
 	atomicAdd(d_Histogram + ((unsigned short)data >> 8), 1);//bin by the upper 256 bits
 }
 
@@ -850,7 +860,6 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 	return Tomo_OK;
 }
 
-
 TomoError TomoRecon::WriteDICOMFullData(std::string Path, int slices) {
 	//Set up the basic path to the raw projection data
 	FILE * ReconData = fopen(Path.c_str(), "ab");
@@ -870,7 +879,17 @@ TomoError TomoRecon::WriteDICOMFullData(std::string Path, int slices) {
 		singleFrame();
 		distance += Sys.Geo.ZPitch;
 		cudaMemcpy(RawData, d_Image, reconPitch*Sys.Recon.Ny, cudaMemcpyDeviceToHost);
-		for (int j = 0; j < reconPitch / sizeof(float)*Sys.Proj.Ny; j++) output[j] = (unsigned short)RawData[j];
+		for (int j = 0; j < reconPitch / sizeof(float)*Sys.Proj.Ny; j++) {
+			float data = RawData[j];
+			if (data != 0.0) {
+				if (constants.log)
+					data = (logf(USHRT_MAX) - logf(data + 1)) / logf(USHRT_MAX) * USHRT_MAX;
+				data = (data - constants.minVal) / (constants.maxVal - constants.minVal) * SHRT_MAX;
+				if (data > SHRT_MAX) data = SHRT_MAX;
+				if (data < 0.0f) data = 0.0f;
+			}
+			output[j] = (unsigned short)data;
+		}
 		fwrite(output, sizeof(unsigned short), reconPitch / sizeof(float)*Sys.Proj.Ny, ReconData);
 	}
 	
