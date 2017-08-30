@@ -524,6 +524,63 @@ __global__ void histogram256Kernel(unsigned int *d_Histogram, T *d_Data, unsigne
 	atomicAdd(d_Histogram + ((unsigned short)data >> 8), 1);//bin by the upper 256 bits
 }
 
+/* div = div0 - g/lambda*/
+__global__ void sub0(float *div0, float *div, float *g, float lambda, int nx, int ny) {
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	int idx = x + y*nx;
+
+	if (x < nx && y < ny) {
+		div[idx] = div0[idx] - g[idx] / lambda;
+
+	}
+}
+
+//Chambolle TV denoising
+__global__ void gradient(float *u, float *g, int nx, int ny) {
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	int idx = x + y*nx;
+
+	if (x<nx && y<ny) {
+		g[2 * idx + 0] = 0;
+		g[2 * idx + 1] = 0;
+		if (x<(nx - 1)) g[2 * idx + 0] = u[idx + 1] - u[idx];
+		if (y<(ny - 1)) g[2 * idx + 1] = u[idx + nx] - u[idx];
+	}
+}
+
+/*z = (z0 + tau z)/(1+tau|z|)*/
+__global__ void zupdate(float *z, float *z0, float tau, int nx, int ny) {
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	int idx = x + y*nx;
+	if (x<nx && y<ny) {
+		float a = z[2 * idx + 0];
+		float b = z[2 * idx + 1];
+		float t = 1 / (1 + tau*sqrtf(a*a + b*b));
+		z[2 * idx + 0] = (z0[2 * idx + 0] + tau*z[2 * idx + 0])*t;
+		z[2 * idx + 1] = (z0[2 * idx + 1] + tau*z[2 * idx + 1])*t;
+	}
+}
+
+__global__ void divergence(float *v, float *d, int nx, int ny) {
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	int idx = x + y*nx;
+
+	if (x<nx && y<ny) {
+		float AX = 0;
+		if ((x<(nx - 1))) AX += v[2 * (idx)+0];
+		if ((x>0))      AX -= v[2 * (idx - 1) + 0];
+
+		if ((y<(ny - 1))) AX += v[2 * (idx)+1];
+		if ((y>0))      AX -= v[2 * (idx - nx) + 1];
+
+		d[idx] = AX;
+	}
+}
+
 /********************************************************************************************/
 /* Function to interface the CPU with the GPU:												*/
 /********************************************************************************************/
@@ -576,7 +633,7 @@ TomoError TomoRecon::initGPU(const char * gainFile, const char * mainFile){
 	reductionBlocks.x = (Sys.Recon.Nx + reductionThreads.x - 1) / reductionThreads.x;
 	reductionBlocks.y = Sys.Recon.Ny;
 
-	//Set up dispaly and buffer (error) regions
+	//Set up display and buffer regions
 	cuda(MallocPitch((void**)&d_Image, &reconPitch, Sys.Recon.Nx * sizeof(float), Sys.Recon.Ny));
 	cuda(MallocPitch((void**)&d_Error, &reconPitch, Sys.Recon.Nx * sizeof(float), Sys.Recon.Ny));
 	cuda(MallocPitch((void**)&d_Sino, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
@@ -843,6 +900,8 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 		cuda(MemcpyAsync(d_SumValsHor, horOff + view * Sys.Proj.Ny, Sys.Proj.Ny * sizeof(float), cudaMemcpyHostToDevice));
 
 		KERNELCALL2(rescale, dimGridProj, dimBlockProj, d_Sino, view, d_MaxVal, d_MinVal, d_SumValsVert, d_SumValsHor, constants);
+
+		if (useTV) chaTV(d_Sino + projPitch / sizeof(float) * Sys.Proj.Ny * view, iter, projPitch / sizeof(float), Sys.Proj.Ny, lambda);
 	}
 
 	constants.log = oldLog;
@@ -863,6 +922,66 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 	cuda(Free(d_Gain));
 	cuda(Free(d_SumValsHor));
 	cuda(Free(d_SumValsVert));
+
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::chaTV(float *input, int it, int nx, int ny, float lambda){
+	float *z, *z0, *div, *div0;
+	size_t size;
+	int j;
+
+	size = nx*ny * sizeof(float);
+
+	/* allocate device memory */
+	cuda(Malloc((void **)&div, size));
+	cuda(Malloc((void **)&div0, size));
+	cuda(Malloc((void **)&z, 2 * size));
+	cuda(Malloc((void **)&z0, 2 * size));
+
+	/* Copy input to device*/
+	cuda(Memset(div, 0, size));
+	cuda(Memset(div0, 0, size));
+	cuda(Memset(z, 0, 2 * size));
+	cuda(Memset(z0, 0, 2 * size));
+
+	/* setup a 2D thread grid, with 16x16 blocks */
+	/* each block is will use nearby memory*/
+	dim3 block_size(16, 16);
+	dim3 n_blocks((nx + block_size.x - 1) / block_size.x,
+		(ny + block_size.y - 1) / block_size.y);
+
+	/* call the functions */
+	for (j = 0; j<it; j++) {
+		/* div = div0 - g/lambda*/
+		KERNELCALL2(sub0, n_blocks, block_size, div0, div, input, lambda, nx, ny);
+
+		KERNELCALL2(gradient, n_blocks, block_size, div, z, nx, ny);
+
+		/*z = (z0 + tau z)/(1+tau|z|)*/
+		KERNELCALL2(zupdate, n_blocks, block_size, z, z0, 0.25, nx, ny);
+
+		KERNELCALL2(divergence, n_blocks, block_size, z, div, nx, ny);
+
+		/* SWAPs */
+		float *tmp;
+		tmp = div;
+		div = div0;
+		div0 = tmp;
+
+		tmp = z;
+		z = z0;
+		z0 = tmp;
+	}
+
+	/*div (SOLUTION) = g -div0*lambda;	*/
+	KERNELCALL2(sub0, n_blocks, block_size, input, input, div0, 1.0 / lambda, nx, ny);
+
+	/* free device memory */
+	cuda(Free(div));
+	cuda(Free(div0));
+	cuda(Free(z));
+	cuda(Free(z0));
 
 	return Tomo_OK;
 }

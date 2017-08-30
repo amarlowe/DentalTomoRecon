@@ -318,3 +318,18 @@ TomoError TomoRecon::setShowNegative(bool showNegative) {
 	constants.showNegative = showNegative;
 	return Tomo_OK;
 }
+
+TomoError TomoRecon::enableTV(bool enable) {
+	useTV = enable;
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setTVLambda(float TVLambda) {
+	lambda = TVLambda * UCHAR_MAX;
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setTVIter(float TVIter) {
+	iter = TVIter;
+	return Tomo_OK;
+}

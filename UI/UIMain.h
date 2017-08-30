@@ -47,6 +47,8 @@
 #define STEPFACTOR	10.0f
 #define SCANFACTOR 100.0f
 #define MAXSLICE 150
+#define LAMBDADEFAULT 2
+#define ITERDEFAULT 20
 
 typedef enum {
 	Status = 0,
@@ -278,6 +280,11 @@ protected:
 	void onNoiseMaxEnable(wxCommandEvent& event);
 	void onNoiseMax(wxScrollEvent& event);
 	void onResetNoiseMax(wxCommandEvent& event);
+	void onTVEnable(wxCommandEvent& event);
+	void onResetLambda(wxCommandEvent& event);
+	void onLambdaSlider(wxScrollEvent& event);
+	void onResetIter(wxCommandEvent& event);
+	void onIterSlider(wxScrollEvent& event);
 
 	//constant globals
 	const int NumViews = NUMVIEWS;

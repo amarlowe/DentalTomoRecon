@@ -23,6 +23,7 @@ TomoRecon
 
 --------------Bugs---------------------
 - Throw all tomo errors instead of crashing the program
+- Toolbar settings do not update on tab change
 
 -------------Completed------------------
 -------------Features------------------

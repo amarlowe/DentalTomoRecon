@@ -264,6 +264,9 @@ void DTRMainWindow::onContinuous() {
 	recon->setLogView(logView->IsChecked());
 	recon->setHorFlip(horFlip->IsChecked());
 	recon->setVertFlip(vertFlip->IsChecked());
+	recon->enableTV(TVEnable->IsChecked());
+	recon->setTVIter(iterSlider->GetValue());
+	recon->setTVLambda(lambdaSlider->GetValue());
 
 	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
@@ -876,6 +879,97 @@ void DTRMainWindow::onNoiseMaxEnable(wxCommandEvent& WXUNUSED(event)) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->enableNoiseMaxFilter(outlierEnable->IsChecked());
+	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onTVEnable(wxCommandEvent& WXUNUSED(event)) {
+	if (TVEnable->IsChecked()) {
+		lambdaVal->Enable(true);
+		resetLambda->Enable(true);
+		lambdaSlider->Enable(true);
+		iterLabel->Enable(true);
+		iterVal->Enable(true);
+		resetIter->Enable(true);
+		iterSlider->Enable(true);
+	}
+	else {
+		lambdaVal->Enable(false);
+		resetLambda->Enable(false);
+		lambdaSlider->Enable(false);
+		iterLabel->Enable(false);
+		iterVal->Enable(false);
+		resetIter->Enable(false);
+		iterSlider->Enable(false);
+	}
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->enableTV(TVEnable->IsChecked());
+	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onResetLambda(wxCommandEvent& WXUNUSED(event)) {
+	lambdaVal->SetLabelText(wxString::Format(wxT("%d"), LAMBDADEFAULT));
+	lambdaSlider->SetValue(LAMBDADEFAULT);
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setTVLambda(lambdaSlider->GetValue());
+	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onLambdaSlider(wxScrollEvent& event) {
+	int value = event.GetPosition();
+	lambdaVal->SetLabelText(wxString::Format(wxT("%d"), value));
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setTVLambda(value);
+	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onResetIter(wxCommandEvent& WXUNUSED(event)) {
+	iterVal->SetLabelText(wxString::Format(wxT("%d"), ITERDEFAULT));
+	iterSlider->SetValue(ITERDEFAULT);
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setTVIter(iterSlider->GetValue());
+	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::onIterSlider(wxScrollEvent& event) {
+	int value = event.GetPosition();
+	iterVal->SetLabelText(wxString::Format(wxT("%d"), value));
+
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setTVIter(value);
 	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();

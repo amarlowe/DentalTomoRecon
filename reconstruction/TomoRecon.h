@@ -320,6 +320,9 @@ public:
 	TomoError enableScanHor(bool enable);
 	TomoError setScanHorVal(float tau);
 	TomoError setShowNegative(bool showNegative);
+	TomoError enableTV(bool useTV);
+	TomoError setTVLambda(float lambda);
+	TomoError setTVIter(float iter);
 
 	/* Input Functions to read data into the program                      */	BOOL CheckFilePathForRepeatScans(std::string BasePathIn);
 	int GetNumberOfScans(std::string BasePathIn);
@@ -383,7 +386,6 @@ private:
 	/* Function to interface the CPU with the GPU:												*/
 	/********************************************************************************************/
 
-	//////////////////////////////////////////////////////////////////////////////////////////////
 	//Functions to Initialize the GPU and set up the reconstruction normalization
 	TomoError initGPU(const char * gainFile, const char * mainFile);
 	TomoError setNOOP(float kernel[KERNELSIZE]);
@@ -391,6 +393,7 @@ private:
 	TomoError setGaussDer(float kernel[KERNELSIZE]);
 	TomoError setGaussDer2(float kernel[KERNELSIZE]);
 	TomoError setGaussDer3(float kernel[KERNELSIZE]);
+	TomoError chaTV(float *input, int it, int nx, int ny, float lambda);
 	void diver(float * z, float * d, int n);
 	void nabla(float * u, float * g, int n);
 	void lapla(float * a, float * b, int n);
@@ -462,6 +465,11 @@ private:
 	//Constants for program set by outside caller
 	CPUParams cConstants;
 	//params constants;
+
+	//TV variables
+	bool useTV = true;
+	float lambda = 10 * UCHAR_MAX;
+	float iter = 20;
 };
 
 /********************************************************************************************/

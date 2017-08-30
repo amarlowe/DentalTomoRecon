@@ -103,6 +103,14 @@ class mainWindow : public wxFrame
 		wxStaticText* noiseMaxVal;
 		wxButton* resetNoiseMax;
 		wxSlider* noiseMaxSlider;
+		wxCheckBox* TVEnable;
+		wxStaticText* lambdaVal;
+		wxButton* resetLambda;
+		wxSlider* lambdaSlider;
+		wxStaticText* iterLabel;
+		wxStaticText* iterVal;
+		wxButton* resetIter;
+		wxSlider* iterSlider;
 		wxPanel* m_panel10;
 		wxStatusBar* m_statusBar1;
 		
@@ -148,6 +156,11 @@ class mainWindow : public wxFrame
 		virtual void onNoiseMaxEnable( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onResetNoiseMax( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onNoiseMax( wxScrollEvent& event ) { event.Skip(); }
+		virtual void onTVEnable( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onResetLambda( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onLambdaSlider( wxScrollEvent& event ) { event.Skip(); }
+		virtual void onResetIter( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onIterSlider( wxScrollEvent& event ) { event.Skip(); }
 		virtual void onPageChange( wxAuiNotebookEvent& event ) { event.Skip(); }
 		virtual void onPageClose( wxAuiNotebookEvent& event ) { event.Skip(); }
 		

@@ -12,6 +12,7 @@
 mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style ) : wxFrame( parent, id, title, pos, size, style )
 {
 	this->SetSizeHints( wxDefaultSize, wxDefaultSize );
+	this->SetForegroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_APPWORKSPACE ) );
 	this->SetBackgroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_MENU ) );
 	m_mgr.SetManagedWindow(this);
 	m_mgr.SetFlags(wxAUI_MGR_DEFAULT);
@@ -257,6 +258,26 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	noiseToolbar->AddControl( resetNoiseMax );
 	noiseMaxSlider = new wxSlider( noiseToolbar, wxID_ANY, 700, 300, 800, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
 	noiseToolbar->AddControl( noiseMaxSlider );
+	TVEnable = new wxCheckBox( noiseToolbar, wxID_ANY, wxT("TV denoising with lambda: "), wxDefaultPosition, wxDefaultSize, 0 );
+	TVEnable->SetValue(true); 
+	noiseToolbar->AddControl( TVEnable );
+	lambdaVal = new wxStaticText( noiseToolbar, wxID_ANY, wxT("2"), wxDefaultPosition, wxDefaultSize, 0 );
+	lambdaVal->Wrap( -1 );
+	noiseToolbar->AddControl( lambdaVal );
+	resetLambda = new wxButton( noiseToolbar, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxDefaultSize, 0 );
+	noiseToolbar->AddControl( resetLambda );
+	lambdaSlider = new wxSlider( noiseToolbar, wxID_ANY, 2, 1, 20, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	noiseToolbar->AddControl( lambdaSlider );
+	iterLabel = new wxStaticText( noiseToolbar, wxID_ANY, wxT("TV iterations: "), wxDefaultPosition, wxDefaultSize, 0 );
+	iterLabel->Wrap( -1 );
+	noiseToolbar->AddControl( iterLabel );
+	iterVal = new wxStaticText( noiseToolbar, wxID_ANY, wxT("20"), wxDefaultPosition, wxDefaultSize, 0 );
+	iterVal->Wrap( -1 );
+	noiseToolbar->AddControl( iterVal );
+	resetIter = new wxButton( noiseToolbar, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxDefaultSize, 0 );
+	noiseToolbar->AddControl( resetIter );
+	iterSlider = new wxSlider( noiseToolbar, wxID_ANY, 20, 1, 500, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	noiseToolbar->AddControl( iterSlider );
 	noiseToolbar->Realize();
 	m_mgr.AddPane( noiseToolbar, wxAuiPaneInfo() .Top() .CaptionVisible( false ).CloseButton( false ).PaneBorder( false ).Movable( false ).Dock().Resizable().FloatingSize( wxDefaultSize ).DockFixed( true ).BottomDockable( false ).TopDockable( false ).LeftDockable( false ).RightDockable( false ).Floatable( false ).Layer( 10 ) );
 	
@@ -390,6 +411,27 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	noiseMaxSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
 	noiseMaxSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
 	noiseMaxSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
+	TVEnable->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onTVEnable ), NULL, this );
+	resetLambda->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( mainWindow::onResetLambda ), NULL, this );
+	lambdaSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( mainWindow::onLambdaSlider ), NULL, this );
+	lambdaSlider->Connect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( mainWindow::onLambdaSlider ), NULL, this );
+	lambdaSlider->Connect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( mainWindow::onLambdaSlider ), NULL, this );
+	lambdaSlider->Connect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( mainWindow::onLambdaSlider ), NULL, this );
+	lambdaSlider->Connect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( mainWindow::onLambdaSlider ), NULL, this );
+	lambdaSlider->Connect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( mainWindow::onLambdaSlider ), NULL, this );
+	lambdaSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( mainWindow::onLambdaSlider ), NULL, this );
+	lambdaSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( mainWindow::onLambdaSlider ), NULL, this );
+	lambdaSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( mainWindow::onLambdaSlider ), NULL, this );
+	resetIter->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( mainWindow::onResetIter ), NULL, this );
+	iterSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( mainWindow::onIterSlider ), NULL, this );
+	iterSlider->Connect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( mainWindow::onIterSlider ), NULL, this );
+	iterSlider->Connect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( mainWindow::onIterSlider ), NULL, this );
+	iterSlider->Connect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( mainWindow::onIterSlider ), NULL, this );
+	iterSlider->Connect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( mainWindow::onIterSlider ), NULL, this );
+	iterSlider->Connect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( mainWindow::onIterSlider ), NULL, this );
+	iterSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( mainWindow::onIterSlider ), NULL, this );
+	iterSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( mainWindow::onIterSlider ), NULL, this );
+	iterSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( mainWindow::onIterSlider ), NULL, this );
 	m_auinotebook6->Connect( wxEVT_COMMAND_AUINOTEBOOK_PAGE_CHANGING, wxAuiNotebookEventHandler( mainWindow::onPageChange ), NULL, this );
 	m_auinotebook6->Connect( wxEVT_COMMAND_AUINOTEBOOK_PAGE_CLOSE, wxAuiNotebookEventHandler( mainWindow::onPageClose ), NULL, this );
 }
@@ -502,6 +544,27 @@ mainWindow::~mainWindow()
 	noiseMaxSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
 	noiseMaxSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
 	noiseMaxSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( mainWindow::onNoiseMax ), NULL, this );
+	TVEnable->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onTVEnable ), NULL, this );
+	resetLambda->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( mainWindow::onResetLambda ), NULL, this );
+	lambdaSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( mainWindow::onLambdaSlider ), NULL, this );
+	lambdaSlider->Disconnect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( mainWindow::onLambdaSlider ), NULL, this );
+	lambdaSlider->Disconnect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( mainWindow::onLambdaSlider ), NULL, this );
+	lambdaSlider->Disconnect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( mainWindow::onLambdaSlider ), NULL, this );
+	lambdaSlider->Disconnect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( mainWindow::onLambdaSlider ), NULL, this );
+	lambdaSlider->Disconnect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( mainWindow::onLambdaSlider ), NULL, this );
+	lambdaSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( mainWindow::onLambdaSlider ), NULL, this );
+	lambdaSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( mainWindow::onLambdaSlider ), NULL, this );
+	lambdaSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( mainWindow::onLambdaSlider ), NULL, this );
+	resetIter->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( mainWindow::onResetIter ), NULL, this );
+	iterSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( mainWindow::onIterSlider ), NULL, this );
+	iterSlider->Disconnect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( mainWindow::onIterSlider ), NULL, this );
+	iterSlider->Disconnect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( mainWindow::onIterSlider ), NULL, this );
+	iterSlider->Disconnect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( mainWindow::onIterSlider ), NULL, this );
+	iterSlider->Disconnect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( mainWindow::onIterSlider ), NULL, this );
+	iterSlider->Disconnect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( mainWindow::onIterSlider ), NULL, this );
+	iterSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( mainWindow::onIterSlider ), NULL, this );
+	iterSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( mainWindow::onIterSlider ), NULL, this );
+	iterSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( mainWindow::onIterSlider ), NULL, this );
 	m_auinotebook6->Disconnect( wxEVT_COMMAND_AUINOTEBOOK_PAGE_CHANGING, wxAuiNotebookEventHandler( mainWindow::onPageChange ), NULL, this );
 	m_auinotebook6->Disconnect( wxEVT_COMMAND_AUINOTEBOOK_PAGE_CLOSE, wxAuiNotebookEventHandler( mainWindow::onPageClose ), NULL, this );
 	
