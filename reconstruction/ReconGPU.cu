@@ -530,23 +530,21 @@ __global__ void sub0(float *div0, float *div, float *g, float lambda, int nx, in
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
 	int idx = x + y*nx;
 
-	if (x < nx && y < ny) {
+	if (x < nx && y < ny)
 		div[idx] = div0[idx] - g[idx] / lambda;
-
-	}
 }
 
 //Chambolle TV denoising
-__global__ void gradient(float *u, float *g, int nx, int ny) {
+__global__ void gradient(float *g, float *div0, float *div, float *z, float lambda, int nx, int ny) {
 	int x = blockIdx.x * blockDim.x + threadIdx.x;
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
 	int idx = x + y*nx;
 
 	if (x<nx && y<ny) {
-		g[2 * idx + 0] = 0;
-		g[2 * idx + 1] = 0;
-		if (x<(nx - 1)) g[2 * idx + 0] = u[idx + 1] - u[idx];
-		if (y<(ny - 1)) g[2 * idx + 1] = u[idx + nx] - u[idx];
+		if (x<(nx - 1)) z[2 * idx + 0] = (div0[idx + 1] - g[idx + 1] / lambda) - (div0[idx] - g[idx] / lambda);
+		else z[2 * idx + 0] = 0;
+		if (y<(ny - 1)) z[2 * idx + 1] = (div0[idx + nx] - g[idx + nx] / lambda) - (div0[idx] - g[idx] / lambda);
+		else z[2 * idx + 1] = 0;
 	}
 }
 
@@ -586,7 +584,7 @@ __global__ void divergence(float *v, float *d, int nx, int ny) {
 /********************************************************************************************/
 
 //Function to set up the memory on the GPU
-TomoError TomoRecon::initGPU(const char * gainFile, const char * mainFile){
+TomoError TomoRecon::initGPU(){
 	//init recon space
 	Sys.Recon.Pitch_x = Sys.Proj.Pitch_x;
 	Sys.Recon.Pitch_y = Sys.Proj.Pitch_y;
@@ -717,8 +715,6 @@ TomoError TomoRecon::initGPU(const char * gainFile, const char * mainFile){
 	float tempKernelDer3[KERNELSIZE];
 	setGaussDer3(tempKernelDer3);
 	cuda(MemcpyAsync(d_gaussDer3, tempKernelDer3, KERNELSIZE * sizeof(float), cudaMemcpyHostToDevice));
-
-	ReadProjections(gainFile, mainFile);
 
 	cudaMemGetInfo(&avail_mem, &total_mem);
 	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
@@ -866,9 +862,33 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 	autoLight(histogram, 80, &minVal, &maxVal);
 	cuda(Memcpy(d_MinVal, &minVal, sizeof(float), cudaMemcpyHostToDevice));
 
+	float *z, *z0, *div, *div0;
+	size_t size;
+	int j;
+	int nx = projPitch / sizeof(float);
+	int ny = Sys.Proj.Ny;
+	size = nx*ny * sizeof(float);
+	/* allocate device memory */
+	cuda(Malloc((void **)&div, size));
+	cuda(Malloc((void **)&div0, size));
+	cuda(Malloc((void **)&z, 2 * size));
+	cuda(Malloc((void **)&z0, 2 * size));
+
+	/* Copy input to device*/
+	cuda(MemsetAsync(div, 0, size));
+	cuda(MemsetAsync(div0, 0, size));
+	cuda(MemsetAsync(z, 0, 2 * size));
+	cuda(MemsetAsync(z0, 0, 2 * size));
+
+	/* setup a 2D thread grid, with 16x16 blocks */
+	/* each block is will use nearby memory*/
+	dim3 block_size(16, 16);
+	dim3 n_blocks((nx + block_size.x - 1) / block_size.x,
+		(ny + block_size.y - 1) / block_size.y);
+
 	for (int view = 0; view < NumViews; view++) {
 		float scale = maxVal/scales[view];
-		cuda(Memcpy(d_MaxVal, &scale, sizeof(float), cudaMemcpyHostToDevice));
+		cuda(MemcpyAsync(d_MaxVal, &scale, sizeof(float), cudaMemcpyHostToDevice));
 		/*
 		{
 			std::ofstream FILE1, FILE2;
@@ -901,8 +921,42 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 
 		KERNELCALL2(rescale, dimGridProj, dimBlockProj, d_Sino, view, d_MaxVal, d_MinVal, d_SumValsVert, d_SumValsHor, constants);
 
-		if (useTV) chaTV(d_Sino + projPitch / sizeof(float) * Sys.Proj.Ny * view, iter, projPitch / sizeof(float), Sys.Proj.Ny, lambda);
+		if (useTV) {
+			//chaTV(d_Sino + projPitch / sizeof(float) * Sys.Proj.Ny * view, iter, projPitch / sizeof(float), Sys.Proj.Ny, lambda);
+			float * input = d_Sino + projPitch / sizeof(float) * Sys.Proj.Ny * view;
+			/* call the functions */
+			for (j = 0; j<iter; j++) {
+				/* div = div0 - g/lambda*/
+				//KERNELCALL2(sub0, n_blocks, block_size, div0, div, input, lambda, nx, ny);
+
+				KERNELCALL2(gradient, n_blocks, block_size, input, div0, div, z, lambda, nx, ny);
+
+				/*z = (z0 + tau z)/(1+tau|z|)*/
+				KERNELCALL2(zupdate, n_blocks, block_size, z, z0, 0.25, nx, ny);
+
+				KERNELCALL2(divergence, n_blocks, block_size, z, div, nx, ny);
+
+				/* SWAPs */
+				float *tmp;
+				tmp = div;
+				div = div0;
+				div0 = tmp;
+
+				tmp = z;
+				z = z0;
+				z0 = tmp;
+			}
+
+			/*div (SOLUTION) = g -div0*lambda;	*/
+			KERNELCALL2(sub0, n_blocks, block_size, input, input, div0, 1.0 / lambda, nx, ny);
+		}
 	}
+
+	/* free device memory */
+	cuda(Free(div));
+	cuda(Free(div0));
+	cuda(Free(z));
+	cuda(Free(z0));
 
 	constants.log = oldLog;
 
@@ -927,61 +981,6 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 }
 
 TomoError TomoRecon::chaTV(float *input, int it, int nx, int ny, float lambda){
-	float *z, *z0, *div, *div0;
-	size_t size;
-	int j;
-
-	size = nx*ny * sizeof(float);
-
-	/* allocate device memory */
-	cuda(Malloc((void **)&div, size));
-	cuda(Malloc((void **)&div0, size));
-	cuda(Malloc((void **)&z, 2 * size));
-	cuda(Malloc((void **)&z0, 2 * size));
-
-	/* Copy input to device*/
-	cuda(Memset(div, 0, size));
-	cuda(Memset(div0, 0, size));
-	cuda(Memset(z, 0, 2 * size));
-	cuda(Memset(z0, 0, 2 * size));
-
-	/* setup a 2D thread grid, with 16x16 blocks */
-	/* each block is will use nearby memory*/
-	dim3 block_size(16, 16);
-	dim3 n_blocks((nx + block_size.x - 1) / block_size.x,
-		(ny + block_size.y - 1) / block_size.y);
-
-	/* call the functions */
-	for (j = 0; j<it; j++) {
-		/* div = div0 - g/lambda*/
-		KERNELCALL2(sub0, n_blocks, block_size, div0, div, input, lambda, nx, ny);
-
-		KERNELCALL2(gradient, n_blocks, block_size, div, z, nx, ny);
-
-		/*z = (z0 + tau z)/(1+tau|z|)*/
-		KERNELCALL2(zupdate, n_blocks, block_size, z, z0, 0.25, nx, ny);
-
-		KERNELCALL2(divergence, n_blocks, block_size, z, div, nx, ny);
-
-		/* SWAPs */
-		float *tmp;
-		tmp = div;
-		div = div0;
-		div0 = tmp;
-
-		tmp = z;
-		z = z0;
-		z0 = tmp;
-	}
-
-	/*div (SOLUTION) = g -div0*lambda;	*/
-	KERNELCALL2(sub0, n_blocks, block_size, input, input, div0, 1.0 / lambda, nx, ny);
-
-	/* free device memory */
-	cuda(Free(div));
-	cuda(Free(div0));
-	cuda(Free(z));
-	cuda(Free(z0));
 
 	return Tomo_OK;
 }

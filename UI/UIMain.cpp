@@ -1484,6 +1484,7 @@ void DTRResDialog::onAddNew(wxCommandEvent& event) {
 		recon->setLogView(true);
 		recon->setHorFlip(false);
 		recon->setVertFlip(true);
+		recon->enableTV(false);
 
 		recon->ReadProjections(((DTRMainWindow*)GetParent())->gainFilepath.mb_str(), openFileDialog.GetPath().mb_str());
 		recon->singleFrame();
@@ -1769,7 +1770,7 @@ CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemC
 	SetCurrent(*m_glRC);
 
 	recon = new TomoRecon(GetSize().x, GetSize().y, Sys);
-	recon->init((const char*)gainFile.mb_str(), (const char*)filename.mb_str());
+	recon->init();
 }
 
 CudaGLCanvas::~CudaGLCanvas(){
@@ -1920,7 +1921,7 @@ CudaGLInCanvas::CudaGLInCanvas(wxWindow *parent, bool vertical, struct SystemCon
 	SetCurrent(*m_glRC);
 
 	recon = new TomoRecon(GetSize().x, GetSize().y, Sys);
-	recon->init((const char*)gainFile.mb_str(), (const char*)filename.mb_str());
+	recon->init();
 	recon->setInputVeritcal(vertical);
 }
 

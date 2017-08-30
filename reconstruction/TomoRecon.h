@@ -73,7 +73,7 @@
 #define HIST_BIN_COUNT 256
 
 //Code use parameters
-//#define PROFILER
+#define PROFILER
 //#define CHAMBOLLE
 #define PRINTSCANCORRECTIONS
 
@@ -244,7 +244,7 @@ public:
 	TomoRecon(int x, int y, struct SystemControl * Sys);
 	~TomoRecon();
 
-	TomoError init(const char * gainFile, const char * mainFile);
+	TomoError init();
 
 	//High level functions for command line call
 	TomoError ReadProjections(const char * gainFile, const char * mainFile);
@@ -387,7 +387,7 @@ private:
 	/********************************************************************************************/
 
 	//Functions to Initialize the GPU and set up the reconstruction normalization
-	TomoError initGPU(const char * gainFile, const char * mainFile);
+	TomoError initGPU();
 	TomoError setNOOP(float kernel[KERNELSIZE]);
 	TomoError setGauss(float kernel[KERNELSIZE]);
 	TomoError setGaussDer(float kernel[KERNELSIZE]);
