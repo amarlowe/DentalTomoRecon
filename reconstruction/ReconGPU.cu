@@ -849,60 +849,19 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 	bool firstLin = true;
 	float bestDist;
 
-	float * scales = new float[NumViews];
+	float sumMain = 0.0;
+	for (int j = 0; j < Sys.Proj.Ny; j++)
+		sumMain += sumValsHor[j + NumViews / 2 * Sys.Proj.Ny];
 
 	for (int i = 0; i < NumViews; i++) {
-		float offLight = 0.0;
-		float bestOffLight = 0.0;
-		float bestScale = 1.0;
-		float thisScale = 1.0;
-		bool scaleSwitch = false;
-		firstLin = true;
-		float scaleStep = 0.01;
-		step = 10;
-		best = FLT_MAX;
+		if (i == NumViews / 2) continue;
+		float sumView = 0.0;
+		for (int j = 0; j < Sys.Proj.Ny; j++)
+			sumView += sumValsHor[j + i * Sys.Proj.Ny];
 
-		while (true) {
-			float newVal = graphCost(sumValsVert, sumValsHor, i, offLight, thisScale, 0.0);
-
-			//compare to current
-			if (newVal < best) {
-				if (scaleSwitch) {
-					bestScale = thisScale;
-					thisScale += scaleStep;
-				}
-				else {
-					bestOffLight = offLight;
-					offLight += step;
-				}
-				best = newVal;
-			}
-			else {
-				if (!firstLin) {
-					if(scaleSwitch) thisScale -= scaleStep;//revert last move
-					else offLight -= step;//revert last move
-				}
-				scaleSwitch = !scaleSwitch;
-				if (!scaleSwitch) {
-					step = -step / 2;//find next step
-					scaleStep = -scaleStep / 2;
-
-					if (abs(step) < 0.1)
-						break;
-					else offLight += step;
-				}
-				else thisScale += scaleStep;
-			}
-			firstLin = false;
-		}
-
-		scales[i] = bestScale;
-		for (int j = 0; j < Sys.Proj.Nx; j++) {
-			sumValsVert[j + i * Sys.Proj.Nx] = sumValsVert[j + i * Sys.Proj.Nx] * bestScale + bestOffLight;
-		}
+		float offset = (sumMain - sumView) / Sys.Proj.Ny;
 		for (int j = 0; j < Sys.Proj.Ny; j++) {
-			sumValsHor[j + i * Sys.Proj.Ny] = sumValsHor[j + i * Sys.Proj.Ny] * bestScale + bestOffLight;
-			horOff[j + i * Sys.Proj.Ny] -= bestOffLight;
+			horOff[j + i * Sys.Proj.Ny] -= offset;
 		}
 	}
 
@@ -937,8 +896,7 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 		(ny + block_size.y - 1) / block_size.y);
 
 	for (int view = 0; view < NumViews; view++) {
-		float scale = maxVal/scales[view];
-		cuda(MemcpyAsync(d_MaxVal, &scale, sizeof(float), cudaMemcpyHostToDevice));
+		cuda(MemcpyAsync(d_MaxVal, &maxVal, sizeof(float), cudaMemcpyHostToDevice));
 		/*
 		{
 			std::ofstream FILE1, FILE2;
@@ -1007,7 +965,6 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 	constants.currXr = -1;
 	constants.currYr = -1;
 
-	delete[] scales;
 	delete[] RawData;
 	delete[] GainData;
 	delete[] sumValsHor;

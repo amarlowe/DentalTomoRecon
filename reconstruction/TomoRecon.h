@@ -73,7 +73,7 @@
 #define HIST_BIN_COUNT 256
 
 //Code use parameters
-//#define PROFILER
+#define PROFILER
 #define PRINTSCANCORRECTIONS
 
 //Macro for checking cuda errors following a cuda launch or api call
