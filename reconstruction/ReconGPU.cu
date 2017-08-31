@@ -579,6 +579,62 @@ __global__ void divergence(float *v, float *d, int nx, int ny) {
 	}
 }
 
+// u=  (1 - tu) * uold + tu .* ( f + 1/lambda*div(z) );
+__global__ void updhgF_SoA(float *f, float *z1, float *z2, float *g, float tf, float invlambda, int nx, int ny){
+	int px = blockIdx.x * blockDim.x + threadIdx.x;
+	int py = blockIdx.y * blockDim.y + threadIdx.y;
+	int idx = px + py*nx;
+	float DIVZ;
+
+	if (px<nx && py<ny){
+		// compute the divergence
+		DIVZ = 0;
+		if ((px<(nx - 1))) DIVZ += z1[idx];
+		if ((px>0))      DIVZ -= z1[idx - 1];
+
+		if ((py<(ny - 1))) DIVZ += z2[idx];
+		if ((py>0))      DIVZ -= z2[idx - nx];
+
+		// update f
+		f[idx] = (1 - tf) *f[idx] + tf * (g[idx] + invlambda*DIVZ);
+	}
+
+}
+
+
+// z= zold + tz*lambda* grad(u);	
+// and normalize z:  
+//n=max(1,sqrt(z(:,:,1).*z(:,:,1) +z(:,:,2).*z(:,:,2) ) ); 
+// z= z/n;
+__global__ void updhgZ_SoA(float *z1, float *z2, float *f, float tz, float lambda, int nx, int ny){
+	int px = blockIdx.x * blockDim.x + threadIdx.x;
+	int py = blockIdx.y * blockDim.y + threadIdx.y;
+	int idx = px + py*nx;
+
+	if (px<nx && py<ny){
+		// compute the gradient
+		float a = 0;
+		float b = 0;
+		float fc = f[idx];
+		if (px<(nx - 1)) a = f[idx + 1] - fc;
+		if (py<(ny - 1)) b = f[idx + nx] - fc;
+
+		// update z
+
+		a = z1[idx] + tz*lambda*a;
+		b = z2[idx] + tz*lambda*b;
+
+		// project
+		float t = 0;
+		t = sqrtf(a*a + b*b);
+		t = (t <= 1 ? 1. : t);
+
+		z1[idx] = a / t;
+		z2[idx] = b / t;
+	}
+}
+
+
 /********************************************************************************************/
 /* Function to interface the CPU with the GPU:												*/
 /********************************************************************************************/
@@ -781,9 +837,9 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 
 		KERNELCALL2(LogCorrectProj, dimGridProj, dimBlockProj, d_Sino, view, d_Proj, d_Gain, constants);
 
-		scanLineDetect(view, d_SumValsHor, sumValsHor + view * Sys.Proj.Ny, horOff + view * Sys.Proj.Ny, false, cConstants.scanHorEnable);
-		scanLineDetect(view, d_SumValsVert, sumValsVert + view * Sys.Proj.Nx, vertOff + view * Sys.Proj.Nx, true, cConstants.scanVertEnable);
 		
+		scanLineDetect(view, d_SumValsVert, sumValsVert + view * Sys.Proj.Nx, vertOff + view * Sys.Proj.Nx, true, cConstants.scanVertEnable);
+		scanLineDetect(view, d_SumValsHor, sumValsHor + view * Sys.Proj.Ny, horOff + view * Sys.Proj.Ny, false, cConstants.scanHorEnable);
 	}
 
 	float step = 10;
@@ -862,23 +918,17 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 	autoLight(histogram, 80, &minVal, &maxVal);
 	cuda(Memcpy(d_MinVal, &minVal, sizeof(float), cudaMemcpyHostToDevice));
 
-	float *z, *z0, *div, *div0;
+	float *g, *z1, *z2;
 	size_t size;
 	int j;
 	int nx = projPitch / sizeof(float);
 	int ny = Sys.Proj.Ny;
 	size = nx*ny * sizeof(float);
+	float tz = 2, tf = .2, beta = 0.0001;
 	/* allocate device memory */
-	cuda(Malloc((void **)&div, size));
-	cuda(Malloc((void **)&div0, size));
-	cuda(Malloc((void **)&z, 2 * size));
-	cuda(Malloc((void **)&z0, 2 * size));
-
-	/* Copy input to device*/
-	cuda(MemsetAsync(div, 0, size));
-	cuda(MemsetAsync(div0, 0, size));
-	cuda(MemsetAsync(z, 0, 2 * size));
-	cuda(MemsetAsync(z0, 0, 2 * size));
+	cudaMalloc((void **)&g, size);
+	cudaMalloc((void **)&z1, size);
+	cudaMalloc((void **)&z2, size);
 
 	/* setup a 2D thread grid, with 16x16 blocks */
 	/* each block is will use nearby memory*/
@@ -924,39 +974,31 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 		if (useTV) {
 			//chaTV(d_Sino + projPitch / sizeof(float) * Sys.Proj.Ny * view, iter, projPitch / sizeof(float), Sys.Proj.Ny, lambda);
 			float * input = d_Sino + projPitch / sizeof(float) * Sys.Proj.Ny * view;
+
+			/* Copy input to device*/
+			cuda(MemcpyAsync(g, input, size, cudaMemcpyDeviceToDevice));
+			cuda(MemsetAsync(z1, 0, size));
+			cuda(MemsetAsync(z2, 0, size));
+
 			/* call the functions */
 			for (j = 0; j<iter; j++) {
-				/* div = div0 - g/lambda*/
-				//KERNELCALL2(sub0, n_blocks, block_size, div0, div, input, lambda, nx, ny);
+				tz = 0.2 + 0.08*j;
+				tf = (0.5 - 5. / (15 + j)) / tz;
 
-				KERNELCALL2(gradient, n_blocks, block_size, input, div0, div, z, lambda, nx, ny);
+				// z= zold + tauz.* grad(u);	
+				// and normalize z:  n=max(1,sqrt(z(:,:,1).*z(:,:,1) +z(:,:,2).*z(:,:,2) + beta) ); z/=n;
+				KERNELCALL2(updhgZ_SoA, n_blocks, block_size, z1, z2, input, tz, 1 / lambda, nx, ny);
 
-				/*z = (z0 + tau z)/(1+tau|z|)*/
-				KERNELCALL2(zupdate, n_blocks, block_size, z, z0, 0.25, nx, ny);
-
-				KERNELCALL2(divergence, n_blocks, block_size, z, div, nx, ny);
-
-				/* SWAPs */
-				float *tmp;
-				tmp = div;
-				div = div0;
-				div0 = tmp;
-
-				tmp = z;
-				z = z0;
-				z0 = tmp;
+				// u=  (1 - tauu*lambda) * uold + tauu .* div(z) + tauu*lambda.*f;
+				KERNELCALL2(updhgF_SoA, n_blocks, block_size, input, z1, z2, g, tf, lambda, nx, ny);
 			}
-
-			/*div (SOLUTION) = g -div0*lambda;	*/
-			KERNELCALL2(sub0, n_blocks, block_size, input, input, div0, 1.0 / lambda, nx, ny);
 		}
 	}
 
 	/* free device memory */
-	cuda(Free(div));
-	cuda(Free(div0));
-	cuda(Free(z));
-	cuda(Free(z0));
+	cuda(Free(g));
+	cuda(Free(z1));
+	cuda(Free(z2));
 
 	constants.log = oldLog;
 
@@ -1031,13 +1073,13 @@ TomoError TomoRecon::scanLineDetect(int view, float * d_sum, float * sum, float 
 	int vectorSize;
 	if (vert) vectorSize = Sys.Proj.Nx;
 	else vectorSize = Sys.Proj.Ny;
+	float * sumCorr = new float[vectorSize];
 
 	cuda(BindTexture2D(NULL, textSino, d_Sino + view*Sys.Proj.Ny*projPitch / sizeof(float), cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny, projPitch));
 	KERNELCALL3(sumRowsOrCols, dim3(1, vectorSize), reductionThreads, reductionSize, d_sum, vert, constants);
 	cuda(Memcpy(sum, d_sum, vectorSize * sizeof(float), cudaMemcpyDeviceToHost));
 
 #ifdef PRINTSCANCORRECTIONS
-	float * sumCorr = new float[vectorSize];
 	{
 		std::ofstream FILE;
 		std::stringstream outputfile;
@@ -1050,58 +1092,13 @@ TomoError TomoRecon::scanLineDetect(int view, float * d_sum, float * sum, float 
 		}
 		FILE.close();
 	}
+#else
+	for (int i = 0; i < vectorSize; i++) {
+		sum[i] /= vectorSize;
+		sumCorr[i] = sum[i];
+	}
 #endif
 
-#ifdef CHAMBOLLE
-	float *g, *z, *z0, *div, *div0;
-	size_t size;
-	int N = vectorSize;
-	int i, j;
-	float alpha;
-	float tau = 0.25;
-	float lambda = 10000;
-
-
-	size = N * sizeof(float);
-	g = sumCorr;
-	div = (float*)malloc(size);
-	div0 = (float*)malloc(size);
-	z = (float*)malloc(2 * size);
-	z0 = (float*)malloc(2 * size);
-
-	for (i = 0; i<N; i++) {
-	div0[i] = 0;
-	z0[i] = 0;
-	}
-
-	#define SWP(a,b) {float *swap=a;a=b;b=swap;}
-	for (j = 0; j<200; j++) {
-	for (i = 0; i<N; i++) { div[i] = div0[i] - g[i] / lambda; }
-
-	nabla(div, z, N);
-	for (i = 0; i<N; i++)
-	{
-	int ix = 2 * i + 0;
-	int iy = 2 * i + 1;
-	alpha = 1.0 / (1.0 + tau*sqrtf(z[ix] * z[ix] + z[iy] * z[iy]));
-
-	z[ix] = (z0[ix] + tau*z[ix])*alpha;
-	z[iy] = (z0[iy] + tau*z[iy])*alpha;
-	}
-
-	diver(z, div, N);
-	SWP(z, z0);
-	SWP(div, div0);
-
-	}
-
-	for (i = 0; i<N; i++) { sumCorr[i] = g[i] - div0[i] * lambda; }
-
-	free(div);
-	free(div0);
-	free(z);
-	free(z0);
-#else
 	float *di;
 	size_t size;
 	int i, j;
@@ -1116,7 +1113,6 @@ TomoError TomoRecon::scanLineDetect(int view, float * d_sum, float * sum, float 
 	}
 
 	free(di);
-#endif
 
 #ifdef PRINTSCANCORRECTIONS
 	{
@@ -1133,12 +1129,16 @@ TomoError TomoRecon::scanLineDetect(int view, float * d_sum, float * sum, float 
 		}
 		FILE.close();
 	}
-	delete[] sumCorr;
+	
 #else
 	for (int i = 0; i < vectorSize; i++) {
-		sum[i] -= sumValsVertCorr[i];
+		if (enable)
+			offset[i] = sum[i] - sumCorr[i];
+		else offset[i] = 0.0;
+		sum[i] = sumCorr[i];
 	}
 #endif
+	delete[] sumCorr;
 }
 
 //Fucntion to free the gpu memory after program finishes
