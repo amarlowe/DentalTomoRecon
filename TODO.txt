@@ -20,6 +20,7 @@ TomoRecon
 - Save projection images after processing
 - Save all toolbar settings for session end
 - Name tabs based on filename, check for duplicates
+- Add DICOM read functions
 
 --------------Bugs---------------------
 - Throw all tomo errors instead of crashing the program

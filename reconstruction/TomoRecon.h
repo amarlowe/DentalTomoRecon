@@ -59,8 +59,8 @@
 #define MAXTHREADS 1024
 
 //Kernel options
-#define SIGMA 1.5f
-#define KERNELRADIUS 5
+#define SIGMA 1.0f
+#define KERNELRADIUS 3
 #define KERNELSIZE (2*KERNELRADIUS + 1)
 
 //Maps to single instruction in cuda
@@ -73,8 +73,9 @@
 #define HIST_BIN_COUNT 256
 
 //Code use parameters
-#define PROFILER
-#define PRINTSCANCORRECTIONS
+//#define PROFILER
+//#define PRINTSCANCORRECTIONS
+#define ENABLEZDER
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {										\
@@ -124,7 +125,9 @@ typedef enum {
 	der,
 	der2,
 	der3,
-	der_all
+	der_all,
+	mag_der,
+	z_der_mag
 } derivative_t;
 
 typedef enum {
@@ -392,7 +395,6 @@ private:
 	TomoError setGaussDer(float kernel[KERNELSIZE]);
 	TomoError setGaussDer2(float kernel[KERNELSIZE]);
 	TomoError setGaussDer3(float kernel[KERNELSIZE]);
-	TomoError chaTV(float *input, int it, int nx, int ny, float lambda);
 	void diver(float * z, float * d, int n);
 	void nabla(float * u, float * g, int n);
 	void lapla(float * a, float * b, int n);
@@ -429,7 +431,6 @@ private:
 	float * d_MinVal;
 
 	//Kernel memory
-	float * d_noop;
 	float * d_gauss;
 	float * d_gaussDer;
 	float * d_gaussDer2;
@@ -438,6 +439,8 @@ private:
 	//Derivative buffers
 	float * buff1;
 	float * buff2;
+	float ** zBuffs;
+	float * inBuff;
 
 	//Kernel call parameters
 	size_t sizeIM;

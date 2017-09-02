@@ -269,7 +269,7 @@ void DTRMainWindow::onContinuous() {
 	recon->setTVLambda(lambdaSlider->GetValue());
 
 	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
-	recon->singleFrame();
+	//recon->singleFrame();
 
 	recon->resetFocus();
 	recon->resetLight();
@@ -1858,9 +1858,18 @@ void CudaGLCanvas::OnChar(wxKeyEvent& event){
 	if (event.GetKeyCode() == 32) {
 		switch (recon->getDisplay()) {
 		case no_der:
-			recon->setDisplay(x_enhance);
+			recon->setDisplay(mag_der);
+			recon->setShowNegative(true);
 			break;
-		case x_enhance:
+		case mag_der:
+			//recon->setDataDisplay(projections);
+			recon->setDisplay(z_der_mag);
+			recon->setShowNegative(true);
+			break;
+		case z_der_mag:
+			recon->setDisplay(mag_der);
+			break;
+		/*case x_enhance:
 			recon->setDisplay(mag_enhance);
 			break;
 		case mag_enhance:
@@ -1896,6 +1905,9 @@ void CudaGLCanvas::OnChar(wxKeyEvent& event){
 			break;
 		case der3_y:
 			recon->setDisplay(no_der);
+			break;*/
+		default:
+			recon->setDisplay(mag_der);
 			break;
 		}
 
