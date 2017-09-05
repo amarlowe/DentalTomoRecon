@@ -244,7 +244,7 @@ void DTRMainWindow::onContinuous() {
 
 	wxStreamToTextRedirector redirect(m_textCtrl8);
 	m_statusBar1->SetFieldsCount(3, statusWidths);
-	recon->continuousMode = true;
+	//recon->continuousMode = true;
 	recon->setDisplay(getEnhance());
 	recon->setEnhanceRatio((float)enhanceSlider->GetValue() / ENHANCEFACTOR);
 	recon->enableNoiseMaxFilter(outlierEnable->IsChecked());
@@ -340,7 +340,7 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 		TomoRecon* recon = currentFrame->m_canvas->recon;
 
 		if (i == 0) {
-			recon->continuousMode = true;
+			//recon->continuousMode = true;
 			recon->setDisplay(no_der);
 			recon->enableNoiseMaxFilter(false);
 			recon->enableScanVert(false);
@@ -359,11 +359,9 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 
 		recon->setSelBoxProj(pConfig->Read(wxString::Format(wxT("/resPhanBoxLxF%d"), i), 0l), pConfig->Read(wxString::Format(wxT("/resPhanBoxUxF%d"), i), 0l), 
 			pConfig->Read(wxString::Format(wxT("/resPhanBoxLyF%d"), i), 0l), pConfig->Read(wxString::Format(wxT("/resPhanBoxUyF%d"), i), 0l));
-		recon->lowX = pConfig->Read(wxString::Format(wxT("/resPhanLowx%d"), i), 0l);
-		recon->lowY = pConfig->Read(wxString::Format(wxT("/resPhanLowy%d"), i), 0l);
-		recon->upX = pConfig->Read(wxString::Format(wxT("/resPhanUpx%d"), i), 0l);
-		recon->upY = pConfig->Read(wxString::Format(wxT("/resPhanUpy%d"), i), 0l);
-		recon->vertical = pConfig->Read(wxString::Format(wxT("/resPhanVert%d"), i), 0l) == 1;
+		recon->setUpperTickProj(pConfig->Read(wxString::Format(wxT("/resPhanUpx%d"), i), 0l), pConfig->Read(wxString::Format(wxT("/resPhanUpy%d"), i), 0l));
+		recon->setLowerTickProj(pConfig->Read(wxString::Format(wxT("/resPhanLowx%d"), i), 0l), pConfig->Read(wxString::Format(wxT("/resPhanLowy%d"), i), 0l));
+		recon->setInputVeritcal(pConfig->Read(wxString::Format(wxT("/resPhanVert%d"), i), 0l) == 1);
 
 		recon->setReconBox(0);
 		recon->autoFocus(true);
@@ -375,10 +373,8 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 		}
 
 		//switch from autofocus box to area of interest
-		recon->baseX = pConfig->Read(wxString::Format(wxT("/resPhanBoxLx%d"), i), 0l);
-		recon->baseY = pConfig->Read(wxString::Format(wxT("/resPhanBoxLy%d"), i), 0l);
-		recon->currX = pConfig->Read(wxString::Format(wxT("/resPhanBoxUx%d"), i), 0l);
-		recon->currY = pConfig->Read(wxString::Format(wxT("/resPhanBoxUy%d"), i), 0l);
+		recon->setSelBoxProj(pConfig->Read(wxString::Format(wxT("/resPhanBoxLx%d"), i), 0l), pConfig->Read(wxString::Format(wxT("/resPhanBoxUx%d"), i), 0l),
+			pConfig->Read(wxString::Format(wxT("/resPhanBoxLy%d"), i), 0l), pConfig->Read(wxString::Format(wxT("/resPhanBoxUy%d"), i), 0l));
 		recon->setReconBox(0);
 
 		recon->singleFrame();
@@ -448,8 +444,119 @@ void DTRMainWindow::onPageChange(wxAuiNotebookEvent& event) {
 	zoomSlider->Enable();
 	autoAll->Enable();
 
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetPage(temp);
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
 	//set all control values when switching tabs
-	//TODO
+	//Distance
+	distanceValue->SetValue(wxString::Format(wxT("%.2f"), recon->getDistance()));
+
+	//Step size
+	float val = recon->getStep();
+	stepVal->SetLabelText(wxString::Format(wxT("%1.1f"), val));
+	stepSlider->SetValue((int)(val * STEPFACTOR));
+
+	//Window and level
+	unsigned int minVal, maxVal;
+	recon->getLight(&minVal, &maxVal);
+	windowVal->SetLabelText(wxString::Format(wxT("%d"), maxVal));
+	levelVal->SetLabelText(wxString::Format(wxT("%d"), minVal));
+	windowSlider->SetValue(maxVal / WINLVLFACTOR);
+	levelSlider->SetValue(minVal / WINLVLFACTOR);
+
+	//Zoom
+	int zoom = recon->getZoom();
+	zoomVal->SetLabelText(wxString::Format(wxT("%5.2f"), pow(ZOOMFACTOR, zoom)));
+	zoomSlider->SetValue(zoom);
+
+	//Checkboxes
+	vertFlip->SetValue(recon->getVertFlip());
+	horFlip->SetValue(recon->getHorFlip());
+	logView->SetValue(recon->getLogView());
+	projectionView->SetValue(recon->getDataDisplay() == projections);
+
+	//Edge enhancement
+	derivative_t display = recon->getDisplay();
+	xEnhance->SetValue(display == mag_enhance || display == both_enhance || display == x_enhance || display == x_mag_enhance);
+	yEnhance->SetValue(display == mag_enhance || display == both_enhance || display == y_enhance || display == y_mag_enhance);
+	absEnhance->SetValue(display == mag_enhance || display == x_mag_enhance || display == y_mag_enhance);
+	float ratio = recon->getEnhanceRatio();
+	ratioValue->SetLabelText(wxString::Format(wxT("%2.1f"), ratio));
+	enhanceSlider->SetValue(ratio * ENHANCEFACTOR);
+
+	//Scan line removal
+	if (recon->scanVertIsEnabled()) {
+		scanVertValue->Enable(true);
+		resetScanVert->Enable(true);
+		scanVertSlider->Enable(true);
+	}
+	else {
+		scanVertValue->Enable(false);
+		resetScanVert->Enable(false);
+		scanVertSlider->Enable(false);
+	}
+	scanVertEnable->SetValue(recon->scanVertIsEnabled());
+	if (recon->scanHorIsEnabled()) {
+		scanHorValue->Enable(true);
+		resetScanHor->Enable(true);
+		scanHorSlider->Enable(true);
+	}
+	else {
+		scanHorValue->Enable(false);
+		resetScanHor->Enable(false);
+		scanHorSlider->Enable(false);
+	}
+	scanHorEnable->SetValue(recon->scanHorIsEnabled());
+	float vert = recon->getScanVertVal();
+	scanVertValue->SetLabelText(wxString::Format(wxT("%1.2f"), vert));
+	scanVertSlider->SetValue((int)(vert * SCANFACTOR));
+	float hor = recon->getScanHorVal();
+	scanHorValue->SetLabelText(wxString::Format(wxT("%1.2f"), hor));
+	scanHorSlider->SetValue((int)(hor * SCANFACTOR));
+
+	//Outlier denoising
+	if (recon->noiseMaxFilterIsEnabled()) {
+		noiseMaxVal->Enable(true);
+		resetNoiseMax->Enable(true);
+		noiseMaxSlider->Enable(true);
+	}
+	else {
+		noiseMaxVal->Enable(false);
+		resetNoiseMax->Enable(false);
+		noiseMaxSlider->Enable(false);
+	}
+	outlierEnable->SetValue(recon->noiseMaxFilterIsEnabled());
+	int max = recon->getNoiseMaxVal();
+	noiseMaxVal->SetLabelText(wxString::Format(wxT("%d"), max));
+	noiseMaxSlider->SetValue(max);
+
+	//TV Denoising
+	if (recon->TVIsEnabled()) {
+		lambdaVal->Enable(true);
+		resetLambda->Enable(true);
+		lambdaSlider->Enable(true);
+		iterLabel->Enable(true);
+		iterVal->Enable(true);
+		resetIter->Enable(true);
+		iterSlider->Enable(true);
+	}
+	else {
+		lambdaVal->Enable(false);
+		resetLambda->Enable(false);
+		lambdaSlider->Enable(false);
+		iterLabel->Enable(false);
+		iterVal->Enable(false);
+		resetIter->Enable(false);
+		iterSlider->Enable(false);
+	}
+	TVEnable->SetValue(recon->TVIsEnabled());
+	int lambda = recon->getTVLambda();
+	lambdaVal->SetLabelText(wxString::Format(wxT("%d"), lambda));
+	lambdaSlider->SetValue(lambda);
+	int iter = recon->getTVIter();
+	iterVal->SetLabelText(wxString::Format(wxT("%d"), iter));
+	iterSlider->SetValue(iter);
+
 	return;
 }
 
@@ -615,11 +722,11 @@ void DTRMainWindow::onProjectionView(wxCommandEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	if (projectionView->IsChecked()) {
-		recon->dataDisplay = projections;
+		recon->setDataDisplay(projections);
 		currentFrame->showScrollBar();
 	}
 	else {
-		recon->dataDisplay = reconstruction;
+		recon->setDataDisplay(reconstruction);
 		currentFrame->hideScrollBar();
 	}
 	
@@ -1475,7 +1582,6 @@ void DTRResDialog::onAddNew(wxCommandEvent& event) {
 	{
 		TomoRecon* recon = frame->m_canvas->recon;
 
-		recon->continuousMode = true;
 		recon->setDisplay(no_der);
 		recon->enableNoiseMaxFilter(false);
 		recon->enableScanVert(false);
@@ -1692,7 +1798,7 @@ void GLFrame::OnMousewheel(wxMouseEvent& event) {
 	else if (event.m_altDown)
 		m_canvas->recon->appendMaxLight(newScrollPos);
 	else {
-		if (m_canvas->recon->dataDisplay == reconstruction) {
+		if (m_canvas->recon->getDataDisplay() == reconstruction) {
 			m_canvas->recon->stepDistance(newScrollPos);
 			m_canvas->recon->singleFrame();
 		}
@@ -1809,13 +1915,15 @@ void CudaGLCanvas::paint(bool disChanged, wxTextCtrl* dis, wxSlider* zoom, wxSta
 		zoomSlider->SetValue(recon->getZoom());
 		windowSlider->SetValue(window / WINLVLFACTOR);
 		levelSlider->SetValue(level / WINLVLFACTOR);
-		zoomLabel->SetLabelText(wxString::Format(wxT("%.2f"), pow(ZOOMFACTOR, recon->zoom)));
+		zoomLabel->SetLabelText(wxString::Format(wxT("%.2f"), pow(ZOOMFACTOR, recon->getZoom())));
 		windowLabel->SetLabelText(wxString::Format(wxT("%d"), window));
 		levelLabel->SetLabelText(wxString::Format(wxT("%d"), level));
 	}
 
-	m_status->SetStatusText(wxString::Format(wxT("X offset: %d px."), recon->xOff), xOffset);
-	m_status->SetStatusText(wxString::Format(wxT("Y offset: %d px."), recon->yOff), yOffset);
+	int xOff, yOff;
+	recon->getOffsets(&xOff, &yOff);
+	m_status->SetStatusText(wxString::Format(wxT("X offset: %d px."), xOff), xOffset);
+	m_status->SetStatusText(wxString::Format(wxT("Y offset: %d px."), yOff), yOffset);
 
 
 	recon->draw(GetSize().x, GetSize().y);

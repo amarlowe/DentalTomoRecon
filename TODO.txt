@@ -9,7 +9,7 @@ TomoRecon
 - Look into upres using the mutltiple viewing angles
 - Confirm overwrite on save if file already exists
 - Make an automated test bench for algorithm changes
-- Correct for dead pixels (not necessarily on all projection inputs)
+- Correct for multipixel surface defects
 - Gui tools for translating scales into real world measurments
 - Image annotations
 - Remove focus artifacts, only show in focus areas
@@ -19,12 +19,10 @@ TomoRecon
 - Correct for non-xy shifts in the detector
 - Save projection images after processing
 - Save all toolbar settings for session end
-- Name tabs based on filename, check for duplicates
 - Add DICOM read functions
 
 --------------Bugs---------------------
 - Throw all tomo errors instead of crashing the program
-- Toolbar settings do not update on tab change
 
 -------------Completed------------------
 -------------Features------------------
@@ -72,6 +70,8 @@ TomoRecon
 - Switch between inputs in form using tab and/or enter
 - Add Units to all number descriptions in settings 
 - Save recon as DICOM from reconstruction mode
+- Correct for dead pixels
+- Name tabs based on filename
 
 --------------Bugs---------------------
 - additional lines included on increasing z size
@@ -105,3 +105,4 @@ TomoRecon
 - Close behavior breaks when the console is the selected tab
 - Changing config after opening image set does not update
 - Histogram lighting has some issues (see rmi single)
+- Toolbar settings do not update on tab change

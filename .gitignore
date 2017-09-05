@@ -48,3 +48,21 @@
 *.idb
 
 *.enc
+
+*.html
+
+*.png
+
+*.css
+
+*.js
+
+*.tex
+
+*.eps
+
+*.sty
+
+*.bat
+
+latex/
