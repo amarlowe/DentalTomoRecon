@@ -39,9 +39,17 @@ TomoError TomoRecon::setLogView(bool useLog) {
 	return Tomo_OK;
 }
 
+bool TomoRecon::getVertFlip() {
+	return constants.flip;
+}
+
 TomoError TomoRecon::setVertFlip(bool flip) {
 	constants.flip = flip;
 	return Tomo_OK;
+}
+
+bool TomoRecon::getHorFlip() {
+	return constants.orientation;
 }
 
 TomoError TomoRecon::setHorFlip(bool flip) {
@@ -61,6 +69,10 @@ TomoError TomoRecon::setDistance(float dist) {
 TomoError TomoRecon::stepDistance(int steps) {
 	distance += Sys.Geo.ZPitch * steps;
 	return Tomo_OK;
+}
+
+float TomoRecon::getStep() {
+	return Sys.Geo.ZPitch;
 }
 
 TomoError TomoRecon::setStep(float dis) {
@@ -274,9 +286,17 @@ TomoError TomoRecon::setDisplay(derivative_t type) {
 	return Tomo_OK;
 }
 
+sourceData TomoRecon::getDataDisplay() {
+	return dataDisplay;
+}
+
 TomoError TomoRecon::setDataDisplay(sourceData data) {
 	dataDisplay = data;
 	return Tomo_OK;
+}
+
+float TomoRecon::getEnhanceRatio() {
+	return constants.ratio;
 }
 
 TomoError TomoRecon::setEnhanceRatio(float ratio) {
@@ -284,14 +304,8 @@ TomoError TomoRecon::setEnhanceRatio(float ratio) {
 	return Tomo_OK;
 }
 
-TomoError TomoRecon::enableNoiseMaxFilter(bool enable) {
-	constants.useMaxNoise = enable;
-	return Tomo_OK;
-}
-
-TomoError TomoRecon::setNoiseMaxVal(int max) {
-	constants.maxNoise = max;
-	return Tomo_OK;
+bool TomoRecon::scanVertIsEnabled() {
+	return cConstants.scanVertEnable;
 }
 
 TomoError TomoRecon::enableScanVert(bool enable) {
@@ -299,14 +313,26 @@ TomoError TomoRecon::enableScanVert(bool enable) {
 	return Tomo_OK;
 }
 
+float TomoRecon::getScanVertVal() {
+	return cConstants.vertTau;
+}
+
 TomoError TomoRecon::setScanVertVal(float tau) {
 	cConstants.vertTau = tau;
 	return Tomo_OK;
 }
 
+bool TomoRecon::scanHorIsEnabled() {
+	return cConstants.scanHorEnable;
+}
+
 TomoError TomoRecon::enableScanHor(bool enable) {
 	cConstants.scanHorEnable = enable;
 	return Tomo_OK;
+}
+
+float TomoRecon::getScanHorVal() {
+	return cConstants.horTau;
 }
 
 TomoError TomoRecon::setScanHorVal(float tau) {
@@ -319,14 +345,44 @@ TomoError TomoRecon::setShowNegative(bool showNegative) {
 	return Tomo_OK;
 }
 
+bool TomoRecon::noiseMaxFilterIsEnabled() {
+	return constants.useMaxNoise;
+}
+
+TomoError TomoRecon::enableNoiseMaxFilter(bool enable) {
+	constants.useMaxNoise = enable;
+	return Tomo_OK;
+}
+
+int TomoRecon::getNoiseMaxVal() {
+	return constants.maxNoise;
+}
+
+TomoError TomoRecon::setNoiseMaxVal(int max) {
+	constants.maxNoise = max;
+	return Tomo_OK;
+}
+
+bool TomoRecon::TVIsEnabled() {
+	return useTV;
+}
+
 TomoError TomoRecon::enableTV(bool enable) {
 	useTV = enable;
 	return Tomo_OK;
 }
 
+float TomoRecon::getTVLambda() {
+	return lambda / UCHAR_MAX;
+}
+
 TomoError TomoRecon::setTVLambda(float TVLambda) {
 	lambda = TVLambda * UCHAR_MAX;
 	return Tomo_OK;
+}
+
+float TomoRecon::getTVIter() {
+	return iter;
 }
 
 TomoError TomoRecon::setTVIter(float TVIter) {

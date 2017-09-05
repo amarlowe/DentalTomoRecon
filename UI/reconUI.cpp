@@ -276,7 +276,7 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	noiseToolbar->AddControl( iterVal );
 	resetIter = new wxButton( noiseToolbar, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxDefaultSize, 0 );
 	noiseToolbar->AddControl( resetIter );
-	iterSlider = new wxSlider( noiseToolbar, wxID_ANY, 20, 1, 500, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	iterSlider = new wxSlider( noiseToolbar, wxID_ANY, 20, 1, 50, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
 	noiseToolbar->AddControl( iterSlider );
 	noiseToolbar->Realize();
 	m_mgr.AddPane( noiseToolbar, wxAuiPaneInfo() .Top() .CaptionVisible( false ).CloseButton( false ).PaneBorder( false ).Movable( false ).Dock().Resizable().FloatingSize( wxDefaultSize ).DockFixed( true ).BottomDockable( false ).TopDockable( false ).LeftDockable( false ).RightDockable( false ).Floatable( false ).Layer( 10 ) );
