@@ -1943,6 +1943,7 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
 
 void CudaGLCanvas::OnChar(wxKeyEvent& event){
 	//Switch the derivative display
+#ifdef ENABLEZDER
 	if (event.GetKeyCode() == 32) {
 		switch (recon->getDisplay()) {
 		case no_der:
@@ -2004,6 +2005,7 @@ void CudaGLCanvas::OnChar(wxKeyEvent& event){
 
 		paint();
 	}
+#endif //ENABLEZDER
 }
 
 wxBEGIN_EVENT_TABLE(CudaGLInCanvas, wxGLCanvas)

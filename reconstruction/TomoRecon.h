@@ -74,7 +74,7 @@
 //Code use parameters
 //#define PROFILER
 //#define PRINTSCANCORRECTIONS
-#define ENABLEZDER
+//#define ENABLEZDER
 //#define PRINTMEMORYUSAGE
 
 //Defaults
