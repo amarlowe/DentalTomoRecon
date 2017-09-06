@@ -166,11 +166,11 @@ __global__ void add(float* src1, float* src2, float *d_Dst, int pitch, bool useR
 	if (useRatio) {
 		if (useAbs) {
 			float val = consts.log ? abs(src2[MUL_ADD(y, pitch, x)]) : USHRT_MAX - abs(src2[MUL_ADD(y, pitch, x)]);
-			d_Dst[MUL_ADD(y, pitch, x)] = (src1[MUL_ADD(y, pitch, x)] + val * consts.ratio) / (abs(consts.ratio) + 1);
+			d_Dst[MUL_ADD(y, pitch, x)] = src1[MUL_ADD(y, pitch, x)] * consts.ratio + val * (1 - consts.ratio);
 		}
 		else {
 			float val = consts.log ? src2[MUL_ADD(y, pitch, x)] : USHRT_MAX - src2[MUL_ADD(y, pitch, x)];
-			d_Dst[MUL_ADD(y, pitch, x)] = (src1[MUL_ADD(y, pitch, x)] + val * consts.ratio) / (abs(consts.ratio) + 1);
+			d_Dst[MUL_ADD(y, pitch, x)] = src1[MUL_ADD(y, pitch, x)] * consts.ratio + val * (1 - consts.ratio);
 		}
 	}
 	else
@@ -362,7 +362,6 @@ __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, uns
 		if (consts.flip) y = consts.Py - 1 - j;
 		else y = j;
 
-		//float val = (float)Proj[j*consts.Px + i] - (float)Dark[j*consts.Px + i];
 		float val = Proj[j*consts.Px + i];
 
 		if (val < LOWTHRESH) val = 0.0;
@@ -705,6 +704,8 @@ TomoError TomoRecon::initGPU(){
 	cuda(MallocPitch((void**)&d_Image, &reconPitch, Sys.Recon.Nx * sizeof(float), Sys.Recon.Ny));
 	cuda(MallocPitch((void**)&d_Error, &reconPitch, Sys.Recon.Nx * sizeof(float), Sys.Recon.Ny));
 	cuda(MallocPitch((void**)&d_Sino, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
+	cuda(MallocPitch((void**)&inXBuff, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
+	cuda(MallocPitch((void**)&inYBuff, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
 
 	reconPitchNum = (int)reconPitch / sizeof(float);
 
@@ -758,14 +759,6 @@ TomoError TomoRecon::initGPU(){
 	//Setup derivative buffers
 	cuda(Malloc(&buff1, sizeIM * sizeof(float)));
 	cuda(Malloc(&buff2, sizeIM * sizeof(float)));
-	float * tempZBuffs[KERNELSIZE];
-	cuda(Malloc(&zBuffs, KERNELSIZE * sizeof(float*)));
-	for (int i = 0; i < KERNELSIZE; i++) {
-		cuda(Malloc(&tempZBuffs[i], sizeIM * sizeof(float)));
-	}
-	cuda(MemcpyAsync(zBuffs, tempZBuffs, KERNELSIZE * sizeof(float*), cudaMemcpyHostToDevice));
-
-	cuda(MallocPitch((void**)&inBuff, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
 
 	//Set up all kernels
 	cuda(Malloc(&d_gauss, KERNELSIZE * sizeof(float)));
@@ -977,6 +970,11 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 				KERNELCALL2(updhgF_SoA, n_blocks, block_size, input, z1, z2, g, tf, lambda, nx, ny);
 			}
 		}
+
+		//Get x and y derivatives and save to their own buffers
+		cuda(Memcpy(d_Image, d_Sino + view * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+		imageKernel(d_gaussDer, d_gauss, inXBuff + view * projPitch / sizeof(float) * Sys.Proj.Ny);
+		imageKernel(d_gauss, d_gaussDer, inYBuff + view * projPitch / sizeof(float) * Sys.Proj.Ny);
 	}
 
 	/* free device memory */
@@ -1123,8 +1121,10 @@ TomoError TomoRecon::FreeGPUMemory(void){
 	cuda(Free(d_Image));
 	cuda(Free(d_Error));
 	cuda(Free(d_Sino));
-	cuda(Free(buff1));
-	cuda(Free(buff2));
+	cuda(Free(d_Sino));
+	cuda(Free(d_Sino));
+	cuda(Free(inXBuff));
+	cuda(Free(inYBuff));
 
 	cuda(Free(constants.d_Beamx));
 	cuda(Free(constants.d_Beamy));
@@ -1192,9 +1192,11 @@ TomoError TomoRecon::singleFrame() {
 	//Initial projection
 	switch (dataDisplay) {
 	case reconstruction:
-		cuda(BindTexture2D(NULL, textError, d_Sino, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
-		KERNELCALL2(projectSlice, contBlocks, contThreads, d_Image, distance, constants);
-		cuda(UnbindTexture(textError));
+		if (derDisplay != square_mag) {//only case frequently used that doesn't need this, leads to 3/2x speedup in autofocus
+			cuda(BindTexture2D(NULL, textError, d_Sino, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
+			KERNELCALL2(projectSlice, contBlocks, contThreads, d_Image, distance, constants);
+			cuda(UnbindTexture(textError));
+		}
 		break;
 	case projections:
 		cuda(Memcpy(d_Image, d_Sino + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
@@ -1203,45 +1205,93 @@ TomoError TomoRecon::singleFrame() {
 
 	switch (derDisplay) {
 	case no_der:
-		
 		break;
 	case x_mag_enhance:
-		imageKernel(d_gaussDer, d_gauss, buff1);
+		if (dataDisplay == projections) {
+			cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+		}
+		else {
+			project(inXBuff, buff1);
+		}
 		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, true, true, constants);
 		break;
 	case y_mag_enhance:
-		imageKernel(d_gauss, d_gaussDer, buff1);
+		if (dataDisplay == projections) {
+			cuda(Memcpy(buff1, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+		}
+		else {
+			project(inYBuff, buff1);
+		}
 		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, true, true, constants);
 		break;
 	case mag_enhance:
-		imageKernel(d_gaussDer, d_gauss, buff1);
-		imageKernel(d_gauss, d_gaussDer, buff2);
+		if (dataDisplay == projections) {
+			cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+			cuda(Memcpy(buff2, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+		}
+		else {
+			project(inXBuff, buff1);
+			project(inYBuff, buff2);
+		}
+		
 		KERNELCALL2(mag, contBlocks, contThreads, buff1, buff2, buff1, reconPitchNum, reconPitchNum, constants);
 		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, true, false, constants);
 		break;
 	case x_enhance:
-		imageKernel(d_gaussDer, d_gauss, buff1);
+		if (dataDisplay == projections) {
+			cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+		}
+		else {
+			project(inXBuff, buff1);
+		}
 		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, true, false, constants);
 		break;
 	case y_enhance:
-		imageKernel(d_gauss, d_gaussDer, buff1);
+		if (dataDisplay == projections) {
+			cuda(Memcpy(buff1, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+		}
+		else {
+			project(inYBuff, buff1);
+		}
 		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, true, false, constants);
 		break;
 	case both_enhance:
-		imageKernel(d_gaussDer, d_gauss, buff1);
-		imageKernel(d_gauss, d_gaussDer, buff2);
+		if (dataDisplay == projections) {
+			cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+			cuda(Memcpy(buff2, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+		}
+		else {
+			project(inXBuff, buff1);
+			project(inYBuff, buff2);
+		}
 		KERNELCALL2(add, contBlocks, contThreads, buff1, buff2, buff1, Sys.Recon.Nx, false, false, constants);
 		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, true, false, constants);
 		break;
 	case der_x:
-		imageKernel(d_gaussDer, d_gauss, d_Image);
+		if (dataDisplay == projections) {
+			cuda(Memcpy(d_Image, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+		}
+		else {
+			project(inXBuff, d_Image);
+		}
 		break;
 	case der_y:
-		imageKernel(d_gauss, d_gaussDer, d_Image);
+		if (dataDisplay == projections) {
+			cuda(Memcpy(d_Image, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+		}
+		else {
+			project(inYBuff, d_Image);
+		}
 		break;
 	case square_mag:
-		imageKernel(d_gaussDer, d_gauss, buff1);
-		imageKernel(d_gauss, d_gaussDer, d_Image);
+		if (dataDisplay == projections) {
+			cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+			cuda(Memcpy(d_Image, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+		}
+		else {
+			project(inXBuff, buff1);
+			project(inYBuff, d_Image);
+		}
 
 		KERNELCALL2(squareMag, contBlocks, contThreads, d_Image, buff1, d_Image, reconPitchNum, reconPitchNum, constants);
 		break;
@@ -1272,14 +1322,14 @@ TomoError TomoRecon::singleFrame() {
 		break;
 	case z_der_mag:
 	{
-		for (int i = 0; i <= NUMVIEWS; i++) {
+		/*for (int i = 0; i <= NUMVIEWS; i++) {
 			cuda(Memcpy(d_Image, d_Sino + i * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
 			imageKernel(d_gaussDer, d_gauss, buff1);
 			imageKernel(d_gauss, d_gaussDer, buff2);
 			KERNELCALL2(mag, contBlocks, contThreads, inBuff + projPitch / sizeof(float) * Sys.Proj.Ny *sliceIndex, buff2, buff1, reconPitchNum, reconPitchNum, constants);
 			//imageKernel(d_gaussDer, d_gauss, inBuff + projPitch / sizeof(float) * Sys.Proj.Ny * i);
 		}
-		cuda(Memcpy(d_Image, inBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+		cuda(Memcpy(d_Image, inBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));*/
 		/*
 		cuda(BindTexture2D(NULL, textError, inBuff, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
 		KERNELCALL2(projectSlice, contBlocks, contThreads, d_Image, distance, constants);
@@ -1720,6 +1770,12 @@ inline TomoError TomoRecon::imageKernel(float xK[KERNELSIZE], float yK[KERNELSIZ
 	cuda(UnbindTexture(textImage));
 
 	return Tomo_OK;
+}
+
+inline TomoError TomoRecon::project(float * projections, float * reconstruction) {
+	cuda(BindTexture2D(NULL, textError, projections, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
+	KERNELCALL2(projectSlice, contBlocks, contThreads, reconstruction, distance, constants);
+	cuda(UnbindTexture(textError));
 }
 
 TomoError TomoRecon::resetLight() {

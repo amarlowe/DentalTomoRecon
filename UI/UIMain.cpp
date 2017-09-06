@@ -817,7 +817,7 @@ void DTRMainWindow::onResetEnhance(wxCommandEvent& WXUNUSED(event)) {
 
 void DTRMainWindow::onEnhanceRatio(wxScrollEvent& event) {
 	float value = (float)event.GetPosition() / ENHANCEFACTOR;
-	ratioValue->SetLabelText(wxString::Format(wxT("%2.1f"), value));
+	ratioValue->SetLabelText(wxString::Format(wxT("%2.2f"), value));
 
 	if (checkForConsole()) return;
 	

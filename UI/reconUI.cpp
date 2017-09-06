@@ -194,12 +194,12 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	ratioLabel->SetForegroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_CAPTIONTEXT ) );
 	
 	edgeToolbar->AddControl( ratioLabel );
-	ratioValue = new wxStaticText( edgeToolbar, wxID_ANY, wxT("5.0"), wxDefaultPosition, wxDefaultSize, 0 );
+	ratioValue = new wxStaticText( edgeToolbar, wxID_ANY, wxT("0.5"), wxDefaultPosition, wxDefaultSize, 0 );
 	ratioValue->Wrap( -1 );
 	edgeToolbar->AddControl( ratioValue );
 	resetEnhance = new wxButton( edgeToolbar, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxSize( 50,20 ), 0 );
 	edgeToolbar->AddControl( resetEnhance );
-	enhanceSlider = new wxSlider( edgeToolbar, wxID_ANY, 50, 0, 200, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	enhanceSlider = new wxSlider( edgeToolbar, wxID_ANY, 50, 0, 100, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
 	edgeToolbar->AddControl( enhanceSlider );
 	edgeToolbar->Realize();
 	m_mgr.AddPane( edgeToolbar, wxAuiPaneInfo() .Top() .CaptionVisible( false ).CloseButton( false ).PaneBorder( false ).Movable( false ).Dock().Resizable().FloatingSize( wxDefaultSize ).DockFixed( true ).BottomDockable( false ).TopDockable( false ).LeftDockable( false ).RightDockable( false ).Floatable( false ).Layer( 10 ) );
