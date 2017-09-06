@@ -669,23 +669,23 @@ TomoError TomoRecon::initGPU(){
 		Sys.Geo.EmitY[i] -= Sys.Geo.IsoY;
 	}
 
-	/*size_t avail_mem;
+#ifdef PRINTMEMORYUSAGE
+	size_t avail_mem;
 	size_t total_mem;
 	cudaMemGetInfo(&avail_mem, &total_mem);
-	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";*/
+	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
+#endif // PRINTMEMORYUSAGE
 
 	//Get Device Number
-	cudaError_t cudaStatus = cudaSetDevice(0);
-	if (cudaStatus != cudaSuccess) {
-		cudaStatus = cudaSetDevice(1);
-		if (cudaStatus != cudaSuccess) {
-			cudaStatus = cudaSetDevice(2);
-			if (cudaStatus != cudaSuccess) {
-				std::cout << "Error: cudaSetDevice failed!" << std::endl;
-				exit(1);
-			}
-		}
+	cudaError_t cudaStatus;
+	int deviceCount;
+	int failedAttempts = 0;
+	cuda(GetDeviceCount(&deviceCount));
+	for (int i = 0; i < deviceCount; i++) {
+		if (cudaSetDevice(i) == cudaSuccess) break;
+		failedAttempts++;
 	}
+	if (failedAttempts == deviceCount) return Tomo_CUDA_err;
 
 	cuda(StreamCreateWithFlags(&stream, cudaStreamDefault));
 
@@ -782,8 +782,10 @@ TomoError TomoRecon::initGPU(){
 	setGaussDer3(tempKernelDer3);
 	cuda(MemcpyAsync(d_gaussDer3, tempKernelDer3, KERNELSIZE * sizeof(float), cudaMemcpyHostToDevice));*/
 
-	//cudaMemGetInfo(&avail_mem, &total_mem);
-	//std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
+#ifdef PRINTMEMORYUSAGE
+	cudaMemGetInfo(&avail_mem, &total_mem);
+	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
+#endif // PRINTMEMORYUSAGE
 
 	return Tomo_OK;
 }
@@ -857,8 +859,8 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 	}
 
 	for (int view = 0; view < NumViews; view++) {
-		scanLineDetect(view, d_SumValsVert, sumValsVert + view * Sys.Proj.Nx, vertOff + view * Sys.Proj.Nx, true, cConstants.scanVertEnable);
-		scanLineDetect(view, d_SumValsHor, sumValsHor + view * Sys.Proj.Ny, horOff + view * Sys.Proj.Ny, false, cConstants.scanHorEnable);
+		tomo_err_throw(scanLineDetect(view, d_SumValsVert, sumValsVert + view * Sys.Proj.Nx, vertOff + view * Sys.Proj.Nx, true, cConstants.scanVertEnable));
+		tomo_err_throw(scanLineDetect(view, d_SumValsHor, sumValsHor + view * Sys.Proj.Ny, horOff + view * Sys.Proj.Ny, false, cConstants.scanHorEnable));
 	}
 
 	float step = 10;
@@ -892,8 +894,8 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 	//Normalize projection image lighting
 	float maxVal, minVal;
 	unsigned int histogram[HIST_BIN_COUNT];
-	getHistogram(d_Sino + (NumViews / 2)*projPitch / sizeof(float)*Sys.Proj.Ny, projPitch*Sys.Proj.Ny, histogram);
-	autoLight(histogram, 80, &minVal, &maxVal);
+	tomo_err_throw(getHistogram(d_Sino + (NumViews / 2)*projPitch / sizeof(float)*Sys.Proj.Ny, projPitch*Sys.Proj.Ny, histogram));
+	tomo_err_throw(autoLight(histogram, 80, &minVal, &maxVal));
 	cuda(Memcpy(d_MinVal, &minVal, sizeof(float), cudaMemcpyHostToDevice));
 
 	float *g, *z1, *z2;
@@ -904,9 +906,9 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 	size = nx*ny * sizeof(float);
 	float tz = 2, tf = .2, beta = 0.0001;
 	/* allocate device memory */
-	cudaMalloc((void **)&g, size);
-	cudaMalloc((void **)&z1, size);
-	cudaMalloc((void **)&z2, size);
+	cuda(Malloc((void **)&g, size));
+	cuda(Malloc((void **)&z1, size));
+	cuda(Malloc((void **)&z2, size));
 
 	/* setup a 2D thread grid, with 16x16 blocks */
 	/* each block is will use nearby memory*/
@@ -916,32 +918,6 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 
 	for (int view = 0; view < NumViews; view++) {
 		cuda(MemcpyAsync(d_MaxVal, &maxVal, sizeof(float), cudaMemcpyHostToDevice));
-		/*
-		{
-			std::ofstream FILE1, FILE2;
-			std::stringstream outputfile1, outputfile2;
-			outputfile1 << "C:\\Users\\jdean\\Downloads\\cudaTV\\cudaTV\\correctedVert" << view << ".txt";
-			outputfile2 << "C:\\Users\\jdean\\Downloads\\cudaTV\\cudaTV\\correctedHor" << view << ".txt";
-			FILE1.open(outputfile1.str());
-			for (int i = 0; i < Sys.Proj.Nx; i++) {
-				//int x = i + Sys.Geo.EmitX[view] * distance / Sys.Geo.EmitZ[view] / constants.PitchPx;
-				int x = i;
-				if(x < Sys.Proj.Nx && x > 0)
-					FILE1 << sumValsVert[x + view * Sys.Proj.Nx] << "\n";
-				else FILE1 << 0.0 << "\n";
-			}
-			FILE1.close();
-
-			FILE2.open(outputfile2.str());
-			for (int i = 0; i < Sys.Proj.Ny; i++) {
-				//int x = i + Sys.Geo.EmitY[view] * distance / Sys.Geo.EmitZ[view] / constants.PitchPy;
-				int x = i;
-				if (x < Sys.Proj.Ny && x > 0)
-					FILE2 << sumValsHor[x + view * Sys.Proj.Ny] << "\n";
-				else FILE2 << 0.0 << "\n";
-			}
-			FILE2.close();
-		}*/
 
 		cuda(MemcpyAsync(d_SumValsVert, vertOff + view * Sys.Proj.Nx, Sys.Proj.Nx * sizeof(float), cudaMemcpyHostToDevice));
 		cuda(MemcpyAsync(d_SumValsHor, horOff + view * Sys.Proj.Ny, Sys.Proj.Ny * sizeof(float), cudaMemcpyHostToDevice));
@@ -973,8 +949,8 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 
 		//Get x and y derivatives and save to their own buffers
 		cuda(Memcpy(d_Image, d_Sino + view * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
-		imageKernel(d_gaussDer, d_gauss, inXBuff + view * projPitch / sizeof(float) * Sys.Proj.Ny);
-		imageKernel(d_gauss, d_gaussDer, inYBuff + view * projPitch / sizeof(float) * Sys.Proj.Ny);
+		tomo_err_throw(imageKernel(d_gaussDer, d_gauss, inXBuff + view * projPitch / sizeof(float) * Sys.Proj.Ny));
+		tomo_err_throw(imageKernel(d_gauss, d_gaussDer, inYBuff + view * projPitch / sizeof(float) * Sys.Proj.Ny));
 	}
 
 	/* free device memory */
@@ -1021,7 +997,7 @@ TomoError TomoRecon::WriteDICOMFullData(std::string Path, int slices) {
 	for (int i = 0; i < slices; i++) {
 		singleFrame();
 		distance += Sys.Geo.ZPitch;
-		cudaMemcpy(RawData, d_Image, reconPitch*Sys.Recon.Ny, cudaMemcpyDeviceToHost);
+		cuda(Memcpy(RawData, d_Image, reconPitch*Sys.Recon.Ny, cudaMemcpyDeviceToHost));
 		for (int j = 0; j < reconPitch / sizeof(float)*Sys.Proj.Ny; j++) {
 			float data = RawData[j];
 			if (data != 0.0) {
@@ -1037,10 +1013,11 @@ TomoError TomoRecon::WriteDICOMFullData(std::string Path, int slices) {
 	}
 	
 	distance = oldDistance;
-	singleFrame();
 	fclose(ReconData);
 	delete[] RawData;
 	delete[] output;
+
+	tomo_err_throw(singleFrame());
 
 	return Tomo_OK;
 }
@@ -1121,14 +1098,16 @@ TomoError TomoRecon::FreeGPUMemory(void){
 	cuda(Free(d_Image));
 	cuda(Free(d_Error));
 	cuda(Free(d_Sino));
-	cuda(Free(d_Sino));
-	cuda(Free(d_Sino));
+	cuda(Free(buff1));
+	cuda(Free(buff2));
 	cuda(Free(inXBuff));
 	cuda(Free(inYBuff));
 
 	cuda(Free(constants.d_Beamx));
 	cuda(Free(constants.d_Beamy));
 	cuda(Free(constants.d_Beamz));
+	cuda(Free(d_MaxVal));
+	cuda(Free(d_MinVal));
 
 	cuda(Free(d_gauss));
 	cuda(Free(d_gaussDer));
@@ -1211,7 +1190,7 @@ TomoError TomoRecon::singleFrame() {
 			cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
 		}
 		else {
-			project(inXBuff, buff1);
+			tomo_err_throw(project(inXBuff, buff1));
 		}
 		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, true, true, constants);
 		break;
@@ -1220,7 +1199,7 @@ TomoError TomoRecon::singleFrame() {
 			cuda(Memcpy(buff1, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
 		}
 		else {
-			project(inYBuff, buff1);
+			tomo_err_throw(project(inYBuff, buff1));
 		}
 		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, true, true, constants);
 		break;
@@ -1230,8 +1209,8 @@ TomoError TomoRecon::singleFrame() {
 			cuda(Memcpy(buff2, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
 		}
 		else {
-			project(inXBuff, buff1);
-			project(inYBuff, buff2);
+			tomo_err_throw(project(inXBuff, buff1));
+			tomo_err_throw(project(inYBuff, buff2));
 		}
 		
 		KERNELCALL2(mag, contBlocks, contThreads, buff1, buff2, buff1, reconPitchNum, reconPitchNum, constants);
@@ -1242,7 +1221,7 @@ TomoError TomoRecon::singleFrame() {
 			cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
 		}
 		else {
-			project(inXBuff, buff1);
+			tomo_err_throw(project(inXBuff, buff1));
 		}
 		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, true, false, constants);
 		break;
@@ -1251,7 +1230,7 @@ TomoError TomoRecon::singleFrame() {
 			cuda(Memcpy(buff1, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
 		}
 		else {
-			project(inYBuff, buff1);
+			tomo_err_throw(project(inYBuff, buff1));
 		}
 		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, true, false, constants);
 		break;
@@ -1261,8 +1240,8 @@ TomoError TomoRecon::singleFrame() {
 			cuda(Memcpy(buff2, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
 		}
 		else {
-			project(inXBuff, buff1);
-			project(inYBuff, buff2);
+			tomo_err_throw(project(inXBuff, buff1));
+			tomo_err_throw(project(inYBuff, buff2));
 		}
 		KERNELCALL2(add, contBlocks, contThreads, buff1, buff2, buff1, Sys.Recon.Nx, false, false, constants);
 		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, true, false, constants);
@@ -1272,7 +1251,7 @@ TomoError TomoRecon::singleFrame() {
 			cuda(Memcpy(d_Image, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
 		}
 		else {
-			project(inXBuff, d_Image);
+			tomo_err_throw(project(inXBuff, d_Image));
 		}
 		break;
 	case der_y:
@@ -1280,7 +1259,7 @@ TomoError TomoRecon::singleFrame() {
 			cuda(Memcpy(d_Image, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
 		}
 		else {
-			project(inYBuff, d_Image);
+			tomo_err_throw(project(inYBuff, d_Image));
 		}
 		break;
 	case square_mag:
@@ -1289,8 +1268,8 @@ TomoError TomoRecon::singleFrame() {
 			cuda(Memcpy(d_Image, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
 		}
 		else {
-			project(inXBuff, buff1);
-			project(inYBuff, d_Image);
+			tomo_err_throw(project(inXBuff, buff1));
+			tomo_err_throw(project(inYBuff, d_Image));
 		}
 
 		KERNELCALL2(squareMag, contBlocks, contThreads, d_Image, buff1, d_Image, reconPitchNum, reconPitchNum, constants);
@@ -1303,10 +1282,10 @@ TomoError TomoRecon::singleFrame() {
 	}
 		break;
 	case der2_x:
-		imageKernel(d_gaussDer2, d_gauss, d_Image);
+		tomo_err_throw(imageKernel(d_gaussDer2, d_gauss, d_Image));
 		break;
 	case der2_y:
-		imageKernel(d_gauss, d_gaussDer2, d_Image);
+		tomo_err_throw(imageKernel(d_gauss, d_gaussDer2, d_Image));
 		break;
 	case der3_x:
 		//imageKernel(d_gaussDer3, d_gauss, d_Image);
@@ -1318,7 +1297,7 @@ TomoError TomoRecon::singleFrame() {
 		/*imageKernel(d_gaussDer, d_gauss, buff1);
 		imageKernel(d_gauss, d_gaussDer, buff2);
 		KERNELCALL2(mag, contBlocks, contThreads, d_Image, buff2, buff1, reconPitchNum, reconPitchNum, constants);*/
-		imageKernel(d_gaussDer, d_gauss, d_Image);
+		tomo_err_throw(imageKernel(d_gaussDer, d_gauss, d_Image));
 		break;
 	case z_der_mag:
 	{
@@ -1375,7 +1354,6 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 		linearRegion = false;
 		oldDisplay = derDisplay;
 		derDisplay = square_mag;
-		singleFrame();
 	}
 
 	float newVal = focusHelper();
@@ -1438,48 +1416,44 @@ TomoError TomoRecon::autoGeo(bool firstRun) {
 		light = -150;
 	}
 
-	if (continuousMode) {
-		float newVal = focusHelper();
-		float newOffset = xDir ? Sys.Geo.EmitX[diffSlice] : Sys.Geo.EmitY[diffSlice];
+	float newVal = focusHelper();
+	float newOffset = xDir ? Sys.Geo.EmitX[diffSlice] : Sys.Geo.EmitY[diffSlice];
 
-		//compare to current
-		if (newVal < best) {
-			best = newVal;
-			newOffset += step;
-		}
-		else {
-			newOffset -= step;//revert last move
-
-			//find next step
-			step = -step / 2;
-			if (abs(step) < GEOLAST) {
-				step = GEOSTART;
-				best = FLT_MAX;
-				if (xDir) Sys.Geo.EmitX[diffSlice] = newOffset;
-				else Sys.Geo.EmitY[diffSlice] = newOffset;
-				xDir = !xDir;
-				if (xDir) diffSlice++;//if we're back on xDir, we've made the next step
-				if (diffSlice == (NUMVIEWS / 2)) diffSlice++;//skip center, it's what we're comparing
-				if (diffSlice >= NUMVIEWS) {
-					light = oldLight;
-					derDisplay = no_der;
-					cuda(MemcpyAsync(constants.d_Beamx, Sys.Geo.EmitX, Sys.Proj.NumViews * sizeof(float), cudaMemcpyHostToDevice));
-					cuda(MemcpyAsync(constants.d_Beamy, Sys.Geo.EmitY, Sys.Proj.NumViews * sizeof(float), cudaMemcpyHostToDevice));
-					return Tomo_Done;
-				}
-				return Tomo_OK;//skip the rest so values don't bleed into one another
-			}
-
-			newOffset += step;
-		}
-
-		if (xDir) Sys.Geo.EmitX[diffSlice] = newOffset;
-		else Sys.Geo.EmitY[diffSlice] = newOffset;
-
-		return Tomo_OK;
+	//compare to current
+	if (newVal < best) {
+		best = newVal;
+		newOffset += step;
 	}
-	
-	return Tomo_Done;
+	else {
+		newOffset -= step;//revert last move
+
+		//find next step
+		step = -step / 2;
+		if (abs(step) < GEOLAST) {
+			step = GEOSTART;
+			best = FLT_MAX;
+			if (xDir) Sys.Geo.EmitX[diffSlice] = newOffset;
+			else Sys.Geo.EmitY[diffSlice] = newOffset;
+			xDir = !xDir;
+			if (xDir) diffSlice++;//if we're back on xDir, we've made the next step
+			if (diffSlice == (NUMVIEWS / 2)) diffSlice++;//skip center, it's what we're comparing
+			if (diffSlice >= NUMVIEWS) {
+				light = oldLight;
+				derDisplay = no_der;
+				cuda(MemcpyAsync(constants.d_Beamx, Sys.Geo.EmitX, Sys.Proj.NumViews * sizeof(float), cudaMemcpyHostToDevice));
+				cuda(MemcpyAsync(constants.d_Beamy, Sys.Geo.EmitY, Sys.Proj.NumViews * sizeof(float), cudaMemcpyHostToDevice));
+				return Tomo_Done;
+			}
+			return Tomo_OK;//skip the rest so values don't bleed into one another
+		}
+
+		newOffset += step;
+	}
+
+	if (xDir) Sys.Geo.EmitX[diffSlice] = newOffset;
+	else Sys.Geo.EmitY[diffSlice] = newOffset;
+
+	return Tomo_OK;
 }
 
 TomoError TomoRecon::autoLight(unsigned int histogram[HIST_BIN_COUNT], int threshold, float * minVal, float * maxVal) {
@@ -1488,7 +1462,7 @@ TomoError TomoRecon::autoLight(unsigned int histogram[HIST_BIN_COUNT], int thres
 	if (histogram == NULL) {
 		emptyHist = true;
 		histogram = new unsigned int[HIST_BIN_COUNT];
-		getHistogram(d_Image, reconPitch*Sys.Recon.Ny, histogram);
+		tomo_err_throw(getHistogram(d_Image, reconPitch*Sys.Recon.Ny, histogram));
 		innerThresh = Sys.Recon.Nx * Sys.Recon.Ny / AUTOTHRESHOLD;
 		minVal = &constants.minVal;
 		maxVal = &constants.maxVal;
@@ -1681,8 +1655,8 @@ TomoError TomoRecon::testTolerances(std::vector<toleranceData> &data, bool first
 	if (firstRun) {
 		if(vertical) derDisplay = der2_x;
 		else derDisplay = der2_y;
-		singleFrame();
-		autoLight();
+		tomo_err_throw(singleFrame());
+		tomo_err_throw(autoLight());
 		iter = data.begin();
 		return Tomo_OK;
 	}
@@ -1734,7 +1708,7 @@ TomoError TomoRecon::testTolerances(std::vector<toleranceData> &data, bool first
 	singleFrame();
 
 	float readVal;
-	readPhantom(&readVal);
+	tomo_err_throw(readPhantom(&readVal));
 	iter->phantomData = readVal;
 	++iter;
 
@@ -1784,7 +1758,7 @@ TomoError TomoRecon::resetLight() {
 	constants.currXr = Sys.Recon.Nx / 4;
 	constants.currYr = Sys.Recon.Ny / 4;
 
-	autoLight();
+	tomo_err_throw(autoLight());
 
 	constants.baseXr = -1;
 	constants.baseYr = -1;
@@ -1800,7 +1774,7 @@ TomoError TomoRecon::resetFocus() {
 	constants.currXr = Sys.Recon.Nx / 4;
 	constants.currYr = Sys.Recon.Ny / 4;
 
-	autoFocus(true);
+	tomo_err_throw(autoFocus(true));
 	while (autoFocus(false) == Tomo_OK);
 
 	constants.baseXr = -1;
@@ -1809,62 +1783,6 @@ TomoError TomoRecon::resetFocus() {
 	constants.currYr = -1;
 
 	return Tomo_OK;
-}
-
-float TomoRecon::graphCost(float * vertGraph, float * horGraph, int view, float offset, float lightScale, float rSq) {
-	float sum = 0.0;
-	int sizeX = Sys.Proj.Nx;
-	int sizeY = Sys.Proj.Ny;
-	int center = NumViews / 2;
-
-	for (int i = 0; i < sizeX; i++) {
-		float base = vertGraph[i + center*sizeX];
-		if (view == -1) {
-			int count = 0;
-			float avg = 0.0;
-			for (int j = 0; j < NumViews; j++) {
-				float x = i + Sys.Geo.EmitX[j] * distance / Sys.Geo.EmitZ[j] / constants.PitchPx;
-				if (x < sizeX && x > 0) {
-					count++;
-					//avg += pow(vertGraph[(int)x + j*sizeX]* lightScale - base, 2);
-					avg += abs(vertGraph[(int)x + j*sizeX] * lightScale - base);
-				}
-			}
-			if (count > 0) sum += avg / count;
-		}
-		else {
-			/*float x = i + Sys.Geo.EmitX[view] * distance / Sys.Geo.EmitZ[view] / constants.PitchPx;
-			if (x < sizeX && x > 0) {
-				sum += pow(vertGraph[(int)x + view*sizeX] + offset - base, 2);
-			}*/
-		}
-	}
-
-	for (int i = 0; i < sizeY; i++) {
-		float base = horGraph[i + center*sizeY];
-		if (view == -1) {
-			/*int count = 0;
-			float avg = 0.0;
-			for (int j = 0; j < NumViews; j++) {
-				float x = i + Sys.Geo.EmitY[j] * distance / Sys.Geo.EmitZ[j] / constants.PitchPy;
-				if (x < sizeY && x > 0) {
-					count++;
-					avg += pow(horGraph[(int)x + j*sizeY] - base, 2);
-				}
-			}
-			if (count > 0) sum += avg / count;*/
-		}
-		else {
-			float x = i + Sys.Geo.EmitY[view] * distance / Sys.Geo.EmitZ[view] / constants.PitchPy;
-			float r = yP2MM(i, Sys.Proj.Ny, Sys.Proj.Pitch_y) - Sys.Geo.EmitY[view];
-			if (x < sizeY && x > 0) {
-				//sum += pow(horGraph[(int)x + view*sizeY]*lightScale + offset - base, 2);
-				sum += abs(horGraph[(int)x + view*sizeY] * lightScale + offset + rSq*pow(r,2) - base);
-			}
-		}
-	}
-
-	return sum;
 }
 
 float TomoRecon::getMax(float * d_Im) {

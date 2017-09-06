@@ -94,7 +94,7 @@ public:
 // The OpenGL-enabled canvas
 class CudaGLCanvas : public wxGLCanvas{
 public:
-	CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString filename, 
+	CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemControl * Sys,
 		wxWindowID id = wxID_ANY, int *gl_attrib = NULL, wxSize size = wxDefaultSize);
 
 	virtual ~CudaGLCanvas();
@@ -129,7 +129,7 @@ private:
 
 class GLFrame : public wxPanel {
 public:
-	GLFrame(wxAuiNotebook *frame, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString filename,
+	GLFrame(wxAuiNotebook *frame, wxStatusBar* status, struct SystemControl * Sys, wxString filename,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = wxDEFAULT_FRAME_STYLE);

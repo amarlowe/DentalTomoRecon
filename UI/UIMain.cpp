@@ -24,9 +24,8 @@ bool MyApp::OnInit(){
 
 	// create the main application window
 	DTRMainWindow *frame = new DTRMainWindow(NULL);
-
-#ifdef PROFILER
 	wxString filename = wxT("C:\\Users\\jdean\\Desktop\\Patient18\\AcquiredImage1_0.raw");
+#ifdef PROFILER
 	frame->Show(true);
 	static unsigned s_pageAdded = 0;
 	frame->m_auinotebook6->AddPage(frame->CreateNewPage(filename),
@@ -36,10 +35,15 @@ bool MyApp::OnInit(){
 			++s_pageAdded
 		),
 		true);
-	wxCommandEvent test;
+	frame->onContinuous();
 	frame->onContinuous();
 	exit(0);
 #else
+	//Run initialization on a dummy frame that will never display, moves interop initialization time to program startup
+	struct SystemControl Sys;
+	frame->genSys(&Sys);
+	GLFrame* initFrame = new GLFrame(frame->m_auinotebook6, frame->m_statusBar1, &Sys, filename);
+	delete initFrame;
 	frame->Show(true);
 #endif
 
@@ -170,7 +174,7 @@ wxPanel *DTRMainWindow::CreateNewPage(wxString filename) {
 	struct SystemControl Sys;
 	genSys(&Sys);
 	wxStreamToTextRedirector redirect(m_textCtrl8);
-	return new GLFrame(m_auinotebook6, m_statusBar1, &Sys, gainFilepath, filename);
+	return new GLFrame(m_auinotebook6, m_statusBar1, &Sys, filename);
 }
 
 void DTRMainWindow::onOpen(wxCommandEvent& event) {
@@ -244,32 +248,8 @@ void DTRMainWindow::onContinuous() {
 
 	wxStreamToTextRedirector redirect(m_textCtrl8);
 	m_statusBar1->SetFieldsCount(3, statusWidths);
-	//recon->continuousMode = true;
-	recon->setDisplay(getEnhance());
-	recon->setEnhanceRatio((float)enhanceSlider->GetValue() / ENHANCEFACTOR);
-	recon->enableNoiseMaxFilter(outlierEnable->IsChecked());
-	recon->setNoiseMaxVal(noiseMaxSlider->GetValue());
-	recon->enableScanVert(scanVertEnable->IsChecked());
-	recon->setScanVertVal((float)scanVertSlider->GetValue() / SCANFACTOR);
-	recon->enableScanHor(scanHorEnable->IsChecked());
-	recon->setScanHorVal((float)scanHorSlider->GetValue() / SCANFACTOR);
-	if (projectionView->IsChecked()) {
-		recon->setDataDisplay(projections);
-		currentFrame->showScrollBar();
-	}
-	else {
-		recon->setDataDisplay(reconstruction);
-		currentFrame->hideScrollBar();
-	}
-	recon->setLogView(logView->IsChecked());
-	recon->setHorFlip(horFlip->IsChecked());
-	recon->setVertFlip(vertFlip->IsChecked());
-	recon->enableTV(TVEnable->IsChecked());
-	recon->setTVIter(iterSlider->GetValue());
-	recon->setTVLambda(lambdaSlider->GetValue());
 
 	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
-	//recon->singleFrame();
 
 	recon->resetFocus();
 	recon->resetLight();
@@ -1743,11 +1723,11 @@ EVT_SCROLL(GLFrame::OnScroll)
 EVT_MOUSEWHEEL(GLFrame::OnMousewheel)
 wxEND_EVENT_TABLE()
 
-GLFrame::GLFrame(wxAuiNotebook *frame, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString filename,
+GLFrame::GLFrame(wxAuiNotebook *frame, wxStatusBar* status, struct SystemControl * Sys, wxString filename,
 	const wxPoint& pos, const wxSize& size, long style)
 	: wxPanel(frame, wxID_ANY, pos, size), m_canvas(NULL), m_status(status), filename(filename){
 	//initialize the canvas to this object
-	m_canvas = new CudaGLCanvas(this, status, Sys, gainFile, filename, wxID_ANY, NULL, GetClientSize());
+	m_canvas = new CudaGLCanvas(this, status, Sys, wxID_ANY, NULL, GetClientSize());
 	m_scrollBar = new wxScrollBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSB_HORIZONTAL);
 	bSizer = new wxBoxSizer(wxVERTICAL);
 
@@ -1867,7 +1847,7 @@ EVT_CHAR(CudaGLCanvas::OnChar)
 EVT_MOUSE_EVENTS(CudaGLCanvas::OnMouseEvent)
 wxEND_EVENT_TABLE()
 
-CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString filename, 
+CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemControl * Sys,
 	wxWindowID id, int* gl_attrib, wxSize size)
 	: wxGLCanvas(parent, id, gl_attrib, wxDefaultPosition, size, wxFULL_REPAINT_ON_RESIZE), m_status(status){
 	// Explicitly create a new rendering context instance for this canvas.

@@ -112,7 +112,6 @@ class mainWindow : public wxFrame
 		wxButton* resetIter;
 		wxSlider* iterSlider;
 		wxPanel* m_panel10;
-		wxStatusBar* m_statusBar1;
 		
 		// Virtual event handlers, overide them in your derived class
 		virtual void onKeyDown( wxKeyEvent& event ) { event.Skip(); }
@@ -168,6 +167,7 @@ class mainWindow : public wxFrame
 	public:
 		wxAuiNotebook* m_auinotebook6;
 		wxTextCtrl* m_textCtrl8;
+		wxStatusBar* m_statusBar1;
 		
 		mainWindow( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Tomogrophy Reconstruction"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 1074,681 ), long style = wxDEFAULT_FRAME_STYLE|wxTAB_TRAVERSAL );
 		wxAuiManager m_mgr;

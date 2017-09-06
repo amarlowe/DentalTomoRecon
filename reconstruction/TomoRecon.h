@@ -41,7 +41,7 @@
 
 //Autofocus parameters
 #define STARTSTEP 1.0f
-#define LASTSTEP 0.001f
+#define LASTSTEP 0.05f
 #define GEOSTART 5.0f
 #define GEOLAST 0.01f
 #define MINDIS 5
@@ -75,6 +75,7 @@
 //#define PROFILER
 //#define PRINTSCANCORRECTIONS
 #define ENABLEZDER
+//#define PRINTMEMORYUSAGE
 
 //Defaults
 #define ENHANCEDEFAULT 0.1f
@@ -766,7 +767,6 @@ private:
 	TomoError imageKernel(float xK[KERNELSIZE], float yK[KERNELSIZE], float * output);
 	TomoError project(float * projections, float * reconstruction);
 	TomoError scanLineDetect(int view, float * d_sum, float * sum, float * offset, bool vert, bool enable);
-	float graphCost(float * vertGraph, float * horGraph, int view = -1, float offset = 0.0, float lightScale = 1.0, float rsq = 0.0);
 	float getMax(float * d_Image);
 
 	//Coordinate conversions
@@ -841,10 +841,10 @@ private:
 	float * d_Image;
 	float * d_Error;
 	float * d_Sino;
-	float * d_MaxVal;
-	float * d_MinVal;
 
 	//Kernel memory
+	float * d_MaxVal;
+	float * d_MinVal;
 	float * d_gauss;
 	float * d_gaussDer;
 	float * d_gaussDer2;
@@ -894,7 +894,7 @@ private:
 TomoError cuda_assert(const cudaError_t code, const char* const file, const int line);
 TomoError cuda_assert_void(const char* const file, const int line);
 
-#define cudav(...)  cuda##__VA_ARGS__; cuda_assert_void(__FILE__, __LINE__);
+#define cudav(...)  cuda##__VA_ARGS__; tomo_err_throw(cuda_assert_void(__FILE__, __LINE__));
 #define cuda(...)  cuda_assert((cuda##__VA_ARGS__), __FILE__, __LINE__);
 
 #endif

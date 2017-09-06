@@ -33,7 +33,7 @@ TomoError gl_assert_void(const char* const file, const int line) {
 }
 
 void reconGlutInit(int *argc, char **argv) {
-	glutInit(argc, argv);
+	gl(utInit(argc, argv));
 }
 
 interop::interop(int x, int y) {
