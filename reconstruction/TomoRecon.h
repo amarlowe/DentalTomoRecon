@@ -30,7 +30,7 @@
 #pragma comment(lib, "Shlwapi.lib")
 
 #define NUMVIEWS 7
-#define MAXZOOM 30
+#define MAXZOOM 20
 #define ZOOMFACTOR 1.1f
 #define LINEWIDTH 3
 #define BARHEIGHT 40
@@ -41,11 +41,11 @@
 
 //Autofocus parameters
 #define STARTSTEP 1.0f
-#define LASTSTEP 0.001f
+#define LASTSTEP 0.05f
 #define GEOSTART 5.0f
 #define GEOLAST 0.01f
-#define MINDIS 0
-#define MAXDIS 20
+#define MINDIS 5
+#define MAXDIS 40
 
 //Phantom reader parameters
 #define LINEPAIRS 5
@@ -74,7 +74,16 @@
 //Code use parameters
 //#define PROFILER
 //#define PRINTSCANCORRECTIONS
-#define ENABLEZDER
+//#define ENABLEZDER
+//#define PRINTMEMORYUSAGE
+
+//Defaults
+#define ENHANCEDEFAULT 0.1f
+#define SCANVERTDEFAULT 0.25f
+#define SCANHORDEFAULT 0.1f
+#define NOISEMAXDEFAULT 700
+#define LAMBDADEFAULT 2
+#define ITERDEFAULT 20
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {										\
@@ -217,17 +226,17 @@ struct params {
 	int currYr = -1;
 
 	//User parameters
-	float ratio = 5.0;
+	float ratio = ENHANCEDEFAULT;
 	bool useMaxNoise = true;
-	int maxNoise = 700;
+	int maxNoise = NOISEMAXDEFAULT;
 };
 
 ///Parameters used in CPU control systems, but not kernel calls
 struct CPUParams {
 	bool scanVertEnable = true;
 	bool scanHorEnable = false;
-	float vertTau = 0.25;
-	float horTau = 0.1;
+	float vertTau = SCANVERTDEFAULT;
+	float horTau = SCANHORDEFAULT;
 	int iterations = 40;
 };
 
@@ -271,6 +280,7 @@ public:
 	TomoError FreeGPUMemory();
 
 	///Conversion tool to transfer projection selection boxes to the reconstruction space
+	///Values are automatically clamped to reconstruction dimensions.
 	TomoError setReconBox(
 		///Projection number that the selection box is from
 		int index);
@@ -360,6 +370,7 @@ public:
 
 	///Set custom minimum and maximum display values
 	///Can be used to set window and level as level=minimum, window = maximum - minimum
+	///Returns Tomo_invalid_arg if either is less than 0, if minVal > maxVal or if either is larger than max unsigned short.
 	TomoError setLight(
 		///minimum diplay value
 		unsigned int minVal,
@@ -367,11 +378,13 @@ public:
 		unsigned int maxVal);
 
 	///Setter used as an increment for maximum light, recommended use is scrolling or +/- controls.
+	///Returns Tomo_invalid_arg if amount would cause max light to be less than min, or greather than max unsigned short.
 	TomoError appendMaxLight(
 		///amount to increment/decrement max light
 		int amount);
 
 	///Setter used as an increment for minimum light, recommended use is scrolling or +/- controls.
+	///Returns Tomo_invalid_arg if amount would cause min light to be less than 0 or greater than max.
 	TomoError appendMinLight(
 		///amount to increment/decrement min light
 		int amount);
@@ -380,14 +393,16 @@ public:
 	///Useful for reading out values after an auto-focus is performed
 	float getDistance();
 
-	///Set the internal distance variable for reconstruction calculations
+	///Set the internal distance variable for reconstruction calculations.
+	///Returns Tomo_invalid_arg if value is less than 0.
 	TomoError setDistance(
-		///Distance variable to be set
+		///Distance variable to be set. Value will be clamped between min and max distance.
 		float distance);
 
 	///Increment the distance by the internal step amount.
 	///Change step size with setStep.
 	///Useful for calling from a mousewheel.
+	///DIstance value will be clamped between min and max distance.
 	TomoError stepDistance(
 		///Number of steps to increment. 
 		int steps);
@@ -444,6 +459,7 @@ public:
 
 	///Set the projection number that will be displayed or otherwise processed.
 	///Generally not used if in reconstruction view.
+	///Returns Tomo_invalid_arg if index is not between 0 and total projections - 1.
 	TomoError setActiveProjection(
 		///Value of the slice to be displayed. Must be between 0 and the total slices - 1.
 		int index);
@@ -459,6 +475,7 @@ public:
 
 	///Apprend the image display offsets.
 	///See setOffsets.
+	///Values will be clamped to stay within the available window.
 	TomoError appendOffsets(
 		///Value to append to horizontal offset. Positive is right.
 		int xOff,
@@ -475,6 +492,7 @@ public:
 
 	///Set the first set of corrdinates for a selection box.
 	///Sets are seperated for ease of input via click and drag.
+	///Values will be clamped to reconstruction dimensions.
 	TomoError setSelBoxStart(
 		///Horizontal position, right is positive.
 		int x, 
@@ -483,6 +501,7 @@ public:
 
 	///Set the second set of corrdinates for a selection box.
 	///Sets are seperated for ease of input via click and drag.
+	///Values will be clamped to reconstruction dimensions.
 	TomoError setSelBoxEnd(
 		///Horizontal position, right is positive.
 		int x, 
@@ -503,6 +522,7 @@ public:
 
 	///Set selection box for a projection image.
 	///Generally used just for geometry testing, normal setSelBox functions work for displaying projection images.
+	///Values will be clamped to projection dimensions.
 	TomoError setSelBoxProj(
 		///First horizontal position, right is positive.
 		int x1, 
@@ -516,6 +536,7 @@ public:
 	///Sets the coordinates for the upper value of a line pair phantom.
 	///Only used for setting line pair phantom tests.
 	///Should be aligned with the 20 pair mark.
+	///Values will be clamped to reconstruction dimensions.
 	TomoError setUpperTick(
 		///Horizontal position, right is positive.
 		int x, 
@@ -525,6 +546,7 @@ public:
 	///Sets the coordinates for the lower value of a line pair phantom.
 	///Only used for setting line pair phantom tests.
 	///Should be aligned with the 4 pair mark.
+	///Values will be clamped to reconstruction dimensions.
 	TomoError setLowerTick(
 		///Horizontal position, right is positive.
 		int x, 
@@ -534,6 +556,7 @@ public:
 	///Sets the coordinates for the upper value of a line pair phantom of a projection image.
 	///Only used for setting line pair phantom tests.
 	///Should be aligned with the 20 pair mark.
+	///Values will be clamped to projection dimensions.
 	TomoError setUpperTickProj(
 		///Horizontal position, right is positive.
 		int x, 
@@ -543,6 +566,7 @@ public:
 	///Sets the coordinates for the lower value of a line pair phantom of a projection image.
 	///Only used for setting line pair phantom tests.
 	///Should be aligned with the 4 pair mark.
+	///Values will be clamped to projection dimensions.
 	TomoError setLowerTickProj(
 		///Horizontal position, right is positive.
 		int x, 
@@ -619,8 +643,9 @@ public:
 	float getEnhanceRatio();
 
 	///Set the ratio for the edge enhancement filters.
+	///Values will be clamped between 0 and 1.
 	TomoError setEnhanceRatio(
-		///Value to be set. Larger values favor derivatives, vaules between 0 and 1 favor the original data.
+		///Value to be set. Values closer to 0 favor derivatives, values closer to 1 favor the original image.
 		float ratio);
 
 	///Returns if vertical scan line correction is in use.
@@ -639,6 +664,7 @@ public:
 
 	///Set the strength of the vertical scan line correction.
 	///Recommended to test different vaules for each detector system to find the minimum value that removes the lines.
+	///Values below 0 will be clamped to 0.
 	TomoError setScanVertVal(
 		///Value to be set. Larger vaules remove the scan lines more effectively, but also may produce more artifacts.
 		float tau);
@@ -659,6 +685,7 @@ public:
 
 	///Set the strength of the horizontal scan line correction.
 	///Recommended to test different vaules for each detector system to find the minimum value that removes the lines.
+	///Values below 0 will be clamped to 0.
 	TomoError setScanHorVal(
 		///Value to be set. Larger vaules remove the scan lines more effectively, but also may produce more artifacts.
 		float tau);
@@ -683,6 +710,7 @@ public:
 
 	///Set the max value for the outlier removal noise filter.
 	///This value also deterimines similarity in neighboring pixels, so values that are too small may not produce any results.
+	///Values below 0 will be clamped to 0.
 	TomoError setNoiseMaxVal(
 		///Value to be set. Must be greater than 0, recommended to be greater than 50.
 		int max);
@@ -700,14 +728,16 @@ public:
 	float getTVLambda();
 
 	///Set the strength of TV correction per iteration. 
+	///Values below 0 will be clamped to 0.
 	TomoError setTVLambda(
-		///Value to be set. Larger values remove more noise, but blur the image more. Value must be between 0 and 1.
+		///Value to be set. Larger values remove more noise, but blur the image more.
 		float lambda);
 
 	///Return the number of TV iterations.
 	float getTVIter();
 
 	///Set the number of TV iterations.
+	///Values below 0 will be clamped to 0.
 	TomoError setTVIter(
 		///Value to be set. Larger values remove more noise, but also blur the image and slow down read ins. 
 		float iter);
@@ -735,8 +765,8 @@ private:
 	//Kernel call helpers
 	float focusHelper();
 	TomoError imageKernel(float xK[KERNELSIZE], float yK[KERNELSIZE], float * output);
+	TomoError project(float * projections, float * reconstruction);
 	TomoError scanLineDetect(int view, float * d_sum, float * sum, float * offset, bool vert, bool enable);
-	float graphCost(float * vertGraph, float * horGraph, int view = -1, float offset = 0.0, float lightScale = 1.0, float rsq = 0.0);
 	float getMax(float * d_Image);
 
 	//Coordinate conversions
@@ -811,10 +841,10 @@ private:
 	float * d_Image;
 	float * d_Error;
 	float * d_Sino;
-	float * d_MaxVal;
-	float * d_MinVal;
 
 	//Kernel memory
+	float * d_MaxVal;
+	float * d_MinVal;
 	float * d_gauss;
 	float * d_gaussDer;
 	float * d_gaussDer2;
@@ -823,8 +853,8 @@ private:
 	//Derivative buffers
 	float * buff1;
 	float * buff2;
-	float ** zBuffs;
-	float * inBuff;
+	float * inXBuff;
+	float * inYBuff;
 
 	//Kernel call parameters
 	size_t sizeIM;
@@ -854,8 +884,8 @@ private:
 
 	//TV variables
 	bool useTV = true;
-	float lambda = 2 * UCHAR_MAX;
-	float iter = 20;
+	float lambda = LAMBDADEFAULT * UCHAR_MAX;
+	float iter = ITERDEFAULT;
 };
 
 /********************************************************************************************/
@@ -864,7 +894,7 @@ private:
 TomoError cuda_assert(const cudaError_t code, const char* const file, const int line);
 TomoError cuda_assert_void(const char* const file, const int line);
 
-#define cudav(...)  cuda##__VA_ARGS__; cuda_assert_void(__FILE__, __LINE__);
+#define cudav(...)  cuda##__VA_ARGS__; tomo_err_throw(cuda_assert_void(__FILE__, __LINE__));
 #define cuda(...)  cuda_assert((cuda##__VA_ARGS__), __FILE__, __LINE__);
 
 #endif

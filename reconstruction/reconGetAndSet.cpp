@@ -13,6 +13,7 @@ TomoError TomoRecon::getLight(unsigned int * minVal, unsigned int * maxVal) {
 TomoError TomoRecon::setLight(unsigned int minVal, unsigned int maxVal) {
 	constants.minVal = minVal;
 	constants.maxVal = maxVal;
+	if (minVal < 0 || maxVal < 0 || minVal > maxVal || maxVal > USHRT_MAX) return Tomo_invalid_arg;
 	return Tomo_OK;
 }
 
@@ -63,11 +64,15 @@ float TomoRecon::getDistance() {
 
 TomoError TomoRecon::setDistance(float dist) {
 	distance = dist;
+	if (dist < MINDIS) distance = MINDIS;
+	if (dist > MAXDIS) distance = MAXDIS;
 	return Tomo_OK;
 }
 
 TomoError TomoRecon::stepDistance(int steps) {
 	distance += Sys.Geo.ZPitch * steps;
+	if (distance < MINDIS) distance = MINDIS;
+	if (distance > MAXDIS) distance = MAXDIS;
 	return Tomo_OK;
 }
 
@@ -76,6 +81,7 @@ float TomoRecon::getStep() {
 }
 
 TomoError TomoRecon::setStep(float dis) {
+	if (dis < 0) return Tomo_invalid_arg;
 	Sys.Geo.ZPitch = dis;
 	return Tomo_OK;
 }
@@ -259,6 +265,7 @@ bool TomoRecon::lowerTickReady() {
 TomoError TomoRecon::appendZoom(int amount) {
 	zoom += amount;
 	if (zoom < 0) zoom = 0;
+	if (zoom > MAXZOOM) zoom = MAXZOOM;
 	return Tomo_OK;
 }
 
@@ -269,6 +276,7 @@ int TomoRecon::getZoom() {
 TomoError TomoRecon::setZoom(int value) {
 	zoom = value;
 	if (zoom < 0) zoom = 0;
+	if (zoom > MAXZOOM) zoom = MAXZOOM;
 	return Tomo_OK;
 }
 
@@ -301,6 +309,8 @@ float TomoRecon::getEnhanceRatio() {
 
 TomoError TomoRecon::setEnhanceRatio(float ratio) {
 	constants.ratio = ratio;
+	if (ratio < 0.0f) constants.ratio = 0.0f;
+	if (ratio > 1.0f) constants.ratio = 1.0f;
 	return Tomo_OK;
 }
 
@@ -319,6 +329,7 @@ float TomoRecon::getScanVertVal() {
 
 TomoError TomoRecon::setScanVertVal(float tau) {
 	cConstants.vertTau = tau;
+	if (tau < 0.0f) cConstants.vertTau = 0.0f;
 	return Tomo_OK;
 }
 
@@ -337,6 +348,7 @@ float TomoRecon::getScanHorVal() {
 
 TomoError TomoRecon::setScanHorVal(float tau) {
 	cConstants.horTau = tau;
+	if (tau < 0.0f) cConstants.horTau = 0.0f;
 	return Tomo_OK;
 }
 
@@ -360,6 +372,7 @@ int TomoRecon::getNoiseMaxVal() {
 
 TomoError TomoRecon::setNoiseMaxVal(int max) {
 	constants.maxNoise = max;
+	if (max < 0.0f) constants.maxNoise = 0.0f;
 	return Tomo_OK;
 }
 
@@ -378,6 +391,7 @@ float TomoRecon::getTVLambda() {
 
 TomoError TomoRecon::setTVLambda(float TVLambda) {
 	lambda = TVLambda * UCHAR_MAX;
+	if (TVLambda < 0.0f) lambda = 0.0f;
 	return Tomo_OK;
 }
 
@@ -387,5 +401,6 @@ float TomoRecon::getTVIter() {
 
 TomoError TomoRecon::setTVIter(float TVIter) {
 	iter = TVIter;
+	if (TVIter < 0.0f) iter = 0.0f;
 	return Tomo_OK;
 }

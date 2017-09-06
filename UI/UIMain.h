@@ -38,17 +38,11 @@
 
 #define MOUSEWHEELMAG 120
 #define SCROLLFACTOR 10
-#define ENHANCEDEFAULT 5.0f
-#define SCANVERTDEFAULT 0.25f
-#define SCANHORDEFAULT 0.1f
-#define NOISEMAXDEFAULT 700
-#define ENHANCEFACTOR 10.0f
+#define ENHANCEFACTOR 100.0f
 #define WINLVLFACTOR 255
 #define STEPFACTOR	10.0f
 #define SCANFACTOR 100.0f
 #define MAXSLICE 150
-#define LAMBDADEFAULT 2
-#define ITERDEFAULT 20
 
 typedef enum {
 	Status = 0,
@@ -100,7 +94,7 @@ public:
 // The OpenGL-enabled canvas
 class CudaGLCanvas : public wxGLCanvas{
 public:
-	CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString filename, 
+	CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemControl * Sys,
 		wxWindowID id = wxID_ANY, int *gl_attrib = NULL, wxSize size = wxDefaultSize);
 
 	virtual ~CudaGLCanvas();
@@ -135,7 +129,7 @@ private:
 
 class GLFrame : public wxPanel {
 public:
-	GLFrame(wxAuiNotebook *frame, wxStatusBar* status, struct SystemControl * Sys, wxString gainFile, wxString filename,
+	GLFrame(wxAuiNotebook *frame, wxStatusBar* status, struct SystemControl * Sys, wxString filename,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = wxDEFAULT_FRAME_STYLE);
