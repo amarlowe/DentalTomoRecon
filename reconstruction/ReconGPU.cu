@@ -187,6 +187,18 @@ __global__ void div(float* src1, float* src2, float *d_Dst, int pitch, params co
 	d_Dst[MUL_ADD(y, pitch, x)] = 100 * src1[MUL_ADD(y, pitch, x)] / (abs(src2[MUL_ADD(y, pitch, x)]) + 1);
 }
 
+__global__ void thresh(float* src1, float* src2, float *d_Dst, int pitch, params consts) {
+	const int x = MUL_ADD(blockDim.x, blockIdx.x, threadIdx.x);
+	const int y = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
+
+	if (x >= consts.Px || y >= consts.Py || x < 0 || y < 0)
+		return;
+
+	if(src1[MUL_ADD(y, pitch, x)] < 50.0f)
+		d_Dst[MUL_ADD(y, pitch, x)] = src2[MUL_ADD(y, pitch, x)];
+	else d_Dst[MUL_ADD(y, pitch, x)] = 0.0f;
+}
+
 __global__ void projectSliceZ(float * zBuff[KERNELSIZE], int index, float distance, params consts) {
 	//Define pixel location in x, y, and z
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -760,6 +772,16 @@ TomoError TomoRecon::initGPU(){
 	cuda(Malloc(&buff1, sizeIM * sizeof(float)));
 	cuda(Malloc(&buff2, sizeIM * sizeof(float)));
 
+#ifdef ENABLEZDER
+	//Z buffer
+	float * tempZBuffs[KERNELSIZE];
+	cuda(Malloc(&zBuffs, KERNELSIZE * sizeof(float*)));
+	for (int i = 0; i < KERNELSIZE; i++) {
+		cuda(Malloc(&tempZBuffs[i], sizeIM * sizeof(float)));
+	}
+	cuda(MemcpyAsync(zBuffs, tempZBuffs, KERNELSIZE * sizeof(float*), cudaMemcpyHostToDevice));
+#endif // ENABLEZDER
+
 	//Set up all kernels
 	cuda(Malloc(&d_gauss, KERNELSIZE * sizeof(float)));
 	cuda(Malloc(&d_gaussDer, KERNELSIZE * sizeof(float)));
@@ -1294,40 +1316,51 @@ TomoError TomoRecon::singleFrame() {
 		//imageKernel(d_gauss, d_gaussDer3, d_Image);
 		break;
 	case mag_der:
-		/*imageKernel(d_gaussDer, d_gauss, buff1);
-		imageKernel(d_gauss, d_gaussDer, buff2);
-		KERNELCALL2(mag, contBlocks, contThreads, d_Image, buff2, buff1, reconPitchNum, reconPitchNum, constants);*/
-		tomo_err_throw(imageKernel(d_gaussDer, d_gauss, d_Image));
+		if (dataDisplay == projections) {
+			cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+			cuda(Memcpy(buff2, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+		}
+		else {
+			tomo_err_throw(project(inXBuff, buff1));
+			tomo_err_throw(project(inYBuff, buff2));
+		}
+
+		KERNELCALL2(mag, contBlocks, contThreads, d_Image, buff2, buff1, reconPitchNum, reconPitchNum, constants);
+
+		//tomo_err_throw(project(inXBuff, d_Image));
+
+		/*cuda(BindTexture2D(NULL, textError, inXBuff, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
+		for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++)
+			KERNELCALL2(projectSliceZ, contBlocks, contThreads, zBuffs, i + KERNELRADIUS, distance + i*Sys.Geo.ZPitch, constants);
+		cuda(UnbindTexture(textError));
+
+		KERNELCALL2(zConvolution, contBlocks, contThreads, d_Image, zBuffs, d_gaussDer, constants);*/
 		break;
 	case z_der_mag:
 	{
-		/*for (int i = 0; i <= NUMVIEWS; i++) {
-			cuda(Memcpy(d_Image, d_Sino + i * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
-			imageKernel(d_gaussDer, d_gauss, buff1);
-			imageKernel(d_gauss, d_gaussDer, buff2);
-			KERNELCALL2(mag, contBlocks, contThreads, inBuff + projPitch / sizeof(float) * Sys.Proj.Ny *sliceIndex, buff2, buff1, reconPitchNum, reconPitchNum, constants);
-			//imageKernel(d_gaussDer, d_gauss, inBuff + projPitch / sizeof(float) * Sys.Proj.Ny * i);
+		if (dataDisplay == projections) {
+			cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+			cuda(Memcpy(buff2, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
 		}
-		cuda(Memcpy(d_Image, inBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));*/
-		/*
-		cuda(BindTexture2D(NULL, textError, inBuff, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
-		KERNELCALL2(projectSlice, contBlocks, contThreads, d_Image, distance, constants);
-		cuda(UnbindTexture(textError));*/
+		else {
+			tomo_err_throw(project(inXBuff, buff1));
+			tomo_err_throw(project(inYBuff, buff2));
+		}
 
-		/*(BindTexture2D(NULL, textError, inBuff, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
-		for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++)
-			KERNELCALL2(projectSliceZ, contBlocks, contThreads, zBuffs, i + KERNELRADIUS, distance + i*Sys.Geo.ZPitch, constants);
-		cuda(UnbindTexture(textError));*/
-
-		/*imageKernel(d_gaussDer, d_gauss, buff1);
-		imageKernel(d_gauss, d_gaussDer, buff2);
 		KERNELCALL2(mag, contBlocks, contThreads, buff1, buff2, buff1, reconPitchNum, reconPitchNum, constants);
 
+		cuda(BindTexture2D(NULL, textError, d_Sino, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
+		for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++)
+			KERNELCALL2(projectSliceZ, contBlocks, contThreads, zBuffs, i + KERNELRADIUS, distance + i*Sys.Geo.ZPitch, constants);
+		cuda(UnbindTexture(textError));
+
+		KERNELCALL2(zConvolution, contBlocks, contThreads, d_Image, zBuffs, d_gaussDer, constants);
+
+		//KERNELCALL2(thresh, contBlocks, contThreads, buff2, buff1, d_Image, reconPitchNum, constants);
+
+		/*KERNELCALL2(zConvolution, contBlocks, contThreads, buff1, zBuffs, d_gaussDer2, constants);
 		KERNELCALL2(zConvolution, contBlocks, contThreads, buff2, zBuffs, d_gaussDer, constants);
-
 		KERNELCALL2(div, contBlocks, contThreads, buff1, buff2, d_Image, reconPitchNum, constants);*/
-
-		//KERNELCALL2(zConvolution, contBlocks, contThreads, d_Image, zBuffs, d_gaussDer, constants);
 
 		//imageKernel(d_gauss, d_gauss, d_Image);
 		//KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, reconPitchNum, true, false, constants);

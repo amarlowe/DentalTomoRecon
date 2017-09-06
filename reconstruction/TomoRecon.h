@@ -74,7 +74,7 @@
 //Code use parameters
 //#define PROFILER
 //#define PRINTSCANCORRECTIONS
-//#define ENABLEZDER
+#define ENABLEZDER
 //#define PRINTMEMORYUSAGE
 
 //Defaults
@@ -806,9 +806,6 @@ private:
 	float scale = 1.5;
 	float distance = 0.0;
 
-	//Cuda constants
-	params constants;
-
 	//Selection variables
 
 	//box
@@ -855,6 +852,7 @@ private:
 	float * buff2;
 	float * inXBuff;
 	float * inYBuff;
+	float ** zBuffs;
 
 	//Kernel call parameters
 	size_t sizeIM;
@@ -880,7 +878,7 @@ private:
 
 	//Constants for program set by outside caller
 	CPUParams cConstants;
-	//params constants;
+	params constants;
 
 	//TV variables
 	bool useTV = true;

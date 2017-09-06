@@ -1952,10 +1952,11 @@ void CudaGLCanvas::OnChar(wxKeyEvent& event){
 			break;
 		case mag_der:
 			//recon->setDataDisplay(projections);
-			recon->setDisplay(z_der_mag);
 			recon->setShowNegative(true);
+			recon->setDisplay(z_der_mag);
 			break;
 		case z_der_mag:
+			recon->setShowNegative(true);
 			recon->setDisplay(mag_der);
 			break;
 		/*case x_enhance:
