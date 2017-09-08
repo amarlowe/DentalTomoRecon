@@ -44,7 +44,7 @@
 #define LASTSTEP 0.05f
 #define GEOSTART 5.0f
 #define GEOLAST 0.01f
-#define MINDIS 5
+#define MINDIS 0
 #define MAXDIS 40
 
 //Phantom reader parameters
@@ -229,6 +229,8 @@ struct params {
 	float ratio = ENHANCEDEFAULT;
 	bool useMaxNoise = true;
 	int maxNoise = NOISEMAXDEFAULT;
+
+	sourceData dataDisplay = reconstruction;
 };
 
 ///Parameters used in CPU control systems, but not kernel calls
@@ -764,7 +766,7 @@ private:
 
 	//Kernel call helpers
 	float focusHelper();
-	TomoError imageKernel(float xK[KERNELSIZE], float yK[KERNELSIZE], float * output);
+	TomoError imageKernel(float xK[KERNELSIZE], float yK[KERNELSIZE], float * output, bool projs);
 	TomoError project(float * projections, float * reconstruction);
 	TomoError scanLineDetect(int view, float * d_sum, float * sum, float * offset, bool vert, bool enable);
 	float getMax(float * d_Image);
@@ -832,7 +834,6 @@ private:
 
 	bool vertical;
 	derivative_t derDisplay = mag_enhance;
-	sourceData dataDisplay = reconstruction;
 
 	//Define data buffer
 	float * d_Image;
@@ -852,7 +853,10 @@ private:
 	float * buff2;
 	float * inXBuff;
 	float * inYBuff;
+	float * inZBuff;
 	float ** zBuffs;
+	float * maxZVal;
+	float * maxZPos;
 
 	//Kernel call parameters
 	size_t sizeIM;

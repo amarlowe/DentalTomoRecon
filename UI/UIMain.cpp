@@ -585,6 +585,9 @@ void DTRMainWindow::onStepSlider(wxScrollEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setStep(value / STEPFACTOR);
+	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
 }
 
 void DTRMainWindow::onAutoLight(wxCommandEvent& event) {

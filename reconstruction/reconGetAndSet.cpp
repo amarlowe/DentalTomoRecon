@@ -295,11 +295,11 @@ TomoError TomoRecon::setDisplay(derivative_t type) {
 }
 
 sourceData TomoRecon::getDataDisplay() {
-	return dataDisplay;
+	return constants.dataDisplay;
 }
 
 TomoError TomoRecon::setDataDisplay(sourceData data) {
-	dataDisplay = data;
+	constants.dataDisplay = data;
 	return Tomo_OK;
 }
 
