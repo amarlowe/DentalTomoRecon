@@ -140,24 +140,26 @@ __global__ void convolutionColumnsKernel(float *d_Dst, float kernel[KERNELSIZE],
 	d_Dst[MUL_ADD(iy, pitch, ix)] = convolutionColumn<KERNELSIZE>(x, y, kernel);
 }
 
-__global__ void squareMag(float *d_Dst, float *src1, float *src2, int pitch1, int pitch2, int pitchOut, params consts) {
+__global__ void squareMag(float *d_Dst, float *src1, float *src2, params consts) {
 	const int x = MUL_ADD(blockDim.x, blockIdx.x, threadIdx.x);
 	const int y = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
-
-	if (x >= consts.Rx || y >= consts.Ry || x < 0 || y < 0)
+	bool recon = consts.dataDisplay == reconstruction;
+	int pitch = recon ? consts.ReconPitchNum : consts.ProjPitchNum;
+	if ((recon && x >= consts.Rx) || (recon && y >= consts.Ry) || (!recon && x >= consts.Px) || (!recon && y >= consts.Py) || x < 0 || y < 0)
 		return;
 
-	d_Dst[MUL_ADD(y, pitchOut, x)] = pow(src1[MUL_ADD(y, pitch1, x)],2) + pow(src2[MUL_ADD(y, pitch2, x)],2);
+	d_Dst[MUL_ADD(y, pitch, x)] = pow(src1[MUL_ADD(y, pitch, x)],2) + pow(src2[MUL_ADD(y, pitch, x)],2);
 }
 
-__global__ void mag(float *d_Dst, float *src1, float *src2, int pitch1, int pitch2, int pitchOut, params consts) {
+__global__ void mag(float *d_Dst, float *src1, float *src2, params consts) {
 	const int x = MUL_ADD(blockDim.x, blockIdx.x, threadIdx.x);
 	const int y = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
-
-	if (x >= consts.Rx || y >= consts.Ry || x < 0 || y < 0)
+	bool recon = consts.dataDisplay == reconstruction;
+	int pitch = recon ? consts.ReconPitchNum : consts.ProjPitchNum;
+	if ((recon && x >= consts.Rx) || (recon && y >= consts.Ry) || (!recon && x >= consts.Px) || (!recon && y >= consts.Py) || x < 0 || y < 0)
 		return;
 
-	d_Dst[MUL_ADD(y, pitchOut, x)] = sqrt(pow(src1[MUL_ADD(y, pitch1, x)], 2) + pow(src2[MUL_ADD(y, pitch2, x)], 2));
+	d_Dst[MUL_ADD(y, pitch, x)] = sqrt(pow(src1[MUL_ADD(y, pitch, x)], 2) + pow(src2[MUL_ADD(y, pitch, x)], 2));
 }
 
 __global__ void squareDiff(float *d_Dst, int view, float xOff, float yOff, int pitchOut, params consts) {
@@ -170,50 +172,26 @@ __global__ void squareDiff(float *d_Dst, int view, float xOff, float yOff, int p
 	d_Dst[MUL_ADD(y, pitchOut, x)] = pow(tex2D(textError, x - xOff, y - yOff + view*consts.Py) - tex2D(textError, x, y + (NUMVIEWS / 2)*consts.Py), 2);
 }
 
-__global__ void add(float* src1, float* src2, float *d_Dst, bool recon1, bool recon2, bool reconOut, bool useRatio, bool useAbs, params consts) {
+__global__ void add(float* src1, float* src2, float *d_Dst, bool useRatio, bool useAbs, params consts) {
 	const int x = MUL_ADD(blockDim.x, blockIdx.x, threadIdx.x);
 	const int y = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
-	int x1 = x; int x2 = x; int y1 = y; int y2 = y;
-	int pitch1 = recon1 ? consts.ReconPitchNum : consts.ProjPitchNum;
-	int pitch2 = recon2 ? consts.ReconPitchNum : consts.ProjPitchNum;
-	int pitchOut = reconOut ? consts.ReconPitchNum : consts.ProjPitchNum;
-	if (reconOut) {
-		if (x >= consts.Rx || y >= consts.Ry || x < 0 || y < 0)
-			return;
-		if (!recon1) {
-			x1 *= consts.Px / consts.Rx;
-			y1 *= consts.Py / consts.Ry;
-		}
-		if (!recon2) {
-			x2 *= consts.Px / consts.Rx;
-			y2 *= consts.Py / consts.Ry;
-		}
-	}
-	else {
-		if (x >= consts.Px || y >= consts.Py || x < 0 || y < 0)
-			return;
-		if (recon1) {
-			x1 *= consts.Rx / consts.Px;
-			y1 *= consts.Ry / consts.Py;
-		}
-		if (recon2) {
-			x2 *= consts.Rx / consts.Px;
-			y2 *= consts.Ry / consts.Py;
-		}
-	}
+	bool recon = consts.dataDisplay == reconstruction;
+	int pitch = recon ? consts.ReconPitchNum : consts.ProjPitchNum;
+	if ((recon && x >= consts.Rx) || (recon && y >= consts.Ry) || (!recon && x >= consts.Px) || (!recon && y >= consts.Py) || x < 0 || y < 0)
+		return;
 
 	if (useRatio) {
 		if (useAbs) {
-			float val = consts.log ? abs(src2[MUL_ADD(y2, pitch2, x2)]) : USHRT_MAX - abs(src2[MUL_ADD(y2, pitch2, x2)]);
-			d_Dst[MUL_ADD(y, pitchOut, x)] = src1[MUL_ADD(y1, pitch1, x1)] * consts.ratio + val * (1 - consts.ratio);
+			float val = consts.log ? abs(src2[MUL_ADD(y, pitch, x)]) : USHRT_MAX - abs(src2[MUL_ADD(y, pitch, x)]);
+			d_Dst[MUL_ADD(y, pitch, x)] = src1[MUL_ADD(y, pitch, x)] * consts.ratio + val * (1 - consts.ratio);
 		}
 		else {
-			float val = consts.log ? src2[MUL_ADD(y2, pitch2, x2)] : USHRT_MAX - src2[MUL_ADD(y2, pitch2, x2)];
-			d_Dst[MUL_ADD(y, pitchOut, x)] = src1[MUL_ADD(y1, pitch1, x1)] * consts.ratio + val * (1 - consts.ratio);
+			float val = consts.log ? src2[MUL_ADD(y, pitch, x)] : USHRT_MAX - src2[MUL_ADD(y, pitch, x)];
+			d_Dst[MUL_ADD(y, pitch, x)] = src1[MUL_ADD(y, pitch, x)] * consts.ratio + val * (1 - consts.ratio);
 		}
 	}
 	else
-		d_Dst[MUL_ADD(y, pitchOut, x)] = (src1[MUL_ADD(y1, pitch1, x1)] + src2[MUL_ADD(y2, pitch2, x2)]) / 2;
+		d_Dst[MUL_ADD(y, pitch, x)] = (src1[MUL_ADD(y, pitch, x)] + src2[MUL_ADD(y, pitch, x)]) / 2;
 }
 
 __global__ void div(float* src1, float* src2, float *d_Dst, int pitch, params consts) {
@@ -1308,72 +1286,62 @@ TomoError TomoRecon::singleFrame() {
 	case x_mag_enhance:
 		if (constants.dataDisplay == projections) {
 			cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
-			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, false, false, false, true, true, constants);
 		}
 		else {
 			tomo_err_throw(project(inXBuff, buff1));
-			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, true, true, true, true, true, constants);
 		}
-		
+		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, true, true, constants);
 		break;
 	case y_mag_enhance:
 		if (constants.dataDisplay == projections) {
 			cuda(Memcpy(buff1, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
-			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, false, false, false, true, true, constants);
 		}
 		else {
 			tomo_err_throw(project(inYBuff, buff1));
-			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, true, true, true, true, true, constants);
 		}
-		
+		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, true, true, constants);
 		break;
 	case mag_enhance:
 		if (constants.dataDisplay == projections) {
 			cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
 			cuda(Memcpy(buff2, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
-			KERNELCALL2(mag, contBlocks, contThreads, buff1, buff2, buff1, reconPitchNum, reconPitchNum, reconPitchNum, constants);
-			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, false, false, false, true, false, constants);
 		}
 		else {
 			tomo_err_throw(project(inXBuff, buff1));
 			tomo_err_throw(project(inYBuff, buff2));
-			KERNELCALL2(mag, contBlocks, contThreads, buff1, buff2, buff1, reconPitchNum, reconPitchNum, reconPitchNum, constants);
-			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, true, true, true, true, false, constants);
 		}
+		KERNELCALL2(mag, contBlocks, contThreads, buff1, buff2, buff1, constants);
+		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, true, false, constants);
 		break;
 	case x_enhance:
 		if (constants.dataDisplay == projections) {
 			cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
-			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, false, false, false, true, false, constants);
 		}
 		else {
 			tomo_err_throw(project(inXBuff, buff1));
-			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, true, true, true, true, false, constants);
 		}
+		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, true, false, constants);
 		break;
 	case y_enhance:
 		if (constants.dataDisplay == projections) {
 			cuda(Memcpy(buff1, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
-			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, false, false, false, true, false, constants);
 		}
 		else {
 			tomo_err_throw(project(inYBuff, buff1));
-			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, true, true, true, true, false, constants);
 		}
+		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, true, false, constants);
 		break;
 	case both_enhance:
 		if (constants.dataDisplay == projections) {
 			cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
 			cuda(Memcpy(buff2, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
-			KERNELCALL2(add, contBlocks, contThreads, buff1, buff2, buff1, false, false, false, false, false, constants);
-			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, false, false, false, true, false, constants);
 		}
 		else {
 			tomo_err_throw(project(inXBuff, buff1));
 			tomo_err_throw(project(inYBuff, buff2));
-			KERNELCALL2(add, contBlocks, contThreads, buff1, buff2, buff1, true, true, true, false, false, constants);
-			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, true, true, true, true, false, constants);
 		}
+		KERNELCALL2(add, contBlocks, contThreads, buff1, buff2, buff1, false, false, constants);
+		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, true, false, constants);
 		break;
 	case der_x:
 		if (constants.dataDisplay == projections) {
@@ -1401,7 +1369,7 @@ TomoError TomoRecon::singleFrame() {
 			tomo_err_throw(project(inYBuff, d_Image));
 		}
 
-		KERNELCALL2(squareMag, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Proj.Nx, Sys.Proj.Nx, Sys.Recon.Nx, constants);
+		KERNELCALL2(squareMag, contBlocks, contThreads, d_Image, buff1, d_Image, constants);
 		break;
 	case slice_diff:
 	{

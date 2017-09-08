@@ -130,8 +130,17 @@ TomoError TomoRecon::appendOffsets(int x, int y) {
 }
 
 TomoError TomoRecon::checkOffsets(int * x, int * y) {
-	int maxX = (int)((Sys.Recon.Nx - width * scale) / 2.0f);
-	int maxY = (int)((Sys.Recon.Ny - height * scale) / 2.0f);
+	int xLim, yLim;
+	if (constants.dataDisplay == reconstruction) {
+		xLim = Sys.Recon.Nx;
+		yLim = Sys.Recon.Ny;
+	}
+	else {
+		xLim = Sys.Proj.Nx;
+		yLim = Sys.Proj.Ny;
+	}
+	int maxX = (int)((xLim - width * scale) / 2.0f);
+	int maxY = (int)((yLim - height * scale) / 2.0f);
 	if (maxX < 0) maxX = 0;
 	if (maxY < 0) maxY = 0;
 	if (*x > maxX || *x < -maxX) *x = *x > 0 ? maxX : -maxX;
