@@ -235,9 +235,18 @@ TomoError TomoRecon::getLowerTickRaw(int* x, int* y) {
 }
 
 inline TomoError TomoRecon::checkBoundaries(int * x, int * y) {
-	if (*x > Sys.Recon.Nx) *x = Sys.Recon.Nx;
+	int xLim, yLim;
+	if (constants.dataDisplay == reconstruction) {
+		xLim = Sys.Recon.Nx;
+		yLim = Sys.Recon.Ny;
+	}
+	else {
+		xLim = Sys.Proj.Nx;
+		yLim = Sys.Proj.Ny;
+	}
+	if (*x > xLim) *x = xLim;
 	if (*x < 0) *x = 0;
-	if (*y > Sys.Recon.Ny) *y = Sys.Recon.Ny;
+	if (*y > yLim) *y = yLim;
 	if (*y < 0) *y = 0;
 	return Tomo_OK;
 }

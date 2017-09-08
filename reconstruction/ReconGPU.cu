@@ -170,25 +170,50 @@ __global__ void squareDiff(float *d_Dst, int view, float xOff, float yOff, int p
 	d_Dst[MUL_ADD(y, pitchOut, x)] = pow(tex2D(textError, x - xOff, y - yOff + view*consts.Py) - tex2D(textError, x, y + (NUMVIEWS / 2)*consts.Py), 2);
 }
 
-__global__ void add(float* src1, float* src2, float *d_Dst, int pitch1, int pitch2, int pitchOut, bool useRatio, bool useAbs, params consts) {
+__global__ void add(float* src1, float* src2, float *d_Dst, bool recon1, bool recon2, bool reconOut, bool useRatio, bool useAbs, params consts) {
 	const int x = MUL_ADD(blockDim.x, blockIdx.x, threadIdx.x);
 	const int y = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
-
-	if (x >= consts.Px || y >= consts.Py || x < 0 || y < 0)
-		return;
+	int x1 = x; int x2 = x; int y1 = y; int y2 = y;
+	int pitch1 = recon1 ? consts.ReconPitchNum : consts.ProjPitchNum;
+	int pitch2 = recon2 ? consts.ReconPitchNum : consts.ProjPitchNum;
+	int pitchOut = reconOut ? consts.ReconPitchNum : consts.ProjPitchNum;
+	if (reconOut) {
+		if (x >= consts.Rx || y >= consts.Ry || x < 0 || y < 0)
+			return;
+		if (!recon1) {
+			x1 *= consts.Px / consts.Rx;
+			y1 *= consts.Py / consts.Ry;
+		}
+		if (!recon2) {
+			x2 *= consts.Px / consts.Rx;
+			y2 *= consts.Py / consts.Ry;
+		}
+	}
+	else {
+		if (x >= consts.Px || y >= consts.Py || x < 0 || y < 0)
+			return;
+		if (recon1) {
+			x1 *= consts.Rx / consts.Px;
+			y1 *= consts.Ry / consts.Py;
+		}
+		if (recon2) {
+			x2 *= consts.Rx / consts.Px;
+			y2 *= consts.Ry / consts.Py;
+		}
+	}
 
 	if (useRatio) {
 		if (useAbs) {
-			float val = consts.log ? abs(src2[MUL_ADD(y, pitch2, x)]) : USHRT_MAX - abs(src2[MUL_ADD(y, pitch2, x)]);
-			d_Dst[MUL_ADD(y, pitchOut, x)] = src1[MUL_ADD(y, pitch1, x)] * consts.ratio + val * (1 - consts.ratio);
+			float val = consts.log ? abs(src2[MUL_ADD(y2, pitch2, x2)]) : USHRT_MAX - abs(src2[MUL_ADD(y2, pitch2, x2)]);
+			d_Dst[MUL_ADD(y, pitchOut, x)] = src1[MUL_ADD(y1, pitch1, x1)] * consts.ratio + val * (1 - consts.ratio);
 		}
 		else {
-			float val = consts.log ? src2[MUL_ADD(y, pitch2, x)] : USHRT_MAX - src2[MUL_ADD(y, pitch2, x)];
-			d_Dst[MUL_ADD(y, pitchOut, x)] = src1[MUL_ADD(y, pitch1, x)] * consts.ratio + val * (1 - consts.ratio);
+			float val = consts.log ? src2[MUL_ADD(y2, pitch2, x2)] : USHRT_MAX - src2[MUL_ADD(y2, pitch2, x2)];
+			d_Dst[MUL_ADD(y, pitchOut, x)] = src1[MUL_ADD(y1, pitch1, x1)] * consts.ratio + val * (1 - consts.ratio);
 		}
 	}
 	else
-		d_Dst[MUL_ADD(y, pitchOut, x)] = (src1[MUL_ADD(y, pitch1, x)] + src2[MUL_ADD(y, pitch2, x)]) / 2;
+		d_Dst[MUL_ADD(y, pitchOut, x)] = (src1[MUL_ADD(y1, pitch1, x1)] + src2[MUL_ADD(y2, pitch2, x2)]) / 2;
 }
 
 __global__ void div(float* src1, float* src2, float *d_Dst, int pitch, params consts) {
@@ -1283,65 +1308,72 @@ TomoError TomoRecon::singleFrame() {
 	case x_mag_enhance:
 		if (constants.dataDisplay == projections) {
 			cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
-			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, Sys.Proj.Nx, Sys.Recon.Nx, true, true, constants);
+			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, false, false, false, true, true, constants);
 		}
 		else {
-			tomo_err_throw(project(inXBuff, d_Image));
-			//KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, true, true, constants);
+			tomo_err_throw(project(inXBuff, buff1));
+			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, true, true, true, true, true, constants);
 		}
 		
 		break;
 	case y_mag_enhance:
 		if (constants.dataDisplay == projections) {
 			cuda(Memcpy(buff1, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, false, false, false, true, true, constants);
 		}
 		else {
 			tomo_err_throw(project(inYBuff, buff1));
+			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, true, true, true, true, true, constants);
 		}
-		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, Sys.Proj.Nx, Sys.Recon.Nx, true, true, constants);
+		
 		break;
 	case mag_enhance:
 		if (constants.dataDisplay == projections) {
 			cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
 			cuda(Memcpy(buff2, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+			KERNELCALL2(mag, contBlocks, contThreads, buff1, buff2, buff1, reconPitchNum, reconPitchNum, reconPitchNum, constants);
+			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, false, false, false, true, false, constants);
 		}
 		else {
 			tomo_err_throw(project(inXBuff, buff1));
 			tomo_err_throw(project(inYBuff, buff2));
+			KERNELCALL2(mag, contBlocks, contThreads, buff1, buff2, buff1, reconPitchNum, reconPitchNum, reconPitchNum, constants);
+			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, true, true, true, true, false, constants);
 		}
-		
-		KERNELCALL2(mag, contBlocks, contThreads, buff1, buff2, buff1, reconPitchNum, reconPitchNum, reconPitchNum, constants);
-		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, Sys.Proj.Nx, Sys.Recon.Nx, true, false, constants);
 		break;
 	case x_enhance:
 		if (constants.dataDisplay == projections) {
 			cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, false, false, false, true, false, constants);
 		}
 		else {
 			tomo_err_throw(project(inXBuff, buff1));
+			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, true, true, true, true, false, constants);
 		}
-		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, Sys.Proj.Nx, Sys.Recon.Nx, true, false, constants);
 		break;
 	case y_enhance:
 		if (constants.dataDisplay == projections) {
 			cuda(Memcpy(buff1, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, false, false, false, true, false, constants);
 		}
 		else {
 			tomo_err_throw(project(inYBuff, buff1));
+			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, true, true, true, true, false, constants);
 		}
-		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, Sys.Proj.Nx, Sys.Recon.Nx, true, false, constants);
 		break;
 	case both_enhance:
 		if (constants.dataDisplay == projections) {
 			cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
 			cuda(Memcpy(buff2, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+			KERNELCALL2(add, contBlocks, contThreads, buff1, buff2, buff1, false, false, false, false, false, constants);
+			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, false, false, false, true, false, constants);
 		}
 		else {
 			tomo_err_throw(project(inXBuff, buff1));
 			tomo_err_throw(project(inYBuff, buff2));
+			KERNELCALL2(add, contBlocks, contThreads, buff1, buff2, buff1, true, true, true, false, false, constants);
+			KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, true, true, true, true, false, constants);
 		}
-		KERNELCALL2(add, contBlocks, contThreads, buff1, buff2, buff1, Sys.Proj.Nx, Sys.Proj.Nx, Sys.Proj.Nx, false, false, constants);
-		KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, Sys.Recon.Nx, Sys.Proj.Nx, Sys.Recon.Nx, true, false, constants);
 		break;
 	case der_x:
 		if (constants.dataDisplay == projections) {
@@ -1889,10 +1921,18 @@ inline TomoError TomoRecon::project(float * projections, float * reconstruction)
 }
 
 TomoError TomoRecon::resetLight() {
-	constants.baseXr = 3 * Sys.Recon.Nx / 4;
-	constants.baseYr = 3 * Sys.Recon.Ny / 4;
-	constants.currXr = Sys.Recon.Nx / 4;
-	constants.currYr = Sys.Recon.Ny / 4;
+	if (constants.dataDisplay == projections) {
+		constants.baseXr = 3 * Sys.Proj.Nx / 4;
+		constants.baseYr = 3 * Sys.Proj.Ny / 4;
+		constants.currXr = Sys.Proj.Nx / 4;
+		constants.currYr = Sys.Proj.Ny / 4;
+	}
+	else {
+		constants.baseXr = 3 * Sys.Recon.Nx / 4;
+		constants.baseYr = 3 * Sys.Recon.Ny / 4;
+		constants.currXr = Sys.Recon.Nx / 4;
+		constants.currYr = Sys.Recon.Ny / 4;
+	}
 
 	tomo_err_throw(autoLight());
 
@@ -1905,10 +1945,18 @@ TomoError TomoRecon::resetLight() {
 }
 
 TomoError TomoRecon::resetFocus() {
-	constants.baseXr = 3 * Sys.Recon.Nx / 4;
-	constants.baseYr = 3 * Sys.Recon.Ny / 4;
-	constants.currXr = Sys.Recon.Nx / 4;
-	constants.currYr = Sys.Recon.Ny / 4;
+	if (constants.dataDisplay == projections) {
+		constants.baseXr = 3 * Sys.Proj.Nx / 4;
+		constants.baseYr = 3 * Sys.Proj.Ny / 4;
+		constants.currXr = Sys.Proj.Nx / 4;
+		constants.currYr = Sys.Proj.Ny / 4;
+	}
+	else {
+		constants.baseXr = 3 * Sys.Recon.Nx / 4;
+		constants.baseYr = 3 * Sys.Recon.Ny / 4;
+		constants.currXr = Sys.Recon.Nx / 4;
+		constants.currYr = Sys.Recon.Ny / 4;
+	}
 
 	tomo_err_throw(autoFocus(true));
 	while (autoFocus(false) == Tomo_OK);
@@ -2000,12 +2048,18 @@ int TomoRecon::R2P(int r, int view, bool xDir) {
 //Image space to on-screen display
 int TomoRecon::I2D(int i, bool xDir) {
 	if (xDir) {
-		float innerOffx = (width - Sys.Proj.Nx / scale) / 2.0f;
+		int sysWidth;
+		if (constants.dataDisplay == projections) sysWidth = Sys.Proj.Nx;
+		else sysWidth = Sys.Recon.Nx;
+		float innerOffx = (width - sysWidth / scale) / 2.0f;
 
 		return (int)((i - xOff) / scale + innerOffx);
 	}
 	//else
-	float innerOffy = (height - Sys.Proj.Ny / scale) / 2.0f;
+	int sysHeight;
+	if (constants.dataDisplay == projections) sysHeight = Sys.Proj.Ny;
+	else sysHeight = Sys.Recon.Ny;
+	float innerOffy = (height - sysHeight / scale) / 2.0f;
 
 	return (int)((i - yOff) / scale + innerOffy);
 }
@@ -2013,12 +2067,18 @@ int TomoRecon::I2D(int i, bool xDir) {
 //On-screen coordinates to image space
 int TomoRecon::D2I(int d, bool xDir) {
 	if (xDir) {
-		float innerOffx = (width - Sys.Proj.Nx / scale) / 2.0f;
+		int sysWidth;
+		if (constants.dataDisplay == projections) sysWidth = Sys.Proj.Nx;
+		else sysWidth = Sys.Recon.Nx;
+		float innerOffx = (width - sysWidth / scale) / 2.0f;
 
 		return (int)((d - innerOffx) * scale + xOff);
 	}
 	//else
-	float innerOffy = (height - Sys.Proj.Ny / scale) / 2.0f;
+	int sysHeight;
+	if (constants.dataDisplay == projections) sysHeight = Sys.Proj.Ny;
+	else sysHeight = Sys.Recon.Ny;
+	float innerOffy = (height - sysHeight / scale) / 2.0f;
 
 	return (int)((d - innerOffy) * scale + yOff);
 }
