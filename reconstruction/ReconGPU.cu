@@ -697,10 +697,10 @@ __global__ void updhgZ_SoA(float *z1, float *z2, float *f, float tz, float lambd
 //Function to set up the memory on the GPU
 TomoError TomoRecon::initGPU(){
 	//init recon space
-	Sys.Recon.Pitch_x = Sys.Proj.Pitch_x * 4;
-	Sys.Recon.Pitch_y = Sys.Proj.Pitch_y * 4;
-	Sys.Recon.Nx = Sys.Proj.Nx / 4;
-	Sys.Recon.Ny = Sys.Proj.Ny / 4;
+	Sys.Recon.Pitch_x = Sys.Proj.Pitch_x;
+	Sys.Recon.Pitch_y = Sys.Proj.Pitch_y;
+	Sys.Recon.Nx = Sys.Proj.Nx;
+	Sys.Recon.Ny = Sys.Proj.Ny;
 
 	//Normalize Geometries
 	Sys.Geo.IsoX = Sys.Geo.EmitX[NUMVIEWS / 2];
@@ -1010,7 +1010,7 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 		constants.dataDisplay = reconstruction;
 
 #ifdef ENABLEZDER
-		cuda(BindTexture2D(NULL, textError, inXBuff, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
+		cuda(BindTexture2D(NULL, textError, d_Sino, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
 		for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
 			KERNELCALL2(projectSliceZ, contBlocks, contThreads, zBuffs, i + KERNELRADIUS, view, i*Sys.Geo.ZPitch, constants);
 		}
@@ -1061,6 +1061,23 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 	cuda(Free(d_Gain));
 	cuda(Free(d_SumValsHor));
 	cuda(Free(d_SumValsVert));
+
+#ifdef ENABLESOLVER
+	int numSlices = 20;
+	int sqrtNumSl = ceil(sqrt(numSlices));
+	int matrixSize = Sys.Proj.Nx * Sys.Proj.Ny / pow(sqrtNumSl, 2) * numSlices * sizeof(float);
+
+	cuda(Malloc(&d_Recon, matrixSize));
+	cuda(Memset(d_Recon, 0, matrixSize));
+
+#ifdef PRINTMEMORYUSAGE
+	size_t avail_mem;
+	size_t total_mem;
+	cudaMemGetInfo(&avail_mem, &total_mem);
+	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
+#endif // PRINTMEMORYUSAGE
+#endif // ENABLESOLVER
+
 
 	return Tomo_OK;
 }
@@ -1199,6 +1216,19 @@ TomoError TomoRecon::FreeGPUMemory(void){
 	cuda(Free(d_gaussDer));
 	cuda(Free(d_gaussDer2));
 	//cuda(Free(d_gaussDer3));
+
+#ifdef ENABLESOLVER
+	cuda(Free(d_Recon));
+#endif
+
+#ifdef ENABLEZDER
+	cuda(Free(inZBuff));
+	cuda(Free(maxZVal));
+	cuda(Free(maxZPos));
+	cuda(Free(zBuffs));
+	
+#endif // ENABLEZDER
+
 
 	return Tomo_OK;
 }
@@ -1435,7 +1465,7 @@ TomoError TomoRecon::singleFrame() {
 			cuda(Memcpy(d_Image, inZBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
 		}
 		else {
-			cuda(BindTexture2D(NULL, textError, inXBuff, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
+			cuda(BindTexture2D(NULL, textError, d_Sino, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
 			for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
 				KERNELCALL2(projectSliceZ, contBlocks, contThreads, zBuffs, i + KERNELRADIUS, -1, distance + i*Sys.Geo.ZPitch, constants);
 			}

@@ -75,7 +75,8 @@
 //#define PROFILER
 //#define PRINTSCANCORRECTIONS
 #define ENABLEZDER
-//#define PRINTMEMORYUSAGE
+//#define ENABLESOLVER
+#define PRINTMEMORYUSAGE
 
 //Defaults
 #define ENHANCEDEFAULT 0.1f
@@ -839,6 +840,7 @@ private:
 	float * d_Image;
 	float * d_Error;
 	float * d_Sino;
+	float * d_Recon;
 
 	//Kernel memory
 	float * d_MaxVal;

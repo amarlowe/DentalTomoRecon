@@ -22,7 +22,8 @@ TomoRecon
 - Add DICOM read functions
 
 --------------Bugs---------------------
-- Throw all tomo errors instead of crashing the program
+
+- Zbuffs are inaccessible on host code for gpu memory cleanup
 
 -------------Completed------------------
 -------------Features------------------
@@ -72,6 +73,7 @@ TomoRecon
 - Save recon as DICOM from reconstruction mode
 - Correct for dead pixels
 - Name tabs based on filename
+- Throw all tomo errors instead of crashing the program
 
 --------------Bugs---------------------
 - additional lines included on increasing z size
