@@ -474,8 +474,8 @@ __global__ void projectSlice(float * IM, float distance, params consts) {
 	for (int view = 0; view < NUMVIEWS; view++) {
 		float dz = distance / consts.d_Beamz[view];
 		if (consts.orientation) dz = -dz;//z changes sign when flipped in the x direction
-		float x = xMM2P((xR2MM(i, consts.Rx, consts.PitchRx) + consts.d_Beamx[view] * dz) / (1 + dz), consts.Px, consts.PitchPx);
-		float y = yMM2P((yR2MM(j, consts.Ry, consts.PitchRy) + consts.d_Beamy[view] * dz) / (1 + dz), consts.Py, consts.PitchPy);
+		float x = xMM2P((xR2MM(i, consts.Rx, consts.PitchRx) + consts.d_Beamx[view] * dz), consts.Px, consts.PitchPx);// / (1 + dz)
+		float y = yMM2P((yR2MM(j, consts.Ry, consts.PitchRy) + consts.d_Beamy[view] * dz), consts.Py, consts.PitchPy);
 
 		//Update the value based on the error scaled and save the scale
 		if (y > 0 && y < consts.Py && x > 0 && x < consts.Px) {
