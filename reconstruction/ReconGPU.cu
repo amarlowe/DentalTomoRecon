@@ -466,7 +466,7 @@ __global__ void projectSlice(float * IM, float distance, params consts) {
 
 	//Set a normalization and pixel value to 0
 	float error = 0.0f;
-	float count = 0.0f;
+	int count = 0;
 
 	//Check image boundaries
 	if ((i >= consts.Rx) || (j >= consts.Ry)) return;
@@ -479,17 +479,17 @@ __global__ void projectSlice(float * IM, float distance, params consts) {
 
 		//Update the value based on the error scaled and save the scale
 		if (y > 0 && y < consts.Py && x > 0 && x < consts.Px) {
-			values[view] = tex2D(textError, x, y + view*consts.Py);
-			if (values[view] != 0) {
-				error += values[view];
+			values[count] = tex2D(textError, x, y + view*consts.Py);
+			if (values[count] != 0) {
+				error += values[count];
 				count++;
 			}
 		}
 	}
 
 	if (count > 0)
-		IM[j*consts.ReconPitchNum + i] = error / count;
-	else IM[j*consts.ReconPitchNum + i] = 0;
+		IM[j*consts.ReconPitchNum + i] = error / (float)count;
+	else IM[j*consts.ReconPitchNum + i] = 0.0f;
 }
 
 //Ruduction and histogram functions
