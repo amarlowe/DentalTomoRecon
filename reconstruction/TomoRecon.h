@@ -74,9 +74,10 @@
 //Code use parameters
 //#define PROFILER
 //#define PRINTSCANCORRECTIONS
-#define ENABLEZDER
+//#define ENABLEZDER
 //#define ENABLESOLVER
 #define PRINTMEMORYUSAGE
+#define USEITERATIVE
 
 //Defaults
 #define ENHANCEDEFAULT 0.1f
@@ -85,6 +86,9 @@
 #define NOISEMAXDEFAULT 700
 #define LAMBDADEFAULT 2
 #define ITERDEFAULT 20
+
+#define RECONSLICES 25
+#define RECONDIS 8.0f
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {										\
@@ -110,7 +114,9 @@ typedef enum {
 ///Possible types of data that could be displayed through each of the possible filters
 typedef enum {
 	projections,
-	reconstruction
+	reconstruction,
+	error,
+	iterRecon
 } sourceData;
 
 ///Filters through which one can look at the data
@@ -186,6 +192,7 @@ struct ReconGeometry {
 	float Pitch_y;							//Recon Image pixel pitch in the y direction
 	int Nx;									//The number of recon image pixels in x direction
 	int Ny;									//The number of recon image pixels in y direction
+	int Nz = RECONSLICES;
 };
 
 ///Meta variable containing all parameters
@@ -206,6 +213,7 @@ struct params {
 	float PitchPy;
 	float PitchRx;
 	float PitchRy;
+	float pitchZ;
 	float * d_Beamx;
 	float * d_Beamy;
 	float * d_Beamz;
@@ -745,6 +753,9 @@ public:
 		///Value to be set. Larger values remove more noise, but also blur the image and slow down read ins. 
 		float iter);
 
+	TomoError iterStep();
+	int getActiveProjection();
+
 private:
 	/********************************************************************************************/
 	/* Function to interface the CPU with the GPU:												*/
@@ -840,7 +851,7 @@ private:
 	float * d_Image;
 	float * d_Error;
 	float * d_Sino;
-	float * d_Recon;
+	cudaArray_t d_Recon2;
 
 	//Kernel memory
 	float * d_MaxVal;

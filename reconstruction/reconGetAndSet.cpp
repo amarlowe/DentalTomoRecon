@@ -100,8 +100,15 @@ TomoError TomoRecon::setInputVeritcal(bool vert) {
 	return Tomo_OK;
 }
 
+int TomoRecon::getActiveProjection() {
+	return sliceIndex;
+}
+
 TomoError TomoRecon::setActiveProjection(int index) {
-	if (index < 0 || index > constants.Views) return Tomo_invalid_arg;
+	if( index < 0 
+		|| (constants.dataDisplay == projections && index >= constants.Views)
+		|| (constants.dataDisplay == error && index >= constants.Views)
+		|| (constants.dataDisplay == iterRecon && index >= RECONSLICES)) return Tomo_invalid_arg;
 	sliceIndex = index;
 	return Tomo_OK;
 }

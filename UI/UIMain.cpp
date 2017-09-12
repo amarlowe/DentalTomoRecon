@@ -156,7 +156,7 @@ TomoError DTRMainWindow::genSys(struct SystemControl * Sys) {
 	//Sys->UsrIn->Orientation = pConfig->ReadLong(wxT("/orientation"), 0l) == 0l ? 0 : 1;//TODO: reintroduce
 	Sys->Proj.Flip = pConfig->ReadLong(wxT("/rotationEnabled"), 0l) == 0l ? 0 : 1;
 
-	Sys->Geo.ZPitch = pConfig->ReadDouble(wxT("/sliceThickness"), 0.5f);
+	Sys->Geo.ZPitch = 0.5f;// pConfig->ReadDouble(wxT("/sliceThickness"), 0.5f);
 	Sys->Proj.Nx = pConfig->ReadLong(wxT("/pixelWidth"), 1915l);
 	Sys->Proj.Ny = pConfig->ReadLong(wxT("/pixelHeight"), 1440l);
 	Sys->Proj.Pitch_x = pConfig->ReadDouble(wxT("/pitchHeight"), 0.0185f);
@@ -706,7 +706,7 @@ void DTRMainWindow::onProjectionView(wxCommandEvent& event) {
 
 	if (projectionView->IsChecked()) {
 		recon->setDataDisplay(projections);
-		currentFrame->showScrollBar();
+		currentFrame->showScrollBar(NUMVIEWS, 0);
 	}
 	else {
 		recon->setDataDisplay(reconstruction);
@@ -1759,7 +1759,8 @@ void GLFrame::hideScrollBar() {
 	this->Layout();
 }
 
-void GLFrame::showScrollBar() {
+void GLFrame::showScrollBar(int steps, int current) {
+	m_scrollBar->SetScrollbar(current, 1, steps, 1);
 	bSizer->ShowItems(true);
 	this->Layout();
 }
@@ -1946,6 +1947,46 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
 
 void CudaGLCanvas::OnChar(wxKeyEvent& event){
 	//Switch the derivative display
+#ifdef USEITERATIVE
+	static int errorIndex = 0;
+	static int reconIndex = 0;
+	if (event.GetKeyCode() == 32) {
+		switch (recon->getDataDisplay()) {
+		case error:
+			recon->setDataDisplay(iterRecon);
+			errorIndex = recon->getActiveProjection();
+			recon->setActiveProjection(reconIndex);
+			recon->setDisplay(no_der);
+			recon->setLogView(false);
+			((GLFrame*)GetParent())->showScrollBar(RECONSLICES, reconIndex);
+			break;
+		case iterRecon:
+			recon->iterStep();
+			recon->setDataDisplay(error);
+			reconIndex = recon->getActiveProjection();
+			recon->setActiveProjection(errorIndex);
+			recon->setDisplay(no_der);
+			((GLFrame*)GetParent())->showScrollBar(NUMVIEWS, errorIndex);
+
+			/*recon->setDataDisplay(reconstruction);
+			recon->setDisplay(mag_enhance);
+			((GLFrame*)GetParent())->hideScrollBar();*/
+			break;
+		default:
+			recon->setDataDisplay(error);
+			recon->setDisplay(no_der);
+			recon->setLogView(false);
+			recon->setShowNegative(true);
+			((GLFrame*)GetParent())->showScrollBar(NUMVIEWS, 0);
+			break;
+		}
+
+		recon->singleFrame();
+		recon->resetLight();
+
+		paint();
+	}
+#endif
 #ifdef ENABLEZDER
 	if (event.GetKeyCode() == 32) {
 		switch (recon->getDisplay()) {

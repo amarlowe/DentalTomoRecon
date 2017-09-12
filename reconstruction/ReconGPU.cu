@@ -40,6 +40,8 @@ union pxl_rgbx_24{
 #define PXL_KERNEL_THREADS_PER_BLOCK  256
 
 surface<void, cudaSurfaceType2D> displaySurface;
+surface<void, cudaSurfaceType3D> surfRecon;
+texture<float, cudaTextureType3D, cudaReadModeElementType> textRecon;
 texture<float, cudaTextureType2D, cudaReadModeElementType> textImage;
 texture<float, cudaTextureType2D, cudaReadModeElementType> textError;
 texture<float, cudaTextureType2D, cudaReadModeElementType> textSino;
@@ -224,6 +226,19 @@ __global__ void sub(float* src1, float* src2, float *d_Dst, int pitch, params co
 		return;
 
 	d_Dst[MUL_ADD(y, pitch, x)] = src1[MUL_ADD(y, pitch, x)] - src2[MUL_ADD(y, pitch, x)];
+}
+
+__global__ void invert(float* image, params consts) {
+	const int x = MUL_ADD(blockDim.x, blockIdx.x, threadIdx.x);
+	const int y = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
+
+	if (x >= consts.Px || y >= consts.Py || x < 0 || y < 0)
+		return;
+
+	float val = image[MUL_ADD(y, consts.ProjPitchNum, x)];
+	if (val <= 0.0f) image[MUL_ADD(y, consts.ProjPitchNum, x)] = 0.0f;
+	else if (val >= USHRT_MAX) image[MUL_ADD(y, consts.ProjPitchNum, x)] = 0.0f;
+	else image[MUL_ADD(y, consts.ProjPitchNum, x)] = USHRT_MAX - val;
 }
 
 __global__ void projectSliceZ(float * zBuff[KERNELSIZE], int index, int projIndex, float distance, params consts) {
@@ -492,6 +507,119 @@ __global__ void projectSlice(float * IM, float distance, params consts) {
 	else IM[j*consts.ReconPitchNum + i] = 0.0f;
 }
 
+__global__ void projectIter(int slice, int slices, params consts) {
+	//Define pixel location in x, y, and z
+	int i = blockDim.x * blockIdx.x + threadIdx.x;
+	int j = blockDim.y * blockIdx.y + threadIdx.y;
+
+	float values[NUMVIEWS];
+
+	//Set a normalization and pixel value to 0
+	int count = 0;
+	float error = 0;
+
+	//Check image boundaries
+	if ((i >= consts.Rx) || (j >= consts.Ry)) return;
+
+	for (int view = 0; view < NUMVIEWS; view++) {
+		float dz = (RECONDIS + slice * consts.pitchZ) / consts.d_Beamz[view];
+		if (consts.orientation) dz = -dz;//z changes sign when flipped in the x direction
+		float x = xMM2P((xR2MM(i, consts.Rx, consts.PitchRx) + consts.d_Beamx[view] * dz), consts.Px, consts.PitchPx);// / (1 + dz)
+		float y = yMM2P((yR2MM(j, consts.Ry, consts.PitchRy) + consts.d_Beamy[view] * dz), consts.Py, consts.PitchPy);
+
+		//Update the value based on the error scaled and save the scale
+		if (y > 0 && y < consts.Py && x > 0 && x < consts.Px) {
+			values[count] = tex2D(textError, x, y + view*consts.Py);
+			if (values[count] != 0) {
+				error += values[count];
+				count++;
+			}
+		}
+	}
+
+	
+	//Minimum 
+	/*error = FLT_MAX;
+	for (int iter = 0; iter < count; iter++) {
+		float val = values[iter];
+		if (abs(val) < abs(error)) error = val;
+	}*/
+
+	if (count > 0)
+		error /= ((float)count * (float)slices);
+	else error = 0.0f;
+
+	//if (error > minimum) error = minimum;
+
+	float returnVal;
+	surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice);
+	returnVal += error;
+	//returnVal *= 0.99f;
+	if (count == 0 || returnVal < 0.0f) surf3Dwrite(0.0f, surfRecon, i * sizeof(float), j, slice);
+	else surf3Dwrite(returnVal, surfRecon, i * sizeof(float), j, slice);
+}
+
+__global__ void backProject(float * proj, float * error, int view, int slices, params consts) {
+	//Define pixel location in x, y, and z
+	int i = blockDim.x * blockIdx.x + threadIdx.x;
+	int j = blockDim.y * blockIdx.y + threadIdx.y;
+
+	float value = 0;
+	int count = 0;
+
+	//Check image boundaries
+	if ((i >= consts.Px) || (j >= consts.Py)) return;
+
+	for (int slice = 0; slice < slices; slice++) {
+		float dz = (RECONDIS + slice * consts.pitchZ) / consts.d_Beamz[view];
+		if (consts.orientation) dz = -dz;//z changes sign when flipped in the x direction
+		float x = xMM2R((xP2MM(i, consts.Px, consts.PitchPx) - consts.d_Beamx[view] * dz), consts.Rx, consts.PitchRx);
+		float y = yMM2R((yP2MM(j, consts.Py, consts.PitchPy) - consts.d_Beamy[view] * dz), consts.Ry, consts.PitchRy);
+
+		//Update the value based on the error scaled and save the scale
+		if (y >= 0 && y < consts.Ry && x >= 0 && x < consts.Rx) {
+			//value += tex2D(textSino, x, y + slice*consts.Ry);
+			//value += recon[(int)((slice * consts.Ry + y)*consts.ReconPitchNum + x)];
+			float returnVal;
+			//surf3Dread(&returnVal, surfRecon, x * sizeof(float), y, slice);
+			returnVal = tex3D(textRecon, x + 0.5f, y + 0.5f, slice);
+			if (returnVal >= 0.0f) count++;
+			value += returnVal;
+		}
+	}
+	
+	float projVal = proj[j*consts.ReconPitchNum + i];
+	if (projVal > 0.0f && projVal <= USHRT_MAX && count > 0)
+		//error[j*consts.ProjPitchNum + i] = (USHRT_MAX - projVal) - value;
+		error[j*consts.ProjPitchNum + i] = (USHRT_MAX - projVal) - (value * (float)consts.Views / (float)count);
+	else error[j*consts.ProjPitchNum + i] = 0.0f;
+}
+
+__global__ void copySlice(float * image, int slice, params consts) {
+	//Define pixel location in x, y, and z
+	int i = blockDim.x * blockIdx.x + threadIdx.x;
+	int j = blockDim.y * blockIdx.y + threadIdx.y;
+
+	//Check image boundaries
+	if ((i >= consts.Rx) || (j >= consts.Ry)) return;
+
+	float returnVal;
+	surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice);
+	image[j*consts.ProjPitchNum + i] = returnVal;
+	//image[j*consts.ProjPitchNum + i] = tex3D(textRecon, i, j, slice);
+}
+
+__global__ void zeroArray(int slice, params consts) {
+	//Define pixel location in x, y, and z
+	int i = blockDim.x * blockIdx.x + threadIdx.x;
+	int j = blockDim.y * blockIdx.y + threadIdx.y;
+
+	//Check image boundaries
+	if ((i >= consts.Rx) || (j >= consts.Ry)) return;
+
+	surf3Dwrite(0.0f, surfRecon, i * sizeof(float), j, slice);
+}
+
 //Ruduction and histogram functions
 __global__ void sumReduction(float * Image, int pitch, float * sum, int lowX, int upX, int lowY, int upY) {
 	//Define shared memory to read all the threads
@@ -711,6 +839,8 @@ TomoError TomoRecon::initGPU(){
 		Sys.Geo.EmitY[i] -= Sys.Geo.IsoY;
 	}
 
+	cudaDeviceSynchronize();
+
 #ifdef PRINTMEMORYUSAGE
 	size_t avail_mem;
 	size_t total_mem;
@@ -744,10 +874,18 @@ TomoError TomoRecon::initGPU(){
 
 	//Set up display and buffer regions
 	cuda(MallocPitch((void**)&d_Image, &reconPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny));
-	cuda(MallocPitch((void**)&d_Error, &reconPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny));
 	cuda(MallocPitch((void**)&d_Sino, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
 	cuda(MallocPitch((void**)&inXBuff, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
 	cuda(MallocPitch((void**)&inYBuff, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
+#ifdef USEITERATIVE
+	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
+	cudaExtent vol = { Sys.Recon.Nx, Sys.Recon.Ny, Sys.Recon.Nz };
+	cuda(Malloc3DArray(&d_Recon2, &channelDesc, vol, cudaArraySurfaceLoadStore));
+
+	cuda(MallocPitch((void**)&d_Error, &reconPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
+#else
+	cuda(MallocPitch((void**)&d_Error, &reconPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny));
+#endif
 
 	reconPitchNum = (int)reconPitch / sizeof(float);
 
@@ -780,6 +918,10 @@ TomoError TomoRecon::initGPU(){
 	textSino.filterMode = cudaFilterModeLinear;
 	textSino.addressMode[0] = cudaAddressModeClamp;
 	textSino.addressMode[1] = cudaAddressModeClamp;
+
+	textRecon.filterMode = cudaFilterModeLinear;
+	textRecon.addressMode[0] = cudaAddressModeClamp;
+	textRecon.addressMode[1] = cudaAddressModeClamp;
 
 	constants.Px = Sys.Proj.Nx;
 	constants.Py = Sys.Proj.Ny;
@@ -881,6 +1023,8 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 
 	bool oldLog = constants.log;
 	constants.log = false;
+
+	constants.pitchZ = Sys.Geo.ZPitch;
 
 	//Read the rest of the blank images for given projection sample set 
 	for (int view = 0; view < NumViews; view++) {
@@ -1078,6 +1222,22 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 #endif // PRINTMEMORYUSAGE
 #endif // ENABLESOLVER
 
+#ifdef USEITERATIVE
+	//cuda(MemsetAsync(d_Recon2, 0, Sys.Recon.Nx*Sys.Recon.Ny*Sys.Recon.Nz * sizeof(float)));
+	cuda(Memcpy2DAsync(d_Error, projPitch, inXBuff, projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny*NUMVIEWS, cudaMemcpyDeviceToDevice));//inXBuff
+
+	for (int view = 0; view < NumViews; view++)
+		KERNELCALL2(invert, contBlocks, contThreads, d_Error + view * projPitch / sizeof(float) * Sys.Proj.Ny, constants);
+
+	cuda(BindTexture2D(NULL, textError, d_Error, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
+	cuda(BindSurfaceToArray(surfRecon, d_Recon2));
+	for (int slice = 0; slice < Sys.Recon.Nz; slice++) {
+		KERNELCALL2(zeroArray, contBlocks, contThreads, slice, constants);
+		KERNELCALL2(projectIter, contBlocks, contThreads, slice, Sys.Recon.Nz, constants);
+	}
+	cuda(UnbindTexture(textError));
+#endif
+
 
 	return Tomo_OK;
 }
@@ -1229,6 +1389,9 @@ TomoError TomoRecon::FreeGPUMemory(void){
 	
 #endif // ENABLEZDER
 
+#ifdef USEITERATIVE
+	cudaFreeArray(d_Recon2);
+#endif
 
 	return Tomo_OK;
 }
@@ -1307,6 +1470,15 @@ TomoError TomoRecon::singleFrame() {
 		break;
 	case projections:
 		cuda(Memcpy(d_Image, d_Sino + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+		break;
+	case iterRecon:
+		//cuda(Memcpy2DAsync(d_Image, reconPitch, d_Recon + sliceIndex * reconPitch / sizeof(float) * Sys.Recon.Ny, reconPitch, Sys.Recon.Nx * sizeof(float), Sys.Recon.Ny, cudaMemcpyDeviceToDevice));
+		//cudaBindTextureToArray(textRecon, d_Recon2);
+		cuda(BindSurfaceToArray(surfRecon, d_Recon2));
+		KERNELCALL2(copySlice, contBlocks, contThreads, d_Image, sliceIndex, constants);
+		break;
+	case error:
+		cuda(Memcpy2DAsync(d_Image, projPitch, d_Error + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny, cudaMemcpyDeviceToDevice));
 		break;
 	}
 
@@ -1867,6 +2039,26 @@ TomoError TomoRecon::testTolerances(std::vector<toleranceData> &data, bool first
 	iter->phantomData = readVal;
 	++iter;
 
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::iterStep() {
+	cuda(Memset2DAsync(d_Error, projPitch, 0, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny*Sys.Proj.NumViews));
+	//cuda(BindTexture2D(NULL, textSino, d_Recon, cudaCreateChannelDesc<float>(), Sys.Recon.Nx, Sys.Recon.Ny*Sys.Recon.Nz, reconPitch));
+	//cuda(BindTexture2D(NULL, textError, d_Recon, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
+	//cuda(BindSurfaceToArray(surfRecon, d_Recon2));
+	cuda(BindTextureToArray(textRecon, d_Recon2));
+	for (int view = 0; view < NumViews; view++) {
+		KERNELCALL2(backProject, contBlocks, contThreads, d_Sino + view * projPitch / sizeof(float) * Sys.Proj.Ny, d_Error + view * projPitch / sizeof(float) * Sys.Proj.Ny, view, Sys.Recon.Nz, constants);
+	}
+	cuda(UnbindTexture(textRecon));
+
+	cuda(BindTexture2D(NULL, textError, d_Error, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch))
+	for (int slice = 0; slice < Sys.Recon.Nz; slice++) {
+		KERNELCALL2(projectIter, contBlocks, contThreads, slice, Sys.Recon.Nz, constants);
+	}
+	cuda(UnbindTexture(textError));
+	
 	return Tomo_OK;
 }
 

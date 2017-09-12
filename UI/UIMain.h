@@ -139,7 +139,7 @@ public:
 	void OnScroll(wxScrollEvent& event);
 	void OnMousewheel(wxMouseEvent& event);
 	void hideScrollBar();
-	void showScrollBar();
+	void showScrollBar(int steps, int current);
 
 	CudaGLCanvas *m_canvas;
 	wxScrollBar* m_scrollBar;
