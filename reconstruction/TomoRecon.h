@@ -87,8 +87,8 @@
 #define LAMBDADEFAULT 2
 #define ITERDEFAULT 20
 
-#define RECONSLICES 25
-#define RECONDIS 8.0f
+#define RECONSLICES 30
+#define RECONDIS 7.0f
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {										\

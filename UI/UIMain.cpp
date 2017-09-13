@@ -1962,22 +1962,25 @@ void CudaGLCanvas::OnChar(wxKeyEvent& event){
 			break;
 		case iterRecon:
 			recon->iterStep();
-			recon->setDataDisplay(error);
+			//recon->setDataDisplay(error);
 			reconIndex = recon->getActiveProjection();
-			recon->setActiveProjection(errorIndex);
+			//recon->setActiveProjection(errorIndex);
 			recon->setDisplay(no_der);
-			((GLFrame*)GetParent())->showScrollBar(NUMVIEWS, errorIndex);
+			((GLFrame*)GetParent())->showScrollBar(RECONSLICES, reconIndex);
+			//((GLFrame*)GetParent())->showScrollBar(NUMVIEWS, errorIndex);
 
 			/*recon->setDataDisplay(reconstruction);
 			recon->setDisplay(mag_enhance);
 			((GLFrame*)GetParent())->hideScrollBar();*/
 			break;
 		default:
-			recon->setDataDisplay(error);
+			//recon->setDataDisplay(error);
+			recon->setDataDisplay(iterRecon);
 			recon->setDisplay(no_der);
 			recon->setLogView(false);
 			recon->setShowNegative(true);
-			((GLFrame*)GetParent())->showScrollBar(NUMVIEWS, 0);
+			//((GLFrame*)GetParent())->showScrollBar(NUMVIEWS, 0);
+			((GLFrame*)GetParent())->showScrollBar(RECONSLICES, 0);
 			break;
 		}
 
