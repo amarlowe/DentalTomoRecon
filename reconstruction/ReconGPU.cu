@@ -603,7 +603,7 @@ __global__ void backProject(float * proj, float * error, int view, int slices, p
 	}
 	
 	float projVal = proj[j*consts.ReconPitchNum + i];
-	if (projVal <= USHRT_MAX && count > 0)//projVal > 0.0f && 
+	if (projVal > 0.0f && projVal <= USHRT_MAX && count > 0)//projVal > 0.0f && 
 		//error[j*consts.ProjPitchNum + i] = (USHRT_MAX - projVal) - value;
 		error[j*consts.ProjPitchNum + i] = (USHRT_MAX - projVal) - (value * (float)consts.Views / (float)count);
 	else error[j*consts.ProjPitchNum + i] = 0.0f;
