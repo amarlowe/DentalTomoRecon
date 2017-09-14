@@ -64,15 +64,15 @@ float TomoRecon::getDistance() {
 
 TomoError TomoRecon::setDistance(float dist) {
 	distance = dist;
-	if (dist < MINDIS) distance = MINDIS;
-	if (dist > MAXDIS) distance = MAXDIS;
+	//if (dist < MINDIS) distance = MINDIS;
+	//if (dist > MAXDIS) distance = MAXDIS;
 	return Tomo_OK;
 }
 
 TomoError TomoRecon::stepDistance(int steps) {
 	distance += Sys.Geo.ZPitch * steps;
-	if (distance < MINDIS) distance = MINDIS;
-	if (distance > MAXDIS) distance = MAXDIS;
+	//if (distance < MINDIS) distance = MINDIS;
+	//if (distance > MAXDIS) distance = MAXDIS;
 	return Tomo_OK;
 }
 

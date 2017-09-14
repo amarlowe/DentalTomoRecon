@@ -7,6 +7,8 @@
 // CUDA runtime
 #include <cuda_runtime.h>
 #include "device_launch_parameters.h"
+#include <curand.h>
+#include <curand_kernel.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -88,7 +90,15 @@
 #define ITERDEFAULT 20
 
 #define RECONSLICES 30
-#define RECONDIS 7.0f
+#define RECONDIS 6.0f
+
+#define TVX 0.2f
+#define TVY 0.2f
+#define TVZ 0.002f
+#define TVITERATIONS 0
+#define USELOGITER
+
+//#define RECONDERIVATIVE
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {										\
@@ -852,6 +862,7 @@ private:
 	float * d_Error;
 	float * d_Sino;
 	cudaArray_t d_Recon2;
+	float * d_ReconOld;
 
 	//Kernel memory
 	float * d_MaxVal;
