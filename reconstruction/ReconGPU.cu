@@ -545,17 +545,41 @@ __global__ void projectIter(float * oldRecon, int slice, int slices, float itera
 
 
 		//Minimum 
-		/*error = FLT_MAX;
+		float error1 = FLT_MAX;
 		for (int iter = 0; iter < count; iter++) {
 			float val = values[iter];
-			if (abs(val) < abs(error)) error = val;
-		}*/
+			if (abs(val) < abs(error1)) error1 = val;
+		}
+		if (count > 0)
+			error1 /= (float)slices;
+		else error1 = 0.0f;
+
+		//Median
+		/*for (int outer = 0; outer < count / 2; outer++) {
+			float minimum = FLT_MAX;
+			int index = 0;
+			for (int inner = outer; inner < count; inner++) {
+				float val = values[inner];
+				if (abs(val) < abs(minimum)) {
+					minimum = val;
+					index = inner;
+				}
+				values[index] = values[outer];
+				values[outer] = minimum;
+			}
+		}
+		float error1 = values[count / 2];
+		if (count > 0)
+			error1 /= (float)slices;
+		else error1 = 0.0f;*/
 
 		if (count > 0)
 			error /= ((float)count * (float)slices);
 		else error = 0.0f;
 
-		error -= 20;
+		error += MEDIANFAC * error1;
+		error /= (1.0f + MEDIANFAC);
+		error -= 30;
 	}
 
 	//if (error > minimum) error = minimum;
@@ -572,8 +596,8 @@ __global__ void projectIter(float * oldRecon, int slice, int slices, float itera
 	if (i<consts.Rx - 1) { BX += oldRecon[i + 1 + j*consts.ReconPitchNum] * TVX; AX += TVX; }
 	if (j>0) { BX += oldRecon[i + (j-1)*consts.ReconPitchNum] * TVY; AX += TVY; }
 	if (j<consts.Ry - 1) { BX += oldRecon[i + (j + 1)*consts.ReconPitchNum] * TVY; AX += TVY; }
-	//if (slice>0) { surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice - 1); BX += returnVal * TVZ; AX += TVZ; }
-	//if (slice<slices - 1) { surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice + 1); BX += returnVal * TVZ; AX += TVZ; }
+	if (slice>0) { surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice - 1); BX += returnVal * TVZ; AX += TVZ; }
+	if (slice<slices - 1) { surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice + 1); BX += returnVal * TVZ; AX += TVZ; }
 	surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice);
 	//error *= pow(iteration, 1 / 2);
 	error += BX - AX*returnVal;
@@ -623,8 +647,6 @@ __global__ void backProject(float * proj, float * error, int view, int slices, p
 	float projVal = proj[j*consts.ReconPitchNum + i];
 #ifdef RECONDERIVATIVE
 	if (abs(projVal) <= USHRT_MAX && count > 0) {
-		error[j*consts.ProjPitchNum + i] = projVal - (value * (float)consts.Views / (float)count);
-	}
 #else
 	if (projVal > 0.0f && projVal <= USHRT_MAX && count > 0) {
 #ifdef USELOGITER

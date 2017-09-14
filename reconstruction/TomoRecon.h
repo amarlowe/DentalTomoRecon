@@ -94,9 +94,10 @@
 
 #define TVX 0.2f
 #define TVY 0.2f
-#define TVZ 0.002f
+#define TVZ 0.2f
 #define TVITERATIONS 0
 #define USELOGITER
+#define MEDIANFAC 2.0f
 
 //#define RECONDERIVATIVE
 
