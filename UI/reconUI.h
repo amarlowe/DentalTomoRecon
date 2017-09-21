@@ -53,6 +53,7 @@ class mainWindow : public wxFrame
 		wxMenuBar* m_menubar1;
 		wxMenu* file;
 		wxMenu* config;
+		wxMenu* reconMenu;
 		wxMenu* calibration;
 		wxMenu* help;
 		wxChoice* optionBox;
@@ -122,6 +123,7 @@ class mainWindow : public wxFrame
 		virtual void onQuit( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onConfig( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onGainSelect( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onReconSetup( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onResList( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onContList( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onRunTest( wxCommandEvent& event ) { event.Skip(); }
@@ -190,6 +192,41 @@ class RunBox : public wxDialog
 		
 		RunBox( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Reconstruction running"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 208,61 ), long style = wxDEFAULT_DIALOG_STYLE|wxSTAY_ON_TOP ); 
 		~RunBox();
+	
+};
+
+///////////////////////////////////////////////////////////////////////////////
+/// Class reconConfig
+///////////////////////////////////////////////////////////////////////////////
+class reconConfig : public wxDialog 
+{
+	private:
+	
+	protected:
+		wxBoxSizer* bSizer6;
+		wxStaticText* startDistanceLabel;
+		wxTextCtrl* startDistance;
+		wxStaticText* startDistanceUnits;
+		wxStaticText* endDistanceLabel;
+		wxTextCtrl* endDistance;
+		wxStaticText* endDistanceUnit;
+		wxButton* ok;
+		wxButton* cancel;
+		wxStaticText* distanceLabel;
+		wxTextCtrl* distance;
+		wxStaticText* distanceUnits;
+		wxStaticText* m_staticText35;
+		
+		// Virtual event handlers, overide them in your derived class
+		virtual void onOk( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onCancel( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onDistance( wxCommandEvent& event ) { event.Skip(); }
+		
+	
+	public:
+		
+		reconConfig( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Reconstruction configuration"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 970,643 ), long style = wxCAPTION|wxCLOSE_BOX|wxMAXIMIZE_BOX|wxRESIZE_BORDER ); 
+		~reconConfig();
 	
 };
 

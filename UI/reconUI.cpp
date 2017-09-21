@@ -52,6 +52,13 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	
 	m_menubar1->Append( config, wxT("Config") ); 
 	
+	reconMenu = new wxMenu();
+	wxMenuItem* reconSetup;
+	reconSetup = new wxMenuItem( reconMenu, wxID_ANY, wxString( wxT("Run Reconstruction") ) + wxT('\t') + wxT("F5"), wxEmptyString, wxITEM_NORMAL );
+	reconMenu->Append( reconSetup );
+	
+	m_menubar1->Append( reconMenu, wxT("Reconstruction") ); 
+	
 	calibration = new wxMenu();
 	wxMenuItem* resList;
 	resList = new wxMenuItem( calibration, wxID_ANY, wxString( wxT("Set Resolution Phantoms") ) , wxEmptyString, wxITEM_NORMAL );
@@ -314,6 +321,7 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	this->Connect( quit->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onQuit ) );
 	this->Connect( configDialog->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onConfig ) );
 	this->Connect( gainSelect->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onGainSelect ) );
+	this->Connect( reconSetup->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onReconSetup ) );
 	this->Connect( resList->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onResList ) );
 	this->Connect( contList->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContList ) );
 	this->Connect( runTest->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onRunTest ) );
@@ -447,6 +455,7 @@ mainWindow::~mainWindow()
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onQuit ) );
 	this->Disconnect( wxID_PREFERENCES, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onConfig ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onGainSelect ) );
+	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onReconSetup ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onResList ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onContList ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onRunTest ) );
@@ -594,6 +603,91 @@ RunBox::RunBox( wxWindow* parent, wxWindowID id, const wxString& title, const wx
 
 RunBox::~RunBox()
 {
+}
+
+reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style ) : wxDialog( parent, id, title, pos, size, style )
+{
+	this->SetSizeHints( wxDefaultSize, wxDefaultSize );
+	
+	bSizer6 = new wxBoxSizer( wxVERTICAL );
+	
+	wxBoxSizer* bSizer9;
+	bSizer9 = new wxBoxSizer( wxHORIZONTAL );
+	
+	startDistanceLabel = new wxStaticText( this, wxID_ANY, wxT("Smallest in-focus distance:"), wxDefaultPosition, wxDefaultSize, 0 );
+	startDistanceLabel->Wrap( -1 );
+	bSizer9->Add( startDistanceLabel, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
+	
+	startDistance = new wxTextCtrl( this, wxID_ANY, wxT("0.0"), wxDefaultPosition, wxDefaultSize, 0 );
+	bSizer9->Add( startDistance, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
+	
+	startDistanceUnits = new wxStaticText( this, wxID_ANY, wxT("mm"), wxDefaultPosition, wxDefaultSize, 0 );
+	startDistanceUnits->Wrap( -1 );
+	bSizer9->Add( startDistanceUnits, 1, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
+	
+	endDistanceLabel = new wxStaticText( this, wxID_ANY, wxT("Largest in-focus distance:"), wxDefaultPosition, wxDefaultSize, 0 );
+	endDistanceLabel->Wrap( -1 );
+	bSizer9->Add( endDistanceLabel, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
+	
+	endDistance = new wxTextCtrl( this, wxID_ANY, wxT("10.0"), wxDefaultPosition, wxDefaultSize, 0 );
+	bSizer9->Add( endDistance, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
+	
+	endDistanceUnit = new wxStaticText( this, wxID_ANY, wxT("mm"), wxDefaultPosition, wxDefaultSize, 0 );
+	endDistanceUnit->Wrap( -1 );
+	bSizer9->Add( endDistanceUnit, 1, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
+	
+	ok = new wxButton( this, wxID_ANY, wxT("OK"), wxDefaultPosition, wxDefaultSize, 0 );
+	bSizer9->Add( ok, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
+	
+	cancel = new wxButton( this, wxID_ANY, wxT("Cancel"), wxDefaultPosition, wxDefaultSize, 0 );
+	bSizer9->Add( cancel, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
+	
+	
+	bSizer6->Add( bSizer9, 1, wxEXPAND, 5 );
+	
+	wxBoxSizer* bSizer7;
+	bSizer7 = new wxBoxSizer( wxHORIZONTAL );
+	
+	distanceLabel = new wxStaticText( this, wxID_ANY, wxT("Currently displayed distance: "), wxDefaultPosition, wxDefaultSize, 0 );
+	distanceLabel->Wrap( -1 );
+	bSizer7->Add( distanceLabel, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
+	
+	distance = new wxTextCtrl( this, wxID_ANY, wxT("5.0"), wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER );
+	bSizer7->Add( distance, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
+	
+	distanceUnits = new wxStaticText( this, wxID_ANY, wxT(" mm"), wxDefaultPosition, wxDefaultSize, 0 );
+	distanceUnits->Wrap( -1 );
+	bSizer7->Add( distanceUnits, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
+	
+	
+	bSizer7->Add( 100, 0, 0, 0, 5 );
+	
+	m_staticText35 = new wxStaticText( this, wxID_ANY, wxT("Recontruction preview (scroll to change distance):"), wxDefaultPosition, wxDefaultSize, 0 );
+	m_staticText35->Wrap( -1 );
+	bSizer7->Add( m_staticText35, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
+	
+	
+	bSizer6->Add( bSizer7, 1, wxEXPAND, 5 );
+	
+	
+	this->SetSizer( bSizer6 );
+	this->Layout();
+	
+	this->Centre( wxBOTH );
+	
+	// Connect Events
+	ok->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onOk ), NULL, this );
+	cancel->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onCancel ), NULL, this );
+	distance->Connect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( reconConfig::onDistance ), NULL, this );
+}
+
+reconConfig::~reconConfig()
+{
+	// Disconnect Events
+	ok->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onOk ), NULL, this );
+	cancel->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onCancel ), NULL, this );
+	distance->Disconnect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( reconConfig::onDistance ), NULL, this );
+	
 }
 
 resDialog::resDialog( wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style ) : wxDialog( parent, id, title, pos, size, style )

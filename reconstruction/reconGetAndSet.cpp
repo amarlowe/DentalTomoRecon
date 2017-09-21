@@ -429,3 +429,17 @@ TomoError TomoRecon::setTVIter(float TVIter) {
 	if (TVIter < 0.0f) iter = 0.0f;
 	return Tomo_OK;
 }
+
+TomoError TomoRecon::setBoundaries(float begin, float end) {
+	float start = min(begin, end);
+	float finish = max(begin, end);
+
+	constants.startDis = start;
+	constants.slices = round((finish - start) / constants.pitchZ);
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::enableGain(bool enable) {
+	constants.useGain = enable;
+	return Tomo_OK;
+}

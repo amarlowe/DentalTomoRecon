@@ -209,7 +209,7 @@ void TomoRecon::ConvertImage(){
 /*********************************************************************************************
 * Function to control the saving of the dicom images
 ********************************************************************************************/
-TomoError TomoRecon::SaveDataAsDICOM(std::string BaseFileIn, int slices){
+TomoError TomoRecon::SaveDataAsDICOM(std::string BaseFileIn){//, int slices){
 	//Set the patient and System settings
 	struct SystemSettings * Set = new SystemSettings;
 	struct PatientInfo * Patient = new PatientInfo;
@@ -223,10 +223,10 @@ TomoError TomoRecon::SaveDataAsDICOM(std::string BaseFileIn, int slices){
 	ConvertImage();
 
 	//Write the DICOM Header based on the System Info
-	tomo_err_throw(WriteDICOMHeader(Set, Patient, Institute, BaseFileIn, slices, 0));
+	tomo_err_throw(WriteDICOMHeader(Set, Patient, Institute, BaseFileIn, constants.slices, 0));
 
 	//Write dicom data
-	tomo_err_throw(WriteDICOMFullData(BaseFileIn, slices));
+	tomo_err_throw(WriteDICOMFullData(BaseFileIn));// , slices));
 
 	//Delete structure pointers, can't just delete the structures with strings
 	FreeStrings(Patient, Institute);

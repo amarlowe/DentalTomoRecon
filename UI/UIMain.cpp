@@ -42,7 +42,7 @@ bool MyApp::OnInit(){
 	//Run initialization on a dummy frame that will never display, moves interop initialization time to program startup
 	struct SystemControl Sys;
 	frame->genSys(&Sys);
-	GLFrame* initFrame = new GLFrame(frame->m_auinotebook6, frame->m_statusBar1, &Sys, filename);
+	GLFrame* initFrame = new GLFrame(frame->m_auinotebook6, &Sys, filename, frame->m_statusBar1);
 	delete initFrame;
 	frame->Show(true);
 #endif
@@ -174,7 +174,7 @@ wxPanel *DTRMainWindow::CreateNewPage(wxString filename) {
 	struct SystemControl Sys;
 	genSys(&Sys);
 	wxStreamToTextRedirector redirect(m_textCtrl8);
-	return new GLFrame(m_auinotebook6, m_statusBar1, &Sys, filename);
+	return new GLFrame(m_auinotebook6, &Sys, filename, m_statusBar1);
 }
 
 void DTRMainWindow::onOpen(wxCommandEvent& event) {
@@ -214,13 +214,14 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 	if (saveFileDialog.ShowModal() == wxID_CANCEL)
 		return;
 
-	DTRSliceSave* sliceSv = new DTRSliceSave(this);
+	/*DTRSliceSave* sliceSv = new DTRSliceSave(this);
 	if (sliceSv->ShowModal() == wxCANCEL) return;
 
 	long val = sliceSv->value;
-	if (val <= 0 || val > MAXSLICE) return;
+	if (val <= 0 || val > MAXSLICE) return;*/
 	m_statusBar1->SetStatusText(_("Saving data as DICOM..."));
-	recon->SaveDataAsDICOM(saveFileDialog.GetPath().ToStdString(), val);
+	//recon->SaveDataAsDICOM(saveFileDialog.GetPath().ToStdString(), val);
+	recon->SaveDataAsDICOM(saveFileDialog.GetPath().ToStdString());
 	m_statusBar1->SetStatusText(_("DICOM saved!"));
 }
 
@@ -287,11 +288,25 @@ void DTRMainWindow::onGainSelect(wxCommandEvent& WXUNUSED(event)) {
 	wxConfigBase::Get()->Write(wxT("/gainFilepath"), gainFilepath);
 }
 
+void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
+	ReconCon* rc = new ReconCon(this);
+	if (rc->canceled) return;
+	rc->ShowModal();
+	if (rc->canceled) return;
+
+	wxFileName file = rc->filename;
+	wxArrayString dirs = file.GetDirs();
+	wxString name = dirs[file.GetDirCount() - 1];
+
+	(*m_textCtrl8) << "Opening new tab titled: \"" << name << "\"\n";
+
+	m_auinotebook6->AddPage(CreateNewPage(rc->filename), name, true);
+	onContinuous();
+}
+
 void DTRMainWindow::onResList(wxCommandEvent& event) {
-	if (resDialog == NULL) {
-		resDialog = new DTRResDialog(this);
-		resDialog->Show(true);
-	}
+	DTRResDialog* resDialog = new DTRResDialog(this);
+	resDialog->ShowModal();
 }
 
 void DTRMainWindow::onContList(wxCommandEvent& event) {
@@ -1086,6 +1101,64 @@ DTRMainWindow::~DTRMainWindow() {
 	cuda(DeviceReset());//only reset here where we know all windows are finished
 }
 
+// ----------------------------------------------------------------------------
+// Resolution phatom selector frame handling
+// ----------------------------------------------------------------------------
+
+ReconCon::ReconCon(wxWindow* parent) : reconConfig(parent) {
+	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
+		"Raw File (*.raw)|*.raw", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+
+	if (openFileDialog.ShowModal() == wxID_CANCEL)
+		return;
+
+	canceled = false;
+
+	wxString fn(openFileDialog.GetPath());
+	filename = fn;
+
+	DTRMainWindow* typedParent = (DTRMainWindow*)GetParent();
+
+	struct SystemControl Sys;
+	typedParent->genSys(&Sys);
+	wxStreamToTextRedirector redirect(typedParent->m_textCtrl8);
+	drawPanel = new GLFrame(this, &Sys, filename);
+	TomoRecon* recon = ((GLFrame*)drawPanel)->m_canvas->recon;
+	recon->enableGain(false);
+	recon->ReadProjections(filename.mb_str(), filename.mb_str());
+
+	recon->resetFocus();
+	recon->resetLight();
+
+	((GLFrame*)drawPanel)->m_canvas->paint(false, distance);
+
+	bSizer6->Add(drawPanel, 10, wxEXPAND | wxALL);
+	bSizer6->Layout();
+}
+
+void ReconCon::onDistance(wxCommandEvent& event) {
+	TomoRecon* recon = ((GLFrame*)drawPanel)->m_canvas->recon;
+
+	double distVal;
+	distance->GetValue().ToCDouble(&distVal);
+	recon->setDistance((float)distVal);
+	recon->singleFrame();
+	((GLFrame*)drawPanel)->m_canvas->paint(true);
+}
+
+void ReconCon::onOk(wxCommandEvent& event) {
+	Close(true);
+}
+
+void ReconCon::onCancel(wxCommandEvent& event) {
+	canceled = true;
+	Close(true);
+}
+
+ReconCon::~ReconCon() {
+	delete drawPanel;
+}
+
 //Save dialog box handling
 DTRSliceSave::DTRSliceSave(wxWindow* parent) : sliceDialog(parent) {
 }
@@ -1710,12 +1783,10 @@ void DTRResDialog::onOk(wxCommandEvent& event) {
 		pConfig->Write(wxString::Format(wxT("/resPhanBoxLyF%d"), selection), value);
 	}
 
-	((DTRMainWindow*)GetParent())->resDialog = NULL;
 	Close(true);
 }
 
 void DTRResDialog::onCancel(wxCommandEvent& event) {
-	((DTRMainWindow*)GetParent())->resDialog = NULL;
 	Close(true);
 }
 
@@ -1726,7 +1797,7 @@ EVT_SCROLL(GLFrame::OnScroll)
 EVT_MOUSEWHEEL(GLFrame::OnMousewheel)
 wxEND_EVENT_TABLE()
 
-GLFrame::GLFrame(wxAuiNotebook *frame, wxStatusBar* status, struct SystemControl * Sys, wxString filename,
+GLFrame::GLFrame(wxWindow *frame, struct SystemControl * Sys, wxString filename, wxStatusBar* status,
 	const wxPoint& pos, const wxSize& size, long style)
 	: wxPanel(frame, wxID_ANY, pos, size), m_canvas(NULL), m_status(status), filename(filename){
 	//initialize the canvas to this object
@@ -1895,20 +1966,21 @@ void CudaGLCanvas::paint(bool disChanged, wxTextCtrl* dis, wxSlider* zoom, wxSta
 	if (!disChanged) {
 		unsigned int window, level;
 		recon->getLight(&level, &window);
-		distanceControl->SetValue(wxString::Format(wxT("%.2f"), recon->getDistance()));
-		zoomSlider->SetValue(recon->getZoom());
-		windowSlider->SetValue(window / WINLVLFACTOR);
-		levelSlider->SetValue(level / WINLVLFACTOR);
-		zoomLabel->SetLabelText(wxString::Format(wxT("%.2f"), pow(ZOOMFACTOR, recon->getZoom())));
-		windowLabel->SetLabelText(wxString::Format(wxT("%d"), window));
-		levelLabel->SetLabelText(wxString::Format(wxT("%d"), level));
+		if(distanceControl) distanceControl->SetValue(wxString::Format(wxT("%.2f"), recon->getDistance()));
+		if (zoomSlider) zoomSlider->SetValue(recon->getZoom());
+		if (windowSlider) windowSlider->SetValue(window / WINLVLFACTOR);
+		if (levelSlider) levelSlider->SetValue(level / WINLVLFACTOR);
+		if (zoomLabel) zoomLabel->SetLabelText(wxString::Format(wxT("%.2f"), pow(ZOOMFACTOR, recon->getZoom())));
+		if (windowLabel) windowLabel->SetLabelText(wxString::Format(wxT("%d"), window));
+		if (levelLabel) levelLabel->SetLabelText(wxString::Format(wxT("%d"), level));
 	}
 
-	int xOff, yOff;
-	recon->getOffsets(&xOff, &yOff);
-	m_status->SetStatusText(wxString::Format(wxT("X offset: %d px."), xOff), xOffset);
-	m_status->SetStatusText(wxString::Format(wxT("Y offset: %d px."), yOff), yOffset);
-
+	if (m_status) {
+		int xOff, yOff;
+		recon->getOffsets(&xOff, &yOff);
+		m_status->SetStatusText(wxString::Format(wxT("X offset: %d px."), xOff), xOffset);
+		m_status->SetStatusText(wxString::Format(wxT("Y offset: %d px."), yOff), yOffset);
+	}
 
 	recon->draw(GetSize().x, GetSize().y);
 
@@ -1961,6 +2033,7 @@ void CudaGLCanvas::OnChar(wxKeyEvent& event){
 			((GLFrame*)GetParent())->showScrollBar(RECONSLICES, reconIndex);
 			break;
 		case iterRecon:
+			break;
 			recon->iterStep();
 			//recon->setDataDisplay(error);
 			reconIndex = recon->getActiveProjection();
@@ -1981,6 +2054,7 @@ void CudaGLCanvas::OnChar(wxKeyEvent& event){
 			recon->setShowNegative(true);
 			//((GLFrame*)GetParent())->showScrollBar(NUMVIEWS, 0);
 			((GLFrame*)GetParent())->showScrollBar(RECONSLICES, 0);
+			for (int i = 0; i < 15; i++) recon->iterStep();
 			break;
 		}
 

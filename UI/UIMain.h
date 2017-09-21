@@ -69,6 +69,22 @@ public:
 	long value = 0;
 };
 
+class ReconCon : public reconConfig {
+protected:
+	wxPanel* drawPanel;
+
+	void onDistance(wxCommandEvent& event);
+	void onOk(wxCommandEvent& event);
+	void onCancel(wxCommandEvent& event);
+public:
+	/** Constructor */
+	ReconCon(wxWindow* parent);
+	~ReconCon();
+
+	wxString filename;
+	bool canceled = true;
+};
+
 class DTRConfigDialog : public configDialog {
 protected:
 	// Handlers for configDialog events.
@@ -109,13 +125,13 @@ public:
 
 	TomoRecon* recon;
 	wxStatusBar* m_status;
-	wxTextCtrl* distanceControl;
-	wxSlider* zoomSlider;
-	wxStaticText* zoomLabel;
-	wxSlider* windowSlider;
-	wxStaticText* windowLabel;
-	wxSlider* levelSlider;
-	wxStaticText* levelLabel;
+	wxTextCtrl* distanceControl = NULL;
+	wxSlider* zoomSlider = NULL;
+	wxStaticText* zoomLabel = NULL;
+	wxSlider* windowSlider = NULL;
+	wxStaticText* windowLabel = NULL;
+	wxSlider* levelSlider = NULL;
+	wxStaticText* levelLabel = NULL;
 
 private:
 	int imageIndex = 0;
@@ -129,7 +145,8 @@ private:
 
 class GLFrame : public wxPanel {
 public:
-	GLFrame(wxAuiNotebook *frame, wxStatusBar* status, struct SystemControl * Sys, wxString filename,
+	GLFrame(wxWindow *frame, struct SystemControl * Sys, wxString filename,
+		wxStatusBar* status = NULL,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = wxDEFAULT_FRAME_STYLE);
@@ -229,6 +246,7 @@ protected:
 	void onAbout(wxCommandEvent& event);
 	void onConfig(wxCommandEvent& event);
 	void onGainSelect(wxCommandEvent& event);
+	void onReconSetup(wxCommandEvent& event);
 	void onResetFocus(wxCommandEvent& event);
 	void onResList(wxCommandEvent& event);
 	void onContList(wxCommandEvent& event);
@@ -294,7 +312,6 @@ public:
 	~DTRMainWindow();
 
 	DTRConfigDialog* cfgDialog = NULL;
-	DTRResDialog* resDialog = NULL;
 	wxPanel * CreateNewPage(wxString filename);
 
 	//User generated filenames

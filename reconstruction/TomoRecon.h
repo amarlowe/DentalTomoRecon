@@ -97,7 +97,7 @@
 #define TVZ 0.2f
 #define TVITERATIONS 0
 #define USELOGITER
-#define MEDIANFAC 2.0f
+#define MEDIANFAC 0.0f
 
 //#define RECONDERIVATIVE
 
@@ -251,6 +251,11 @@ struct params {
 	int maxNoise = NOISEMAXDEFAULT;
 
 	sourceData dataDisplay = reconstruction;
+
+	bool useGain = true;
+
+	float startDis = RECONDIS;
+	int slices = RECONSLICES;
 };
 
 ///Parameters used in CPU control systems, but not kernel calls
@@ -377,9 +382,9 @@ public:
 	///Reconstruction will save based on current position; half the slices will be in front of the current postion, half will be behind.
 	TomoError SaveDataAsDICOM(
 		///Desired save file name (will be overwritten if it exists)
-		std::string BaseFileIn,
+		std::string BaseFileIn);// ,
 		///Number of reconstruction slices to save
-		int slices);
+		//int slices);
 
 	//Getters and setters
 
@@ -766,6 +771,8 @@ public:
 
 	TomoError iterStep();
 	int getActiveProjection();
+	TomoError setBoundaries(float begin, float end);
+	TomoError enableGain(bool enable);
 
 private:
 	/********************************************************************************************/
@@ -808,7 +815,7 @@ private:
 	void CreatePatientandSetSystem(struct PatientInfo * Patient, struct SystemSettings * Set);
 	void CreateScanInsitution(struct ExamInstitution * Institute);
 	void FreeStrings(struct PatientInfo * Patient, struct ExamInstitution * Institute);
-	TomoError WriteDICOMFullData(std::string Path, int slices);
+	TomoError WriteDICOMFullData(std::string Path);//, int slices
 	TomoError WriteDICOMHeader(struct SystemSettings * Set, struct PatientInfo * Patient, struct ExamInstitution * Inst, std::string Path, int Nz, int slice);	/*BOOL CheckFilePathForRepeatScans(std::string BasePathIn);
 	int GetNumberOfScans(std::string BasePathIn);
 	int GetNumOfProjectionsPerView(std::string BasePathIn);

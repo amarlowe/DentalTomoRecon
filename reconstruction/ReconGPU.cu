@@ -428,9 +428,11 @@ __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, uns
 
 		if (val < LOWTHRESH) val = 0.0;
 
-		val /= Gain[j*consts.Px + i];
-		if (val > HIGHTHRESH) val = 0.0;
-		val *= USHRT_MAX;
+		if (consts.useGain) {
+			val /= Gain[j*consts.Px + i];
+			if (val > HIGHTHRESH) val = 0.0;
+			val *= USHRT_MAX;
+		}
 
 		//if (val / Gain[j*consts.Px + i] > HIGHTHRESH) val = 0.0;
 
@@ -512,7 +514,7 @@ __global__ void projectSlice(float * IM, float distance, params consts) {
 	else IM[j*consts.ReconPitchNum + i] = 0.0f;
 }
 
-__global__ void projectIter(float * oldRecon, int slice, int slices, float iteration, bool TVOnly, params consts) {
+__global__ void projectIter(float * oldRecon, int slice, float iteration, bool TVOnly, params consts) {
 	//Define pixel location in x, y, and z
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
@@ -528,7 +530,7 @@ __global__ void projectIter(float * oldRecon, int slice, int slices, float itera
 
 	if (!TVOnly) {
 		for (int view = 0; view < NUMVIEWS; view++) {
-			float dz = (RECONDIS + slice * consts.pitchZ) / consts.d_Beamz[view];
+			float dz = (consts.startDis + slice * consts.pitchZ) / consts.d_Beamz[view];
 			if (consts.orientation) dz = -dz;//z changes sign when flipped in the x direction
 			float x = xMM2P((xR2MM(i, consts.Rx, consts.PitchRx) + consts.d_Beamx[view] * dz), consts.Px, consts.PitchPx);// / (1 + dz)
 			float y = yMM2P((yR2MM(j, consts.Ry, consts.PitchRy) + consts.d_Beamy[view] * dz), consts.Py, consts.PitchPy);
@@ -545,14 +547,14 @@ __global__ void projectIter(float * oldRecon, int slice, int slices, float itera
 
 
 		//Minimum 
-		float error1 = FLT_MAX;
+		/*float error1 = FLT_MAX;
 		for (int iter = 0; iter < count; iter++) {
 			float val = values[iter];
 			if (abs(val) < abs(error1)) error1 = val;
 		}
 		if (count > 0)
 			error1 /= (float)slices;
-		else error1 = 0.0f;
+		else error1 = 0.0f;*/
 
 		//Median
 		/*for (int outer = 0; outer < count / 2; outer++) {
@@ -574,12 +576,12 @@ __global__ void projectIter(float * oldRecon, int slice, int slices, float itera
 		else error1 = 0.0f;*/
 
 		if (count > 0)
-			error /= ((float)count * (float)slices);
+			error /= ((float)count * (float)consts.slices);
 		else error = 0.0f;
 
-		error += MEDIANFAC * error1;
-		error /= (1.0f + MEDIANFAC);
-		error -= 30;
+		//error += MEDIANFAC * error1;
+		//error /= (1.0f + MEDIANFAC);
+		//error -= 20;
 	}
 
 	//if (error > minimum) error = minimum;
@@ -597,7 +599,7 @@ __global__ void projectIter(float * oldRecon, int slice, int slices, float itera
 	if (j>0) { BX += oldRecon[i + (j-1)*consts.ReconPitchNum] * TVY; AX += TVY; }
 	if (j<consts.Ry - 1) { BX += oldRecon[i + (j + 1)*consts.ReconPitchNum] * TVY; AX += TVY; }
 	if (slice>0) { surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice - 1); BX += returnVal * TVZ; AX += TVZ; }
-	if (slice<slices - 1) { surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice + 1); BX += returnVal * TVZ; AX += TVZ; }
+	if (slice<consts.slices - 1) { surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice + 1); BX += returnVal * TVZ; AX += TVZ; }
 	surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice);
 	//error *= pow(iteration, 1 / 2);
 	error += BX - AX*returnVal;
@@ -615,7 +617,7 @@ __global__ void projectIter(float * oldRecon, int slice, int slices, float itera
 	else surf3Dwrite(returnVal, surfRecon, i * sizeof(float), j, slice);
 }
 
-__global__ void backProject(float * proj, float * error, int view, int slices, params consts) {
+__global__ void backProject(float * proj, float * error, int view, params consts) {
 	//Define pixel location in x, y, and z
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
@@ -626,8 +628,8 @@ __global__ void backProject(float * proj, float * error, int view, int slices, p
 	//Check image boundaries
 	if ((i >= consts.Px) || (j >= consts.Py)) return;
 
-	for (int slice = 0; slice < slices; slice++) {
-		float dz = (RECONDIS + slice * consts.pitchZ) / consts.d_Beamz[view];
+	for (int slice = 0; slice < consts.slices; slice++) {
+		float dz = (consts.startDis + slice * consts.pitchZ) / consts.d_Beamz[view];
 		if (consts.orientation) dz = -dz;//z changes sign when flipped in the x direction
 		float x = xMM2R((xP2MM(i, consts.Px, consts.PitchPx) - consts.d_Beamx[view] * dz), consts.Rx, consts.PitchRx);
 		float y = yMM2R((yP2MM(j, consts.Py, consts.PitchPy) - consts.d_Beamy[view] * dz), consts.Ry, consts.PitchRy);
@@ -1304,7 +1306,7 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 	for (int slice = 0; slice < Sys.Recon.Nz; slice++) {
 		KERNELCALL2(zeroArray, contBlocks, contThreads, slice, constants);
 		KERNELCALL2(copySlice, contBlocks, contThreads, d_ReconOld, slice, constants);
-		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, Sys.Recon.Nz, 1.0f, false, constants);
+		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, 1.0f, false, constants);
 	}
 	cuda(UnbindTexture(textError));
 #endif
@@ -1313,7 +1315,7 @@ TomoError TomoRecon::ReadProjections(const char * gainFile, const char * mainFil
 	return Tomo_OK;
 }
 
-TomoError TomoRecon::WriteDICOMFullData(std::string Path, int slices) {
+TomoError TomoRecon::WriteDICOMFullData(std::string Path) {//, int slices
 	//Set up the basic path to the raw projection data
 	FILE * ReconData = fopen(Path.c_str(), "ab");
 
@@ -1327,10 +1329,11 @@ TomoError TomoRecon::WriteDICOMFullData(std::string Path, int slices) {
 
 	//Create the reconstruction volume around the current location
 	float oldDistance = distance;
-	distance -= slices / 2 * Sys.Geo.ZPitch;
-	for (int i = 0; i < slices; i++) {
+	distance -= constants.slices / 2 * Sys.Geo.ZPitch;
+	for (int i = 0; i < constants.slices; i++) {
+		setActiveProjection(i);
 		singleFrame();
-		distance += Sys.Geo.ZPitch;
+		//distance += Sys.Geo.ZPitch;
 		cuda(Memcpy(RawData, d_Image, reconPitch*Sys.Recon.Ny, cudaMemcpyDeviceToHost));
 		for (int j = 0; j < reconPitch / sizeof(float)*Sys.Proj.Ny; j++) {
 			float data = RawData[j];
@@ -1461,7 +1464,8 @@ TomoError TomoRecon::FreeGPUMemory(void){
 #endif // ENABLEZDER
 
 #ifdef USEITERATIVE
-	cudaFreeArray(d_Recon2);
+	cuda(FreeArray(d_Recon2));
+	cuda(Free(d_ReconOld));
 #endif
 
 	return Tomo_OK;
@@ -2127,7 +2131,7 @@ TomoError TomoRecon::iterStep() {
 	}
 #else
 	for (int view = 0; view < NumViews; view++) {
-		KERNELCALL2(backProject, contBlocks, contThreads, d_Sino + view * projPitch / sizeof(float) * Sys.Proj.Ny, d_Error + view * projPitch / sizeof(float) * Sys.Proj.Ny, view, Sys.Recon.Nz, constants);
+		KERNELCALL2(backProject, contBlocks, contThreads, d_Sino + view * projPitch / sizeof(float) * Sys.Proj.Ny, d_Error + view * projPitch / sizeof(float) * Sys.Proj.Ny, view, constants);
 	}
 #endif // RECONDERIVATIVE
 	cuda(UnbindTexture(textRecon));
@@ -2135,11 +2139,11 @@ TomoError TomoRecon::iterStep() {
 	cuda(BindTexture2D(NULL, textError, d_Error, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch))
 	for (int slice = 0; slice < Sys.Recon.Nz; slice++) {
 		KERNELCALL2(copySlice, contBlocks, contThreads, d_ReconOld, slice, constants);
-		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, Sys.Recon.Nz, iteration++, false, constants);
-		for (int i = 0; i < TVITERATIONS; i++) {
+		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, iteration++, false, constants);
+		/*for (int i = 0; i < TVITERATIONS; i++) {
 			KERNELCALL2(copySlice, contBlocks, contThreads, d_ReconOld, slice, constants);
-			KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, Sys.Recon.Nz, iteration++, true, constants);
-		}
+			KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, iteration++, true, constants);
+		}*/
 	}
 	cuda(UnbindTexture(textError));
 	
