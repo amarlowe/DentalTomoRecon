@@ -20,6 +20,7 @@ TomoRecon
 - Save projection images after processing
 - Save all toolbar settings for session end
 - Add DICOM read functions
+- Use a texture gather to detect 0s that would be used in bilinear filtering to further remove artifacts
 
 --------------Bugs---------------------
 

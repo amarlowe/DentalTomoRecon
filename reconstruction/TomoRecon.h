@@ -59,11 +59,6 @@
 #define WARPSIZE 32
 #define MAXTHREADS 1024
 
-//Kernel options
-#define SIGMA 1.0f
-#define KERNELRADIUS 3
-#define KERNELSIZE (2*KERNELRADIUS + 1)
-
 //Maps to single instruction in cuda
 #define MUL_ADD(a, b, c) ( __mul24((a), (b)) + (c) )
 #define UMUL(a, b) ( (a) * (b) )
@@ -81,13 +76,27 @@
 #define PRINTMEMORYUSAGE
 #define USEITERATIVE
 
+#ifdef ENABLEZDER
+//Kernel options
+#define SIGMA 1.0f
+#define KERNELRADIUS 3
+#define KERNELSIZE (2*KERNELRADIUS + 1)
+#else
+#define SIGMA 1.0f
+#define KERNELRADIUS 10
+#define KERNELSIZE (2*KERNELRADIUS + 1)
+#endif
+
 //Defaults
-#define ENHANCEDEFAULT 0.1f
+#define ENHANCEDEFAULT 0.5f
 #define SCANVERTDEFAULT 0.25f
 #define SCANHORDEFAULT 0.1f
 #define NOISEMAXDEFAULT 700
 #define LAMBDADEFAULT 2
 #define ITERDEFAULT 20
+
+//#define RECONSLICES 18
+//#define RECONDIS 3.0f
 
 #define RECONSLICES 30
 #define RECONDIS 6.0f
@@ -96,10 +105,11 @@
 #define TVY 0.2f
 #define TVZ 0.2f
 #define TVITERATIONS 0
-#define USELOGITER
+//#define USELOGITER
 #define MEDIANFAC 0.0f
 
 //#define RECONDERIVATIVE
+//#define SQUAREMAGINX
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {										\
@@ -770,9 +780,12 @@ public:
 		float iter);
 
 	TomoError iterStep();
+	TomoError finalizeIter();
 	int getActiveProjection();
 	TomoError setBoundaries(float begin, float end);
 	TomoError enableGain(bool enable);
+	TomoError getHistogramRecon(unsigned int * histogram);
+	TomoError initIterative();
 
 private:
 	/********************************************************************************************/
@@ -869,8 +882,8 @@ private:
 	float * d_Image;
 	float * d_Error;
 	float * d_Sino;
-	cudaArray_t d_Recon2;
-	float * d_ReconOld;
+	cudaArray_t d_Recon2 = NULL;
+	float * d_ReconOld = NULL;
 
 	//Kernel memory
 	float * d_MaxVal;
@@ -920,6 +933,9 @@ private:
 	bool useTV = true;
 	float lambda = LAMBDADEFAULT * UCHAR_MAX;
 	float iter = ITERDEFAULT;
+
+	bool iterativeInitialized = false;
+	cudaSurfaceObject_t surfReconObj = 0;
 };
 
 /********************************************************************************************/

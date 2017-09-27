@@ -20,6 +20,9 @@
 #include "../fileIO/cJSON.h"
 //#include <GL/freeglut.h>
 
+#include "dcmtk/config/osconfig.h" 
+#include "dcmtk/dcmimgle/dcmimage.h"
+
 #ifdef __BORLANDC__
 #pragma hdrstop
 #endif

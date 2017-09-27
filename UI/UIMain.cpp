@@ -126,13 +126,29 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 	
 	//Step 1: Get and example file for get the path
 	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
-		"Raw File (*.raw)|*.raw", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+		"Raw File (*.raw)|*.raw|DICOM File (*.dcm)|*.dcm", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
 	if (openFileDialog.ShowModal() == wxID_CANCEL)
 		return;
 
 	wxString filename(openFileDialog.GetPath());
 	wxFileName file = filename;
+	if (!file.GetExt().CmpNoCase(_("dcm"))) {
+		OFLog::configure(OFLogger::INFO_LOG_LEVEL);
+
+		DicomImage *image = new DicomImage(filename.mb_str(), CIF_UsePartialAccessToPixelData, 0, 10 /* fcount */);
+
+		wxStreamToTextRedirector redirect(m_textCtrl8);
+		if (image->getStatus() == EIS_Normal)
+		{
+			do {
+				DCMIMGLE_INFO("processing frame " << image->getFirstFrame() + 1 << " to "
+					<< image->getFirstFrame() + image->getFrameCount());
+			} while (image->processNextFrames());
+		}
+
+		delete image;
+	}
 	wxArrayString dirs = file.GetDirs();
 	wxString name = dirs[file.GetDirCount() - 1];
 
@@ -307,6 +323,7 @@ void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 void DTRMainWindow::onResList(wxCommandEvent& event) {
 	DTRResDialog* resDialog = new DTRResDialog(this);
 	resDialog->ShowModal();
+	delete resDialog;
 }
 
 void DTRMainWindow::onContList(wxCommandEvent& event) {
@@ -1147,16 +1164,18 @@ void ReconCon::onDistance(wxCommandEvent& event) {
 }
 
 void ReconCon::onOk(wxCommandEvent& event) {
-	Close(true);
+	delete drawPanel;
+	Close();
 }
 
 void ReconCon::onCancel(wxCommandEvent& event) {
 	canceled = true;
-	Close(true);
+	delete drawPanel;
+	Close();
 }
 
 ReconCon::~ReconCon() {
-	delete drawPanel;
+	
 }
 
 //Save dialog box handling
@@ -2049,12 +2068,13 @@ void CudaGLCanvas::OnChar(wxKeyEvent& event){
 		default:
 			//recon->setDataDisplay(error);
 			recon->setDataDisplay(iterRecon);
-			recon->setDisplay(no_der);
-			recon->setLogView(false);
-			recon->setShowNegative(true);
+			//recon->setShowNegative(true);
 			//((GLFrame*)GetParent())->showScrollBar(NUMVIEWS, 0);
 			((GLFrame*)GetParent())->showScrollBar(RECONSLICES, 0);
-			for (int i = 0; i < 15; i++) recon->iterStep();
+			recon->initIterative();
+			for (int i = 0; i < 30; i++) recon->iterStep();
+			recon->finalizeIter();
+			recon->setLogView(true);
 			break;
 		}
 

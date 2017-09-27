@@ -20,7 +20,7 @@ public:
 	int						height = 0;
 
 	// CUDA resources
-	cudaArray_t				ca;
+	cudaArray_t				ca = NULL;
 private:
 	//Variables
 
