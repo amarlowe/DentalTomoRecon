@@ -1,5 +1,96 @@
 #include "UIMain.h"
 
+TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainFile) {
+	TomoError returnError = Tomo_OK;
+
+	std::string ProjPath = mainFile;
+
+	if (!ProjPath.substr(ProjPath.length() - 3, ProjPath.length()).compare("dcm")) {
+		//Read projections
+		int NumViews = recon->getNumViews();
+		int width, height;
+		recon->getProjectionDimensions(&width, &height);
+		unsigned short ** RawData = new unsigned short *[NumViews];
+		unsigned short ** GainData = new unsigned short *[NumViews];
+		FILE * fileptr = NULL;
+		std::string ProjPath = mainFile;
+		std::string GainPath = gainFile;
+
+		for (int view = 0; view < NumViews; view++) {
+			//Read and correct projections
+			RawData[view] = new unsigned short[width*height];
+			GainData[view] = new unsigned short[width*height];
+
+			ProjPath = ProjPath.substr(0, ProjPath.length() - 5);
+			ProjPath += std::to_string(view + 1) + ".dcm";
+			GainPath = GainPath.substr(0, GainPath.length() - 5);
+			GainPath += std::to_string(view) + ".dcm";
+
+			OFLog::configure(OFLogger::INFO_LOG_LEVEL);
+
+			DicomImage *image = new DicomImage(ProjPath.c_str());
+
+			if (image->getStatus() == EIS_Normal) {
+				unsigned short *pixelData = (unsigned short *)(image->getOutputData(16));
+				if (pixelData != NULL) {
+					memcpy(RawData[view], pixelData, width*height * sizeof(unsigned short));
+				}
+				else
+					std::cerr << "Error: cannot load DICOM image (" << DicomImage::getString(image->getStatus()) << ")" << endl;
+			}
+
+			delete image;
+
+			/*fopen_s(&fileptr, GainPath.c_str(), "rb");
+			if (fileptr == NULL) return Tomo_file_err;
+			fread(GainData[view], sizeof(unsigned short), width*height, fileptr);
+			fclose(fileptr);*/
+		}
+
+		returnError = recon->ReadProjections(GainData, RawData);
+
+		for (int view = 0; view < NumViews; view++) {
+			//Read and correct projections
+			delete[] RawData[view];
+			delete[] GainData[view];
+		}
+		delete[] RawData;
+		delete[] GainData;
+	}
+	else recon->ReadProjectionsFromFile(gainFile, mainFile);
+
+	/*if (!file.GetExt().CmpNoCase(_("dcm"))) {
+		OFLog::configure(OFLogger::INFO_LOG_LEVEL);
+
+		DicomImage *image = new DicomImage(filename.mb_str());
+
+		wxStreamToTextRedirector redirect(m_textCtrl8);
+		if (image->getStatus() == EIS_Normal)
+		{
+			for (int i = 0; i < image->getFrameCount(); i++) {
+				unsigned short *pixelData = (unsigned short *)(image->getOutputData(16, i));
+				if (pixelData != NULL) {
+					int width = image->getWidth();
+					int height = image->getHeight();
+					for (int y = 0; y < height; y++) {
+						for (int x = 0; x < width; x++) {
+							std::cout << pixelData[y*width + x] << " ";
+						}
+						std::cout << "/n";
+					}
+				}
+				else
+					std::cerr << "Error: cannot load DICOM image (" << DicomImage::getString(image->getStatus()) << ")" << endl;
+			}
+		}
+
+		delete image;
+		return;
+	}*/
+
+	return returnError;
+}
+
 // Define a new application type, each program should derive a class from wxApp
 class MyApp : public wxApp{
 public:
@@ -133,22 +224,6 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 
 	wxString filename(openFileDialog.GetPath());
 	wxFileName file = filename;
-	if (!file.GetExt().CmpNoCase(_("dcm"))) {
-		OFLog::configure(OFLogger::INFO_LOG_LEVEL);
-
-		DicomImage *image = new DicomImage(filename.mb_str(), CIF_UsePartialAccessToPixelData, 0, 10 /* fcount */);
-
-		wxStreamToTextRedirector redirect(m_textCtrl8);
-		if (image->getStatus() == EIS_Normal)
-		{
-			do {
-				DCMIMGLE_INFO("processing frame " << image->getFirstFrame() + 1 << " to "
-					<< image->getFirstFrame() + image->getFrameCount());
-			} while (image->processNextFrames());
-		}
-
-		delete image;
-	}
 	wxArrayString dirs = file.GetDirs();
 	wxString name = dirs[file.GetDirCount() - 1];
 
@@ -211,7 +286,7 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	wxString filename(openFileDialog.GetPath());
 	
 	wxStreamToTextRedirector redirect(m_textCtrl8);
-	recon->ReadProjections(gainFilepath.mb_str(), filename.mb_str());
+	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), filename.mb_str());
 	recon->singleFrame();
 	recon->resetFocus();
 	recon->resetLight();
@@ -266,7 +341,8 @@ void DTRMainWindow::onContinuous() {
 	wxStreamToTextRedirector redirect(m_textCtrl8);
 	m_statusBar1->SetFieldsCount(3, statusWidths);
 
-	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	//recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 
 	recon->resetFocus();
 	recon->resetLight();
@@ -363,7 +439,7 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 			recon->setVertFlip(true);
 			recon->setShowNegative(true);
 		}
-		recon->ReadProjections(gainFilepath.mb_str(), filename.GetFullPath().mb_str());
+		recon->ReadProjectionsFromFile(gainFilepath.mb_str(), filename.GetFullPath().mb_str());
 		recon->singleFrame();
 		recon->resetLight();
 
@@ -617,7 +693,7 @@ void DTRMainWindow::onStepSlider(wxScrollEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setStep(value / STEPFACTOR);
-	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -701,7 +777,7 @@ void DTRMainWindow::onVertFlip(wxCommandEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setVertFlip(vertFlip->IsChecked());
-	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -713,7 +789,7 @@ void DTRMainWindow::onHorFlip(wxCommandEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setHorFlip(horFlip->IsChecked());
-	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -864,7 +940,7 @@ void DTRMainWindow::onScanVertEnable(wxCommandEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->enableScanVert(scanVertEnable->IsChecked());
-	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -879,7 +955,7 @@ void DTRMainWindow::onScanVert(wxScrollEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setScanVertVal(value / SCANFACTOR);
-	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -894,7 +970,7 @@ void DTRMainWindow::onResetScanVert(wxCommandEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setScanVertVal(SCANVERTDEFAULT);
-	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -917,7 +993,7 @@ void DTRMainWindow::onScanHorEnable(wxCommandEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->enableScanHor(scanHorEnable->IsChecked());
-	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -932,7 +1008,7 @@ void DTRMainWindow::onScanHor(wxScrollEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setScanHorVal(value / SCANFACTOR);
-	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -947,7 +1023,7 @@ void DTRMainWindow::onResetScanHor(wxCommandEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setScanHorVal(SCANHORDEFAULT);
-	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -963,7 +1039,7 @@ void DTRMainWindow::onNoiseMax(wxScrollEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setNoiseMaxVal(noiseMaxSlider->GetValue());
-	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -978,7 +1054,7 @@ void DTRMainWindow::onResetNoiseMax(wxCommandEvent& WXUNUSED(event)) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setNoiseMaxVal(noiseMaxSlider->GetValue());
-	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -1001,7 +1077,7 @@ void DTRMainWindow::onNoiseMaxEnable(wxCommandEvent& WXUNUSED(event)) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->enableNoiseMaxFilter(outlierEnable->IsChecked());
-	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -1032,7 +1108,7 @@ void DTRMainWindow::onTVEnable(wxCommandEvent& WXUNUSED(event)) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->enableTV(TVEnable->IsChecked());
-	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -1047,7 +1123,7 @@ void DTRMainWindow::onResetLambda(wxCommandEvent& WXUNUSED(event)) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setTVLambda(lambdaSlider->GetValue());
-	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -1062,7 +1138,7 @@ void DTRMainWindow::onLambdaSlider(wxScrollEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setTVLambda(value);
-	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -1077,7 +1153,7 @@ void DTRMainWindow::onResetIter(wxCommandEvent& WXUNUSED(event)) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setTVIter(iterSlider->GetValue());
-	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -1092,7 +1168,7 @@ void DTRMainWindow::onIterSlider(wxScrollEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setTVIter(value);
-	recon->ReadProjections(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -1115,7 +1191,7 @@ DTRMainWindow::~DTRMainWindow() {
 	else
 		pConfig->Write(wxT("/dialog/max"), 0);
 
-	cuda(DeviceReset());//only reset here where we know all windows are finished
+	//cuda(DeviceReset());//only reset here where we know all windows are finished
 }
 
 // ----------------------------------------------------------------------------
@@ -1142,7 +1218,7 @@ ReconCon::ReconCon(wxWindow* parent) : reconConfig(parent) {
 	drawPanel = new GLFrame(this, &Sys, filename);
 	TomoRecon* recon = ((GLFrame*)drawPanel)->m_canvas->recon;
 	recon->enableGain(false);
-	recon->ReadProjections(filename.mb_str(), filename.mb_str());
+	recon->ReadProjectionsFromFile(filename.mb_str(), filename.mb_str());
 
 	recon->resetFocus();
 	recon->resetLight();
@@ -1667,7 +1743,7 @@ void DTRResDialog::onAddNew(wxCommandEvent& event) {
 		recon->setVertFlip(true);
 		recon->enableTV(false);
 
-		recon->ReadProjections(((DTRMainWindow*)GetParent())->gainFilepath.mb_str(), openFileDialog.GetPath().mb_str());
+		recon->ReadProjectionsFromFile(((DTRMainWindow*)GetParent())->gainFilepath.mb_str(), openFileDialog.GetPath().mb_str());
 		recon->singleFrame();
 
 		recon->resetLight();
@@ -2052,29 +2128,37 @@ void CudaGLCanvas::OnChar(wxKeyEvent& event){
 			((GLFrame*)GetParent())->showScrollBar(RECONSLICES, reconIndex);
 			break;
 		case iterRecon:
-			break;
 			recon->iterStep();
-			//recon->setDataDisplay(error);
+			recon->setDataDisplay(error);
 			reconIndex = recon->getActiveProjection();
-			//recon->setActiveProjection(errorIndex);
+			recon->setActiveProjection(errorIndex);
 			recon->setDisplay(no_der);
-			((GLFrame*)GetParent())->showScrollBar(RECONSLICES, reconIndex);
-			//((GLFrame*)GetParent())->showScrollBar(NUMVIEWS, errorIndex);
+			//((GLFrame*)GetParent())->showScrollBar(RECONSLICES, reconIndex);
+			((GLFrame*)GetParent())->showScrollBar(NUMVIEWS, errorIndex);
 
 			/*recon->setDataDisplay(reconstruction);
 			recon->setDisplay(mag_enhance);
 			((GLFrame*)GetParent())->hideScrollBar();*/
 			break;
 		default:
-			//recon->setDataDisplay(error);
+			/*recon->setDataDisplay(error);
+			recon->setDisplay(no_der);
+			recon->setShowNegative(true);
+			((GLFrame*)GetParent())->showScrollBar(NUMVIEWS, 0);
+			recon->initIterative();*/
 			recon->setDataDisplay(iterRecon);
-			//recon->setShowNegative(true);
-			//((GLFrame*)GetParent())->showScrollBar(NUMVIEWS, 0);
 			((GLFrame*)GetParent())->showScrollBar(RECONSLICES, 0);
 			recon->initIterative();
-			for (int i = 0; i < 30; i++) recon->iterStep();
+			bool oldLog = recon->getLogView();
+			recon->setLogView(false);
+			for (int i = 0; i < 100; i++) {
+				recon->iterStep();
+				recon->singleFrame();
+				recon->resetLight();
+				paint();
+			}
 			recon->finalizeIter();
-			recon->setLogView(true);
+			recon->setLogView(oldLog);
 			break;
 		}
 

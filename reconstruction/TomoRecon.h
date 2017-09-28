@@ -95,11 +95,17 @@
 #define LAMBDADEFAULT 2
 #define ITERDEFAULT 20
 
+//UNC version 1
 //#define RECONSLICES 18
 //#define RECONDIS 3.0f
 
-#define RECONSLICES 30
-#define RECONDIS 6.0f
+//UNC version 2
+#define RECONSLICES 18
+#define RECONDIS -14.0f
+
+//RMI phantoms
+//#define RECONSLICES 30
+//#define RECONDIS 6.0f
 
 #define TVX 0.2f
 #define TVY 0.2f
@@ -307,7 +313,7 @@ public:
 	TomoError init();
 
 	///Load in gain and primary data files for display
-	TomoError ReadProjections(
+	TomoError ReadProjectionsFromFile(
 		///Images taken of the detector with no subject
 		const char * gainFile,
 		///Main data file to be reconstructed
@@ -786,6 +792,9 @@ public:
 	TomoError enableGain(bool enable);
 	TomoError getHistogramRecon(unsigned int * histogram);
 	TomoError initIterative();
+	TomoError ReadProjections(unsigned short ** GainData, unsigned short ** RawData);
+	int getNumViews();
+	void getProjectionDimensions(int * width, int * height);
 
 private:
 	/********************************************************************************************/

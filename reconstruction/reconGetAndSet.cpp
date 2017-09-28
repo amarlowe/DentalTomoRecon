@@ -443,3 +443,12 @@ TomoError TomoRecon::enableGain(bool enable) {
 	constants.useGain = enable;
 	return Tomo_OK;
 }
+
+int TomoRecon::getNumViews() {
+	return NumViews;
+}
+
+void TomoRecon::getProjectionDimensions(int* width, int* height) {
+	*width = Sys.Proj.Nx;
+	*height = Sys.Proj.Ny;
+}

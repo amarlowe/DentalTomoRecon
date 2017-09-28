@@ -33,6 +33,50 @@ TomoError TomoRecon::init() {
 	return Tomo_OK;
 }
 
+TomoError TomoRecon::ReadProjectionsFromFile(const char * gainFile, const char * mainFile) {
+	TomoError returnError;
+
+	//Read projections
+	unsigned short ** RawData = new unsigned short *[NumViews];
+	unsigned short ** GainData = new unsigned short *[NumViews];
+	FILE * fileptr = NULL;
+	std::string ProjPath = mainFile;
+	std::string GainPath = gainFile;
+
+	for (int view = 0; view < NumViews; view++) {
+		//Read and correct projections
+		RawData[view] = new unsigned short[Sys.Proj.Nx*Sys.Proj.Ny];
+		GainData[view] = new unsigned short[Sys.Proj.Nx*Sys.Proj.Ny];
+
+		ProjPath = ProjPath.substr(0, ProjPath.length() - 5);
+		ProjPath += std::to_string(view) + ".raw";
+		GainPath = GainPath.substr(0, GainPath.length() - 5);
+		GainPath += std::to_string(view) + ".raw";
+
+		fopen_s(&fileptr, ProjPath.c_str(), "rb");
+		if (fileptr == NULL) return Tomo_file_err;
+		fread(RawData[view], sizeof(unsigned short), Sys.Proj.Nx * Sys.Proj.Ny, fileptr);
+		fclose(fileptr);
+
+		fopen_s(&fileptr, GainPath.c_str(), "rb");
+		if (fileptr == NULL) return Tomo_file_err;
+		fread(GainData[view], sizeof(unsigned short), Sys.Proj.Nx * Sys.Proj.Ny, fileptr);
+		fclose(fileptr);
+	}
+
+	returnError = ReadProjections(GainData, RawData);
+
+	for (int view = 0; view < NumViews; view++) {
+		//Read and correct projections
+		delete[] RawData[view];
+		delete[] GainData[view];
+	}
+	delete[] RawData;
+	delete[] GainData;
+
+	return returnError;
+}
+
 TomoError TomoRecon::setNOOP(float kernel[KERNELSIZE]) {
 	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
 		kernel[i + KERNELRADIUS] = 0.0;
