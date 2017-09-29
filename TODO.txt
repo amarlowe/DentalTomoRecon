@@ -9,25 +9,34 @@ TomoRecon
 - Look into upres using the mutltiple viewing angles
 - Confirm overwrite on save if file already exists
 - Make an automated test bench for algorithm changes
-- Correct for multipixel surface defects
 - Gui tools for translating scales into real world measurments
 - Image annotations
-- Remove focus artifacts, only show in focus areas
 - Use autofocus to generate relative geometries
 - Move autodetect geometry to config menu, grey out geo list when this is selected
-- Make input selections a wizard
 - Correct for non-xy shifts in the detector
-- Save projection images after processing
 - Save all toolbar settings for session end
-- Add DICOM read functions
 - Use a texture gather to detect 0s that would be used in bilinear filtering to further remove artifacts
+- Make it possible to choose beginning index as a default and read in setting
+- Save project settings to DICOM header
+- Move DICOM writes to external library
+- Move all read in functions to initial config list
+- Save all defaults as JSON and registry settings
+- Differentiate between project, projection and reconstruction (or other) DICOM files
+- Open reconstruction and other DICOMs as if the program were just a reader
 
 --------------Bugs---------------------
 
-- Zbuffs are inaccessible on host code for gpu memory cleanup
+
 
 -------------Completed------------------
 -------------Features------------------
+--(9/28 - 10/5)
+- Save projections as a single DICOM as default save function
+- Replace open and new functions with iterative config window
+- Make DICOM and raw files open the same way
+--(pre 9/28)
+- Correct for multipixel surface defects (only in iterative)
+- Add DICOM read functions
 - Move sys generation to initializer
 - Fix readGainAndDarkimages
 - Remove magic numbers and filepaths
@@ -77,6 +86,8 @@ TomoRecon
 - Throw all tomo errors instead of crashing the program
 
 --------------Bugs---------------------
+- Zbuffs are inaccessible on host code for gpu memory cleanup
+- Border artifacts in edge enhancement
 - additional lines included on increasing z size
 - index out of bounds and other conditions set array values to an explicit -10 (removed TV+sq)
 - image edges given tails that are not explicitly dealt with

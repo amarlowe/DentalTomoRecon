@@ -59,35 +59,6 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 	}
 	else recon->ReadProjectionsFromFile(gainFile, mainFile);
 
-	/*if (!file.GetExt().CmpNoCase(_("dcm"))) {
-		OFLog::configure(OFLogger::INFO_LOG_LEVEL);
-
-		DicomImage *image = new DicomImage(filename.mb_str());
-
-		wxStreamToTextRedirector redirect(m_textCtrl8);
-		if (image->getStatus() == EIS_Normal)
-		{
-			for (int i = 0; i < image->getFrameCount(); i++) {
-				unsigned short *pixelData = (unsigned short *)(image->getOutputData(16, i));
-				if (pixelData != NULL) {
-					int width = image->getWidth();
-					int height = image->getHeight();
-					for (int y = 0; y < height; y++) {
-						for (int x = 0; x < width; x++) {
-							std::cout << pixelData[y*width + x] << " ";
-						}
-						std::cout << "/n";
-					}
-				}
-				else
-					std::cerr << "Error: cannot load DICOM image (" << DicomImage::getString(image->getStatus()) << ")" << endl;
-			}
-		}
-
-		delete image;
-		return;
-	}*/
-
 	return returnError;
 }
 
@@ -236,7 +207,7 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 	recon->initIterative();
 	bool oldLog = recon->getLogView();
 	recon->setLogView(false);
-	for (int i = 0; i < 100; i++) {
+	for (int i = 0; i < 15; i++) {
 		recon->iterStep();
 		recon->singleFrame();
 		recon->resetLight();
@@ -291,24 +262,6 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 		return;
 	}
 
-	/*GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
-	TomoRecon* recon = currentFrame->m_canvas->recon;
-
-	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
-		"Raw or DICOM Files (*.raw, *.dcm)|*.raw;*.dcm|Raw File (*.raw)|*.raw|DICOM File (*.dcm)|*.dcm", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
-
-	if (openFileDialog.ShowModal() == wxID_CANCEL)
-		return;
-
-	wxString filename(openFileDialog.GetPath());
-	
-	wxStreamToTextRedirector redirect(m_textCtrl8);
-	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), filename.mb_str());
-	recon->singleFrame();
-	recon->resetFocus();
-	recon->resetLight();
-	currentFrame->m_canvas->paint();*/
-
 	ReconCon* rc = new ReconCon(this);
 	if (rc->canceled) return;
 	rc->canceled = true;
@@ -330,7 +283,7 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	recon->resetIterative();
 	bool oldLog = recon->getLogView();
 	recon->setLogView(false);
-	for (int i = 0; i < 100; i++) {
+	for (int i = 0; i < 15; i++) {
 		recon->iterStep();
 		recon->singleFrame();
 		recon->resetLight();
@@ -356,14 +309,94 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 	if (saveFileDialog.ShowModal() == wxID_CANCEL)
 		return;
 
-	/*DTRSliceSave* sliceSv = new DTRSliceSave(this);
-	if (sliceSv->ShowModal() == wxCANCEL) return;
+	wxStreamToTextRedirector redirect(m_textCtrl8);
 
-	long val = sliceSv->value;
-	if (val <= 0 || val > MAXSLICE) return;*/
 	m_statusBar1->SetStatusText(_("Saving data as DICOM..."));
-	//recon->SaveDataAsDICOM(saveFileDialog.GetPath().ToStdString(), val);
-	recon->SaveDataAsDICOM(saveFileDialog.GetPath().ToStdString());
+	//recon->SaveDataAsDICOM(saveFileDialog.GetPath().ToStdString());
+
+	std::string ProjPath = currentFrame->filename;
+	int NumViews = recon->getNumViews();
+	int width, height;
+	recon->getProjectionDimensions(&width, &height);
+
+	char uid[100];
+	DcmFileFormat fileformat;
+	DcmDataset *dataset = fileformat.getDataset();
+	dataset->putAndInsertString(DCM_SOPClassUID, UID_CTImageStorage);
+	dataset->putAndInsertString(DCM_SOPInstanceUID, dcmGenerateUniqueIdentifier(uid, SITE_INSTANCE_UID_ROOT));
+	dataset->putAndInsertString(DCM_PatientName, "Doe^John");
+	dataset->putAndInsertString(DCM_NumberOfFrames, std::to_string(NumViews).c_str());
+	dataset->putAndInsertString(DCM_Rows, std::to_string(height).c_str());
+	dataset->putAndInsertString(DCM_Columns, std::to_string(width).c_str());
+	unsigned short * RawData = new unsigned short[width*height*NumViews];
+
+	if (!ProjPath.substr(ProjPath.length() - 3, ProjPath.length()).compare("dcm")) {
+		//Read projections
+		for (int view = 0; view < NumViews; view++) {
+		//int view = 0; {
+			//Read projections
+			ProjPath = ProjPath.substr(0, ProjPath.length() - 5);
+			ProjPath += std::to_string(view) + ".dcm";//+1
+
+			OFLog::configure(OFLogger::INFO_LOG_LEVEL);
+
+			DicomImage *image = new DicomImage(ProjPath.c_str());
+
+			if (image->getStatus() == EIS_Normal) {
+				unsigned short *pixelData = (unsigned short *)(image->getOutputData(16));
+				if (pixelData != NULL) {
+					memcpy(RawData + view*width*height, pixelData, width*height * sizeof(unsigned short));
+				}
+				else
+					std::cout << "Error: cannot load DICOM image (" << DicomImage::getString(image->getStatus()) << ")" << endl;
+			}
+
+			delete image;
+		}
+	}
+	/*else {
+		//Read projections
+		unsigned short ** RawData = new unsigned short *[NumViews];
+		unsigned short ** GainData = new unsigned short *[NumViews];
+		FILE * fileptr = NULL;
+
+		for (int view = 0; view < NumViews; view++) {
+			//Read and correct projections
+			RawData[view] = new unsigned short[Sys.Proj.Nx*Sys.Proj.Ny];
+			GainData[view] = new unsigned short[Sys.Proj.Nx*Sys.Proj.Ny];
+
+			ProjPath = ProjPath.substr(0, ProjPath.length() - 5);
+			ProjPath += std::to_string(view) + ".raw";
+			GainPath = GainPath.substr(0, GainPath.length() - 5);
+			GainPath += std::to_string(view) + ".raw";
+
+			fopen_s(&fileptr, ProjPath.c_str(), "rb");
+			if (fileptr == NULL) return;
+			fread(RawData[view], sizeof(unsigned short), Sys.Proj.Nx * Sys.Proj.Ny, fileptr);
+			fclose(fileptr);
+
+			fopen_s(&fileptr, GainPath.c_str(), "rb");
+			if (fileptr == NULL) return;
+			fread(GainData[view], sizeof(unsigned short), Sys.Proj.Nx * Sys.Proj.Ny, fileptr);
+			fclose(fileptr);
+		}
+
+		for (int view = 0; view < NumViews; view++) {
+			//Read and correct projections
+			delete[] RawData[view];
+			delete[] GainData[view];
+		}
+		delete[] RawData;
+		delete[] GainData;
+	}*/
+
+	dataset->putAndInsertUint16Array(DCM_PixelData, RawData, width*height*NumViews);
+	OFCondition status = fileformat.saveFile(saveFileDialog.GetPath().ToStdString(), EXS_LittleEndianExplicit);
+	if (status.bad())
+		std::cout << "Error: cannot write DICOM file (" << status.text() << ")" << endl;
+
+	delete[] RawData;
+
 	m_statusBar1->SetStatusText(_("DICOM saved!"));
 }
 

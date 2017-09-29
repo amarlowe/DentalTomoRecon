@@ -21,6 +21,7 @@
 //#include <GL/freeglut.h>
 
 #include "dcmtk/config/osconfig.h" 
+#include "dcmtk/dcmdata/dctk.h"
 #include "dcmtk/dcmimgle/dcmimage.h"
 
 #ifdef __BORLANDC__
