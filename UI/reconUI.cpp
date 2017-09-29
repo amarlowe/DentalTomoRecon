@@ -177,8 +177,11 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	logView = new wxCheckBox( navToolbar, wxID_ANY, wxT("Log view"), wxDefaultPosition, wxDefaultSize, 0 );
 	logView->SetValue(true); 
 	navToolbar->AddControl( logView );
-	projectionView = new wxCheckBox( navToolbar, wxID_ANY, wxT("View projections"), wxDefaultPosition, wxDefaultSize, 0 );
-	navToolbar->AddControl( projectionView );
+	wxString dataDisplayChoices[] = { wxT("Reconstruction"), wxT("Single Pass Reconstruction"), wxT("Projections") };
+	int dataDisplayNChoices = sizeof( dataDisplayChoices ) / sizeof( wxString );
+	dataDisplay = new wxChoice( navToolbar, wxID_ANY, wxDefaultPosition, wxDefaultSize, dataDisplayNChoices, dataDisplayChoices, 0 );
+	dataDisplay->SetSelection( 0 );
+	navToolbar->AddControl( dataDisplay );
 	navToolbar->Realize();
 	m_mgr.AddPane( navToolbar, wxAuiPaneInfo() .Top() .CaptionVisible( false ).CloseButton( false ).PaneBorder( false ).Movable( false ).Dock().Resizable().FloatingSize( wxDefaultSize ).DockFixed( true ).BottomDockable( false ).TopDockable( false ).LeftDockable( false ).RightDockable( false ).Floatable( false ).Layer( 10 ) );
 	
@@ -372,7 +375,7 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	vertFlip->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onVertFlip ), NULL, this );
 	horFlip->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onHorFlip ), NULL, this );
 	logView->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onLogView ), NULL, this );
-	projectionView->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onProjectionView ), NULL, this );
+	dataDisplay->Connect( wxEVT_COMMAND_CHOICE_SELECTED, wxCommandEventHandler( mainWindow::onDataDisplay ), NULL, this );
 	xEnhance->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onXEnhance ), NULL, this );
 	yEnhance->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onYEnhance ), NULL, this );
 	absEnhance->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onAbsEnhance ), NULL, this );
@@ -506,7 +509,7 @@ mainWindow::~mainWindow()
 	vertFlip->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onVertFlip ), NULL, this );
 	horFlip->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onHorFlip ), NULL, this );
 	logView->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onLogView ), NULL, this );
-	projectionView->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onProjectionView ), NULL, this );
+	dataDisplay->Disconnect( wxEVT_COMMAND_CHOICE_SELECTED, wxCommandEventHandler( mainWindow::onDataDisplay ), NULL, this );
 	xEnhance->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onXEnhance ), NULL, this );
 	yEnhance->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onYEnhance ), NULL, this );
 	absEnhance->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( mainWindow::onAbsEnhance ), NULL, this );
@@ -614,7 +617,7 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	wxBoxSizer* bSizer9;
 	bSizer9 = new wxBoxSizer( wxHORIZONTAL );
 	
-	startDistanceLabel = new wxStaticText( this, wxID_ANY, wxT("Smallest in-focus distance:"), wxDefaultPosition, wxDefaultSize, 0 );
+	startDistanceLabel = new wxStaticText( this, wxID_ANY, wxT("Start Distance:"), wxDefaultPosition, wxDefaultSize, 0 );
 	startDistanceLabel->Wrap( -1 );
 	bSizer9->Add( startDistanceLabel, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
 	
@@ -625,7 +628,7 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	startDistanceUnits->Wrap( -1 );
 	bSizer9->Add( startDistanceUnits, 1, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
 	
-	endDistanceLabel = new wxStaticText( this, wxID_ANY, wxT("Largest in-focus distance:"), wxDefaultPosition, wxDefaultSize, 0 );
+	endDistanceLabel = new wxStaticText( this, wxID_ANY, wxT("End Distance:"), wxDefaultPosition, wxDefaultSize, 0 );
 	endDistanceLabel->Wrap( -1 );
 	bSizer9->Add( endDistanceLabel, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
 	
@@ -659,12 +662,18 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	distanceUnits->Wrap( -1 );
 	bSizer7->Add( distanceUnits, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
 	
+	setStartDis = new wxButton( this, wxID_ANY, wxT("Set As Start Distance"), wxDefaultPosition, wxDefaultSize, 0 );
+	bSizer7->Add( setStartDis, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
 	
-	bSizer7->Add( 100, 0, 0, 0, 5 );
+	setEndDis = new wxButton( this, wxID_ANY, wxT("Set As End Distance"), wxDefaultPosition, wxDefaultSize, 0 );
+	bSizer7->Add( setEndDis, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
+	
+	
+	bSizer7->Add( 0, 0, 1, 0, 5 );
 	
 	m_staticText35 = new wxStaticText( this, wxID_ANY, wxT("Recontruction preview (scroll to change distance):"), wxDefaultPosition, wxDefaultSize, 0 );
 	m_staticText35->Wrap( -1 );
-	bSizer7->Add( m_staticText35, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
+	bSizer7->Add( m_staticText35, 1, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
 	
 	
 	bSizer6->Add( bSizer7, 1, wxEXPAND, 5 );
@@ -676,17 +685,23 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	this->Centre( wxBOTH );
 	
 	// Connect Events
+	this->Connect( wxEVT_CLOSE_WINDOW, wxCloseEventHandler( reconConfig::onClose ) );
 	ok->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onOk ), NULL, this );
 	cancel->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onCancel ), NULL, this );
 	distance->Connect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( reconConfig::onDistance ), NULL, this );
+	setStartDis->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onSetStartDis ), NULL, this );
+	setEndDis->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onSetEndDis ), NULL, this );
 }
 
 reconConfig::~reconConfig()
 {
 	// Disconnect Events
+	this->Disconnect( wxEVT_CLOSE_WINDOW, wxCloseEventHandler( reconConfig::onClose ) );
 	ok->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onOk ), NULL, this );
 	cancel->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onCancel ), NULL, this );
 	distance->Disconnect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( reconConfig::onDistance ), NULL, this );
+	setStartDis->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onSetStartDis ), NULL, this );
+	setEndDis->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onSetEndDis ), NULL, this );
 	
 }
 

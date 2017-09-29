@@ -328,6 +328,8 @@ __global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, float scal
 	float sum = 0;
 	int i = (x - (wOut - wIn / scale) / 2)*scale + xOff;
 	int j = (y - (hOut - hIn / scale) / 2)*scale + yOff;
+	if (consts.orientation) i = wIn - 1 - i;
+	if (consts.flip) j = hIn - 1 - j;
 	if (i > 0 && j > 0 && i < wIn && j < hIn)
 		sum = tex2D(textImage, (float)i + 0.5f, (float)j + 0.5f);
 
@@ -434,11 +436,8 @@ __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, uns
 	//Check image boundaries
 	if ((i < consts.Px) && (j < consts.Py)){
 		//Flip and invert while converting to float
-		int x, y;
-		if (consts.orientation) x = consts.Px - 1 - i;
-		else x = i;
-		if (consts.flip) y = consts.Py - 1 - j;
-		else y = j;
+		int x = i;
+		int y = j;
 
 		float val = Proj[j*consts.Px + i];
 
@@ -488,7 +487,7 @@ __global__ void rescale(float * Sino, int view, float * MaxVal, float * MinVal, 
 	if ((i < consts.Px) && (j < consts.Py)) {
 		float test = Sino[(j + view*consts.Py)*consts.ProjPitchNum + i] - *MinVal;
 		if (test > 0) {
-			Sino[(j + view*consts.Py)*consts.ProjPitchNum + i] = (test - colShifts[i] - rowShifts[j]) / *MaxVal * USHRT_MAX;//scale from 1 to max
+			Sino[(j + view*consts.Py)*consts.ProjPitchNum + i] = (test - colShifts[i] - rowShifts[j]) / (*MaxVal-*MinVal) * USHRT_MAX;//scale from 1 to max
 		}
 		else Sino[(j + view*consts.Py)*consts.ProjPitchNum + i] = 0.0;
 	}
@@ -715,10 +714,10 @@ __global__ void scaleRecon(int slice, unsigned int minVal, unsigned int maxVal, 
 	test -=  minVal;
 	float maxV = maxVal - minVal;
 	if (test > maxV) test = maxV;
-	if (test > 0) {
+	if (test > 1.0f) {
 		surf3Dwrite(test / maxV * (float)USHRT_MAX, surfRecon, i * sizeof(float), j, slice);
 	}
-	else surf3Dwrite(0.0f, surfRecon, i * sizeof(float), j, slice);
+	else surf3Dwrite(1.0f, surfRecon, i * sizeof(float), j, slice);
 }
 
 __global__ void zeroArray(int slice, params consts, cudaSurfaceObject_t surfRecon) {
@@ -2296,6 +2295,8 @@ TomoError TomoRecon::iterStep() {
 
 TomoError TomoRecon::finalizeIter() {
 	//cuda(BindSurfaceToArray(surfRecon, d_Recon2));
+	for (int slice = 0; slice < Sys.Recon.Nz; slice++)
+		KERNELCALL2(invertRecon, contBlocks, contThreads, slice, constants, surfReconObj);
 
 	constants.baseXr = 0;
 	constants.baseYr = 0;
@@ -2308,14 +2309,11 @@ TomoError TomoRecon::finalizeIter() {
 	float maxVal, minVal;
 	unsigned int histogram[HIST_BIN_COUNT];
 	tomo_err_throw(getHistogramRecon(histogram));
-	tomo_err_throw(autoLight(histogram, 80, &minVal, &maxVal));
+	tomo_err_throw(autoLight(histogram, 0, &minVal, &maxVal));
 
 	//cuda(BindSurfaceToArray(surfRecon, d_Recon2));
 	for (int slice = 0; slice < Sys.Recon.Nz; slice++)
 		KERNELCALL2(scaleRecon, contBlocks, contThreads, slice, minVal, maxVal, constants, surfReconObj);
-
-	for (int slice = 0; slice < Sys.Recon.Nz; slice++)
-		KERNELCALL2(invertRecon, contBlocks, contThreads, slice, constants, surfReconObj);
 
 	constants.log = oldLog;
 

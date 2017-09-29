@@ -108,7 +108,7 @@ TomoError TomoRecon::setActiveProjection(int index) {
 	if( index < 0 
 		|| (constants.dataDisplay == projections && index >= constants.Views)
 		|| (constants.dataDisplay == error && index >= constants.Views)
-		|| (constants.dataDisplay == iterRecon && index >= RECONSLICES)) return Tomo_invalid_arg;
+		|| (constants.dataDisplay == iterRecon && index >= constants.slices)) return Tomo_invalid_arg;
 	sliceIndex = index;
 	return Tomo_OK;
 }
@@ -436,7 +436,12 @@ TomoError TomoRecon::setBoundaries(float begin, float end) {
 
 	constants.startDis = start;
 	constants.slices = round((finish - start) / constants.pitchZ);
+	Sys.Recon.Nz = constants.slices;
 	return Tomo_OK;
+}
+
+int TomoRecon::getNumSlices() {
+	return constants.slices;
 }
 
 TomoError TomoRecon::enableGain(bool enable) {

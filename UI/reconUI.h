@@ -81,7 +81,7 @@ class mainWindow : public wxFrame
 		wxCheckBox* vertFlip;
 		wxCheckBox* horFlip;
 		wxCheckBox* logView;
-		wxCheckBox* projectionView;
+		wxChoice* dataDisplay;
 		wxToolBar* edgeToolbar;
 		wxCheckBox* xEnhance;
 		wxCheckBox* yEnhance;
@@ -142,7 +142,7 @@ class mainWindow : public wxFrame
 		virtual void onVertFlip( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onHorFlip( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onLogView( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onProjectionView( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onDataDisplay( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onXEnhance( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onYEnhance( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onAbsEnhance( wxCommandEvent& event ) { event.Skip(); }
@@ -215,12 +215,17 @@ class reconConfig : public wxDialog
 		wxStaticText* distanceLabel;
 		wxTextCtrl* distance;
 		wxStaticText* distanceUnits;
+		wxButton* setStartDis;
+		wxButton* setEndDis;
 		wxStaticText* m_staticText35;
 		
 		// Virtual event handlers, overide them in your derived class
+		virtual void onClose( wxCloseEvent& event ) { event.Skip(); }
 		virtual void onOk( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onCancel( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onDistance( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onSetStartDis( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onSetEndDis( wxCommandEvent& event ) { event.Skip(); }
 		
 	
 	public:

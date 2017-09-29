@@ -79,10 +79,16 @@ protected:
 	void onDistance(wxCommandEvent& event);
 	void onOk(wxCommandEvent& event);
 	void onCancel(wxCommandEvent& event);
+	void onSetStartDis(wxCommandEvent& event);
+	void onSetEndDis(wxCommandEvent& event);
+	void onClose(wxCloseEvent& event);
 public:
 	/** Constructor */
 	ReconCon(wxWindow* parent);
 	~ReconCon();
+
+	double startDis = 0.0f;
+	double endDis = 10.0f;
 
 	wxString filename;
 	bool canceled = true;
@@ -273,7 +279,7 @@ protected:
 	void onVertFlip(wxCommandEvent& event);
 	void onHorFlip(wxCommandEvent& event);
 	void onLogView(wxCommandEvent& event);
-	void onProjectionView(wxCommandEvent& event);
+	void onDataDisplay(wxCommandEvent& event);
 
 	//Edge enhancement
 	void onToolbarChoice(wxCommandEvent& event);
@@ -307,6 +313,7 @@ protected:
 public:
 	// Generate a System object from config file
 	TomoError genSys(struct SystemControl * Sys);
+	void setDataDisplay(GLFrame* currentFrame, sourceData selection);
 
 	void onContinuous();
 

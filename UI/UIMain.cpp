@@ -133,8 +133,9 @@ bool MyApp::OnInit(){
 	//Run initialization on a dummy frame that will never display, moves interop initialization time to program startup
 	struct SystemControl Sys;
 	frame->genSys(&Sys);
-	GLFrame* initFrame = new GLFrame(frame->m_auinotebook6, &Sys, filename, frame->m_statusBar1);
-	delete initFrame;
+	//GLFrame* initFrame = new GLFrame(frame->m_auinotebook6, &Sys, filename, frame->m_statusBar1);
+	CudaGLCanvas* m_canvas = new CudaGLCanvas(frame, frame->m_statusBar1, &Sys);
+	delete m_canvas;
 	frame->Show(true);
 #endif
 
@@ -217,7 +218,7 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 	
 	//Step 1: Get and example file for get the path
 	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
-		"Raw File (*.raw)|*.raw|DICOM File (*.dcm)|*.dcm", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+		"Raw or DICOM Files (*.raw, *.dcm)|*.raw;*.dcm|Raw File (*.raw)|*.raw|DICOM File (*.dcm)|*.dcm", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
 	if (openFileDialog.ShowModal() == wxID_CANCEL)
 		return;
@@ -278,7 +279,7 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
-		"Raw File (*.raw)|*.raw", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+		"Raw or DICOM Files (*.raw, *.dcm)|*.raw;*.dcm|Raw File (*.raw)|*.raw|DICOM File (*.dcm)|*.dcm", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
 	if (openFileDialog.ShowModal() == wxID_CANCEL)
 		return;
@@ -342,7 +343,6 @@ void DTRMainWindow::onContinuous() {
 	m_statusBar1->SetFieldsCount(3, statusWidths);
 
 	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
-	//recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
 
 	recon->resetFocus();
 	recon->resetLight();
@@ -383,6 +383,7 @@ void DTRMainWindow::onGainSelect(wxCommandEvent& WXUNUSED(event)) {
 void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 	ReconCon* rc = new ReconCon(this);
 	if (rc->canceled) return;
+	rc->canceled = true;
 	rc->ShowModal();
 	if (rc->canceled) return;
 
@@ -392,8 +393,28 @@ void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 
 	(*m_textCtrl8) << "Opening new tab titled: \"" << name << "\"\n";
 
-	m_auinotebook6->AddPage(CreateNewPage(rc->filename), name, true);
+	GLFrame * currentFrame = (GLFrame*)CreateNewPage(rc->filename);
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+	m_auinotebook6->AddPage(currentFrame, name, true);
 	onContinuous();
+	recon->setBoundaries(rc->startDis, rc->endDis);
+
+	setDataDisplay(currentFrame, iterRecon);
+	recon->initIterative();
+	bool oldLog = recon->getLogView();
+	recon->setLogView(false);
+	for (int i = 0; i < 100; i++) {
+		recon->iterStep();
+		recon->singleFrame();
+		recon->resetLight();
+		currentFrame->m_canvas->paint();
+	}
+	recon->finalizeIter();
+	recon->setLogView(oldLog);
+	recon->singleFrame();
+	recon->resetLight();
+
+	currentFrame->m_canvas->paint();
 }
 
 void DTRMainWindow::onResList(wxCommandEvent& event) {
@@ -561,7 +582,7 @@ void DTRMainWindow::onPageChange(wxAuiNotebookEvent& event) {
 	vertFlip->SetValue(recon->getVertFlip());
 	horFlip->SetValue(recon->getHorFlip());
 	logView->SetValue(recon->getLogView());
-	projectionView->SetValue(recon->getDataDisplay() == projections);
+	setDataDisplay(currentFrame, recon->getDataDisplay());
 
 	//Edge enhancement
 	derivative_t display = recon->getDisplay();
@@ -693,7 +714,7 @@ void DTRMainWindow::onStepSlider(wxScrollEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setStep(value / STEPFACTOR);
-	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -777,8 +798,6 @@ void DTRMainWindow::onVertFlip(wxCommandEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setVertFlip(vertFlip->IsChecked());
-	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
-	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
 
@@ -789,8 +808,6 @@ void DTRMainWindow::onHorFlip(wxCommandEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setHorFlip(horFlip->IsChecked());
-	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
-	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
 
@@ -806,24 +823,55 @@ void DTRMainWindow::onLogView(wxCommandEvent& event) {
 	currentFrame->m_canvas->paint();
 }
 
-void DTRMainWindow::onProjectionView(wxCommandEvent& event) {
+void DTRMainWindow::onDataDisplay(wxCommandEvent& event) {
 	if (checkForConsole()) return;
 
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
-
-	if (projectionView->IsChecked()) {
-		recon->setDataDisplay(projections);
-		currentFrame->showScrollBar(NUMVIEWS, 0);
-	}
-	else {
-		recon->setDataDisplay(reconstruction);
-		currentFrame->hideScrollBar();
-	}
 	
+	setDataDisplay(currentFrame, (sourceData)dataDisplay->GetSelection());
+
 	recon->singleFrame();
 	recon->resetLight();
 	currentFrame->m_canvas->paint();
+}
+
+void DTRMainWindow::setDataDisplay(GLFrame* currentFrame, sourceData selection) {
+	static int projIndex = 0;
+	static int reconIndex = 0;
+
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	dataDisplay->SetSelection(selection);
+
+	switch (recon->getDataDisplay()) {
+	case projections:
+		projIndex = recon->getActiveProjection();
+		break;
+	case iterRecon:
+		reconIndex = recon->getActiveProjection();
+		break;
+	default:
+		break;
+	}
+
+	recon->setDataDisplay(selection);
+	switch (selection) {
+	case projections:
+		currentFrame->showScrollBar(NUMVIEWS, projIndex);
+		recon->setActiveProjection(projIndex);
+		break;
+	case reconstruction:
+		currentFrame->hideScrollBar();
+		break;
+	case iterRecon:
+		currentFrame->showScrollBar(recon->getNumSlices(), reconIndex);
+		recon->setActiveProjection(reconIndex);
+		break;
+	default:
+		currentFrame->hideScrollBar();
+		break;
+	}
 }
 
 //Edge enhancement
@@ -940,7 +988,7 @@ void DTRMainWindow::onScanVertEnable(wxCommandEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->enableScanVert(scanVertEnable->IsChecked());
-	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -955,7 +1003,7 @@ void DTRMainWindow::onScanVert(wxScrollEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setScanVertVal(value / SCANFACTOR);
-	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -970,7 +1018,7 @@ void DTRMainWindow::onResetScanVert(wxCommandEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setScanVertVal(SCANVERTDEFAULT);
-	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -993,7 +1041,7 @@ void DTRMainWindow::onScanHorEnable(wxCommandEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->enableScanHor(scanHorEnable->IsChecked());
-	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -1008,7 +1056,7 @@ void DTRMainWindow::onScanHor(wxScrollEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setScanHorVal(value / SCANFACTOR);
-	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -1023,7 +1071,7 @@ void DTRMainWindow::onResetScanHor(wxCommandEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setScanHorVal(SCANHORDEFAULT);
-	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -1039,7 +1087,7 @@ void DTRMainWindow::onNoiseMax(wxScrollEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setNoiseMaxVal(noiseMaxSlider->GetValue());
-	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -1054,7 +1102,7 @@ void DTRMainWindow::onResetNoiseMax(wxCommandEvent& WXUNUSED(event)) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setNoiseMaxVal(noiseMaxSlider->GetValue());
-	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -1077,7 +1125,7 @@ void DTRMainWindow::onNoiseMaxEnable(wxCommandEvent& WXUNUSED(event)) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->enableNoiseMaxFilter(outlierEnable->IsChecked());
-	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -1108,7 +1156,7 @@ void DTRMainWindow::onTVEnable(wxCommandEvent& WXUNUSED(event)) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->enableTV(TVEnable->IsChecked());
-	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -1123,7 +1171,7 @@ void DTRMainWindow::onResetLambda(wxCommandEvent& WXUNUSED(event)) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setTVLambda(lambdaSlider->GetValue());
-	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -1138,7 +1186,7 @@ void DTRMainWindow::onLambdaSlider(wxScrollEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setTVLambda(value);
-	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -1153,7 +1201,7 @@ void DTRMainWindow::onResetIter(wxCommandEvent& WXUNUSED(event)) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setTVIter(iterSlider->GetValue());
-	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -1168,7 +1216,7 @@ void DTRMainWindow::onIterSlider(wxScrollEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setTVIter(value);
-	recon->ReadProjectionsFromFile(gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }
@@ -1200,7 +1248,7 @@ DTRMainWindow::~DTRMainWindow() {
 
 ReconCon::ReconCon(wxWindow* parent) : reconConfig(parent) {
 	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
-		"Raw File (*.raw)|*.raw", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+		"Raw or DICOM Files (*.raw, *.dcm)|*.raw;*.dcm|Raw File (*.raw)|*.raw|DICOM File (*.dcm)|*.dcm", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
 	if (openFileDialog.ShowModal() == wxID_CANCEL)
 		return;
@@ -1218,7 +1266,7 @@ ReconCon::ReconCon(wxWindow* parent) : reconConfig(parent) {
 	drawPanel = new GLFrame(this, &Sys, filename);
 	TomoRecon* recon = ((GLFrame*)drawPanel)->m_canvas->recon;
 	recon->enableGain(false);
-	recon->ReadProjectionsFromFile(filename.mb_str(), filename.mb_str());
+	parseFile(recon, filename.mb_str(), filename.mb_str());
 
 	recon->resetFocus();
 	recon->resetLight();
@@ -1240,14 +1288,28 @@ void ReconCon::onDistance(wxCommandEvent& event) {
 }
 
 void ReconCon::onOk(wxCommandEvent& event) {
-	delete drawPanel;
+	startDistance->GetValue().ToCDouble(&startDis);
+	endDistance->GetValue().ToCDouble(&endDis);
+	canceled = false;
 	Close();
 }
 
 void ReconCon::onCancel(wxCommandEvent& event) {
 	canceled = true;
-	delete drawPanel;
 	Close();
+}
+
+void ReconCon::onSetStartDis(wxCommandEvent& event) {
+	startDistance->SetValue(distance->GetValue());
+}
+
+void ReconCon::onSetEndDis(wxCommandEvent& event) {
+	endDistance->SetValue(distance->GetValue());
+}
+
+void ReconCon::onClose(wxCloseEvent& event) {
+	delete drawPanel;
+	event.Skip();
 }
 
 ReconCon::~ReconCon() {
@@ -1716,8 +1778,8 @@ DTRResDialog::DTRResDialog(wxWindow* parent) : resDialog(parent) {
 }
 
 void DTRResDialog::onAddNew(wxCommandEvent& event) {
-	wxFileDialog openFileDialog(this, _("Open raw image file"), "", "",
-			"Raw File (*.raw)|*.raw", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
+		"Raw or DICOM Files (*.raw, *.dcm)|*.raw;*.dcm|Raw File (*.raw)|*.raw|DICOM File (*.dcm)|*.dcm", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
 	if (openFileDialog.ShowModal() == wxID_CANCEL)
 		return;
@@ -2146,8 +2208,9 @@ void CudaGLCanvas::OnChar(wxKeyEvent& event){
 			recon->setShowNegative(true);
 			((GLFrame*)GetParent())->showScrollBar(NUMVIEWS, 0);
 			recon->initIterative();*/
-			recon->setDataDisplay(iterRecon);
-			((GLFrame*)GetParent())->showScrollBar(RECONSLICES, 0);
+			//recon->setDataDisplay(iterRecon);
+			((DTRMainWindow*)(GetParent()->GetParent()->GetParent()))->setDataDisplay((GLFrame*)GetParent(), iterRecon);
+			//((GLFrame*)GetParent())->showScrollBar(RECONSLICES, 0);
 			recon->initIterative();
 			bool oldLog = recon->getLogView();
 			recon->setLogView(false);

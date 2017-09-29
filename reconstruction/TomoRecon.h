@@ -100,8 +100,12 @@
 //#define RECONDIS 3.0f
 
 //UNC version 2
-#define RECONSLICES 18
-#define RECONDIS -14.0f
+//#define RECONSLICES 18
+//#define RECONDIS -14.0f
+
+//UNC Screws
+#define RECONSLICES 12
+#define RECONDIS -16.0f
 
 //RMI phantoms
 //#define RECONSLICES 30
@@ -140,10 +144,10 @@ typedef enum {
 
 ///Possible types of data that could be displayed through each of the possible filters
 typedef enum {
-	projections,
+	iterRecon = 0,
 	reconstruction,
-	error,
-	iterRecon
+	projections,
+	error
 } sourceData;
 
 ///Filters through which one can look at the data
@@ -789,6 +793,7 @@ public:
 	TomoError finalizeIter();
 	int getActiveProjection();
 	TomoError setBoundaries(float begin, float end);
+	int getNumSlices();
 	TomoError enableGain(bool enable);
 	TomoError getHistogramRecon(unsigned int * histogram);
 	TomoError initIterative();
