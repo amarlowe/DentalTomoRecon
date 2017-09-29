@@ -797,6 +797,7 @@ public:
 	TomoError enableGain(bool enable);
 	TomoError getHistogramRecon(unsigned int * histogram);
 	TomoError initIterative();
+	TomoError resetIterative();
 	TomoError ReadProjections(unsigned short ** GainData, unsigned short ** RawData);
 	int getNumViews();
 	void getProjectionDimensions(int * width, int * height);

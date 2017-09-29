@@ -214,24 +214,40 @@ derivative_t DTRMainWindow::getEnhance() {
 
 // event handlers
 void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
-	//static int s_pageAdded = 1;
-	
-	//Step 1: Get and example file for get the path
-	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
-		"Raw or DICOM Files (*.raw, *.dcm)|*.raw;*.dcm|Raw File (*.raw)|*.raw|DICOM File (*.dcm)|*.dcm", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+	ReconCon* rc = new ReconCon(this);
+	if (rc->canceled) return;
+	rc->canceled = true;
+	rc->ShowModal();
+	if (rc->canceled) return;
 
-	if (openFileDialog.ShowModal() == wxID_CANCEL)
-		return;
-
-	wxString filename(openFileDialog.GetPath());
-	wxFileName file = filename;
+	wxFileName file = rc->filename;
 	wxArrayString dirs = file.GetDirs();
 	wxString name = dirs[file.GetDirCount() - 1];
 
 	(*m_textCtrl8) << "Opening new tab titled: \"" << name << "\"\n";
 
-	m_auinotebook6->AddPage(CreateNewPage(filename), name, true);
+	GLFrame * currentFrame = (GLFrame*)CreateNewPage(rc->filename);
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+	m_auinotebook6->AddPage(currentFrame, name, true);
 	onContinuous();
+	recon->setBoundaries(rc->startDis, rc->endDis);
+
+	setDataDisplay(currentFrame, iterRecon);
+	recon->initIterative();
+	bool oldLog = recon->getLogView();
+	recon->setLogView(false);
+	for (int i = 0; i < 100; i++) {
+		recon->iterStep();
+		recon->singleFrame();
+		recon->resetLight();
+		currentFrame->m_canvas->paint();
+	}
+	recon->finalizeIter();
+	recon->setLogView(oldLog);
+	recon->singleFrame();
+	recon->resetLight();
+
+	currentFrame->m_canvas->paint();
 }
 
 TomoError DTRMainWindow::genSys(struct SystemControl * Sys) {
@@ -275,7 +291,7 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 		return;
 	}
 
-	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	/*GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
@@ -291,6 +307,40 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	recon->singleFrame();
 	recon->resetFocus();
 	recon->resetLight();
+	currentFrame->m_canvas->paint();*/
+
+	ReconCon* rc = new ReconCon(this);
+	if (rc->canceled) return;
+	rc->canceled = true;
+	rc->ShowModal();
+	if (rc->canceled) return;
+
+	wxFileName file = rc->filename;
+	wxArrayString dirs = file.GetDirs();
+	wxString name = dirs[file.GetDirCount() - 1];
+
+	(*m_textCtrl8) << "Opening new tab titled: \"" << name << "\"\n";
+
+	GLFrame * currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+	parseFile(recon, gainFilepath.mb_str(), rc->filename.mb_str());
+	recon->setBoundaries(rc->startDis, rc->endDis);
+
+	setDataDisplay(currentFrame, iterRecon);
+	recon->resetIterative();
+	bool oldLog = recon->getLogView();
+	recon->setLogView(false);
+	for (int i = 0; i < 100; i++) {
+		recon->iterStep();
+		recon->singleFrame();
+		recon->resetLight();
+		currentFrame->m_canvas->paint();
+	}
+	recon->finalizeIter();
+	recon->setLogView(oldLog);
+	recon->singleFrame();
+	recon->resetLight();
+
 	currentFrame->m_canvas->paint();
 }
 

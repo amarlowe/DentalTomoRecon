@@ -2235,7 +2235,6 @@ TomoError TomoRecon::initIterative() {
 #ifdef RECONDERIVATIVE
 	cuda(Memcpy2DAsync(d_Error, projPitch, inXBuff, projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny*NUMVIEWS, cudaMemcpyDeviceToDevice));
 #else
-	
 
 	for (int view = 0; view < NumViews; view++) {
 		cuda(Memcpy2DAsync(d_Error + view * projPitch / sizeof(float) * Sys.Proj.Ny, projPitch, d_Sino + view * projPitch / sizeof(float) * Sys.Proj.Ny, projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny, cudaMemcpyDeviceToDevice));
@@ -2260,13 +2259,33 @@ TomoError TomoRecon::initIterative() {
 	return Tomo_OK;
 }
 
+TomoError TomoRecon::resetIterative() {
+#ifdef RECONDERIVATIVE
+	cuda(Memcpy2DAsync(d_Error, projPitch, inXBuff, projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny*NUMVIEWS, cudaMemcpyDeviceToDevice));
+#else
+
+	for (int view = 0; view < NumViews; view++) {
+		cuda(Memcpy2DAsync(d_Error + view * projPitch / sizeof(float) * Sys.Proj.Ny, projPitch, d_Sino + view * projPitch / sizeof(float) * Sys.Proj.Ny, projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny, cudaMemcpyDeviceToDevice));
+		KERNELCALL2(invert, contBlocks, contThreads, d_Error + view * projPitch / sizeof(float) * Sys.Proj.Ny, constants);
+	}
+#endif // RECONDERIVATIVE
+
+	cuda(BindTexture2D(NULL, textError, d_Error, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
+	//cuda(BindSurfaceToArray(surfRecon, d_Recon2));
+	for (int slice = 0; slice < Sys.Recon.Nz; slice++) {
+		KERNELCALL2(zeroArray, contBlocks, contThreads, slice, constants, surfReconObj);
+		KERNELCALL2(copySlice, contBlocks, contThreads, d_ReconOld, slice, constants, surfReconObj);
+		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, 1.0f, true, constants, surfReconObj);
+	}
+	cuda(UnbindTexture(textError));
+
+	return Tomo_OK;
+}
+
+
 TomoError TomoRecon::iterStep() {
 	static float iteration = 1.0f;
 
-	//cuda(Memset2DAsync(d_Error, projPitch, 0, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny*Sys.Proj.NumViews));
-	//cuda(BindTexture2D(NULL, textSino, d_Recon, cudaCreateChannelDesc<float>(), Sys.Recon.Nx, Sys.Recon.Ny*Sys.Recon.Nz, reconPitch));
-	//cuda(BindTexture2D(NULL, textError, d_Recon, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
-	//cuda(BindSurfaceToArray(surfRecon, d_Recon2));
 	cuda(BindTextureToArray(textRecon, d_Recon2));
 #ifdef RECONDERIVATIVE
 	for (int view = 0; view < NumViews; view++) {
