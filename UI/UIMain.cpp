@@ -354,41 +354,20 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 			delete image;
 		}
 	}
-	/*else {
+	else {
 		//Read projections
-		unsigned short ** RawData = new unsigned short *[NumViews];
-		unsigned short ** GainData = new unsigned short *[NumViews];
 		FILE * fileptr = NULL;
 
 		for (int view = 0; view < NumViews; view++) {
-			//Read and correct projections
-			RawData[view] = new unsigned short[Sys.Proj.Nx*Sys.Proj.Ny];
-			GainData[view] = new unsigned short[Sys.Proj.Nx*Sys.Proj.Ny];
-
 			ProjPath = ProjPath.substr(0, ProjPath.length() - 5);
 			ProjPath += std::to_string(view) + ".raw";
-			GainPath = GainPath.substr(0, GainPath.length() - 5);
-			GainPath += std::to_string(view) + ".raw";
 
 			fopen_s(&fileptr, ProjPath.c_str(), "rb");
 			if (fileptr == NULL) return;
-			fread(RawData[view], sizeof(unsigned short), Sys.Proj.Nx * Sys.Proj.Ny, fileptr);
-			fclose(fileptr);
-
-			fopen_s(&fileptr, GainPath.c_str(), "rb");
-			if (fileptr == NULL) return;
-			fread(GainData[view], sizeof(unsigned short), Sys.Proj.Nx * Sys.Proj.Ny, fileptr);
+			fread(RawData + view*width*height, sizeof(unsigned short), width*height, fileptr);
 			fclose(fileptr);
 		}
-
-		for (int view = 0; view < NumViews; view++) {
-			//Read and correct projections
-			delete[] RawData[view];
-			delete[] GainData[view];
-		}
-		delete[] RawData;
-		delete[] GainData;
-	}*/
+	}
 
 	dataset->putAndInsertUint16Array(DCM_PixelData, RawData, width*height*NumViews);
 	OFCondition status = fileformat.saveFile(saveFileDialog.GetPath().ToStdString(), EXS_LittleEndianExplicit);

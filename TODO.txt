@@ -23,6 +23,7 @@ TomoRecon
 - Save all defaults as JSON and registry settings
 - Differentiate between project, projection and reconstruction (or other) DICOM files
 - Open reconstruction and other DICOMs as if the program were just a reader
+- Iterative mode autofocus
 
 --------------Bugs---------------------
 
