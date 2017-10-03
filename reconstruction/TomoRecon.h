@@ -121,6 +121,8 @@
 //#define RECONDERIVATIVE
 //#define SQUAREMAGINX
 
+#define ITERATIONS 15
+
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {										\
 	(__VA_ARGS__);												\
@@ -139,7 +141,8 @@ typedef enum {
 	Tomo_file_err,
 	Tomo_DICOM_err,
 	Tomo_CUDA_err,
-	Tomo_Done
+	Tomo_Done,
+	Tomo_proj_file
 } TomoError;
 
 ///Possible types of data that could be displayed through each of the possible filters
@@ -793,6 +796,8 @@ public:
 	TomoError finalizeIter();
 	int getActiveProjection();
 	TomoError setBoundaries(float begin, float end);
+	float getStartBoundary();
+	float getEndBoundary();
 	int getNumSlices();
 	TomoError enableGain(bool enable);
 	TomoError getHistogramRecon(unsigned int * histogram);

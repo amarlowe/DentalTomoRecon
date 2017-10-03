@@ -12,42 +12,98 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 		recon->getProjectionDimensions(&width, &height);
 		unsigned short ** RawData = new unsigned short *[NumViews];
 		unsigned short ** GainData = new unsigned short *[NumViews];
-		FILE * fileptr = NULL;
-		std::string ProjPath = mainFile;
-		std::string GainPath = gainFile;
-
 		for (int view = 0; view < NumViews; view++) {
 			//Read and correct projections
 			RawData[view] = new unsigned short[width*height];
 			GainData[view] = new unsigned short[width*height];
-
-			ProjPath = ProjPath.substr(0, ProjPath.length() - 5);
-			ProjPath += std::to_string(view + 1) + ".dcm";
-			GainPath = GainPath.substr(0, GainPath.length() - 5);
-			GainPath += std::to_string(view) + ".dcm";
-
-			OFLog::configure(OFLogger::INFO_LOG_LEVEL);
-
-			DicomImage *image = new DicomImage(ProjPath.c_str());
-
-			if (image->getStatus() == EIS_Normal) {
-				unsigned short *pixelData = (unsigned short *)(image->getOutputData(16));
-				if (pixelData != NULL) {
-					memcpy(RawData[view], pixelData, width*height * sizeof(unsigned short));
-				}
-				else
-					std::cerr << "Error: cannot load DICOM image (" << DicomImage::getString(image->getStatus()) << ")" << endl;
-			}
-
-			delete image;
-
-			/*fopen_s(&fileptr, GainPath.c_str(), "rb");
-			if (fileptr == NULL) return Tomo_file_err;
-			fread(GainData[view], sizeof(unsigned short), width*height, fileptr);
-			fclose(fileptr);*/
 		}
 
-		returnError = recon->ReadProjections(GainData, RawData);
+		//Test for dicom type (projection, display stack, project file)
+		DcmFileFormat dcmff;
+		OFString test;
+		DcmDataset* dset;
+		OFCondition result = dcmff.loadFile(ProjPath.c_str());
+		if (result.good()) {
+			 dset = dcmff.getDataset();
+			 dset->findAndGetOFString(PRV_PrivateCreator, test);
+		}
+
+		if (test.compare(PRIVATE_CREATOR_NAME) == 0) {
+			const Uint16 *pixelData = NULL;
+			dset->findAndGetUint16Array(DCM_PixelData, pixelData);
+			if (pixelData != NULL) {
+				for(int view = 0; view < NumViews; view++)
+					memcpy(RawData[view], pixelData + width*height*view, width*height * sizeof(unsigned short));
+			}
+
+			float tempFlt;
+			unsigned short tempShrt;
+			dset->findAndGetFloat32(PRV_StepSize, tempFlt);
+			recon->setStep(tempFlt);
+			dset->findAndGetUint16(PRV_DerDisplay, tempShrt);
+			recon->setDisplay((derivative_t)tempShrt);
+			dset->findAndGetFloat32(PRV_EdgeRatio, tempFlt);
+			recon->setEnhanceRatio(tempFlt);
+			dset->findAndGetUint16(PRV_DataDisplay, tempShrt);
+			recon->setDataDisplay((sourceData)tempShrt);
+			dset->findAndGetUint16(PRV_HorFlip, tempShrt);
+			recon->setHorFlip(tempShrt == 1);
+			dset->findAndGetUint16(PRV_VertFlip, tempShrt);
+			recon->setVertFlip(tempShrt == 1);
+			dset->findAndGetUint16(PRV_LogView, tempShrt);
+			recon->setLogView(tempShrt == 1);
+			dset->findAndGetUint16(PRV_ScanVertEn, tempShrt);
+			recon->enableScanVert(tempShrt == 1);
+			dset->findAndGetFloat32(PRV_ScanVertVal, tempFlt);
+			recon->setScanVertVal(tempFlt);
+			dset->findAndGetUint16(PRV_ScanHorEn, tempShrt);
+			recon->enableScanHor(tempShrt == 1);
+			dset->findAndGetFloat32(PRV_ScanHorVal, tempFlt);
+			recon->setScanHorVal(tempFlt);
+			dset->findAndGetUint16(PRV_OutNoiseEn, tempShrt);
+			recon->enableNoiseMaxFilter(tempShrt == 1);
+			dset->findAndGetUint16(PRV_OutNoiseMax, tempShrt);
+			recon->setNoiseMaxVal(tempFlt);
+			dset->findAndGetUint16(PRV_TVEn, tempShrt);
+			recon->enableTV(tempShrt == 1);
+			dset->findAndGetUint16(PRV_TVLambda, tempShrt);
+			recon->setTVLambda(tempShrt);
+			dset->findAndGetUint16(PRV_TVIter, tempShrt);
+			recon->setTVIter(tempShrt);
+			dset->findAndGetFloat32(PRV_DisStart, tempFlt);
+			float tempFlt2;
+			dset->findAndGetFloat32(PRV_DisEnd, tempFlt2);
+			recon->setBoundaries(tempFlt, tempFlt2);
+
+			returnError = Tomo_proj_file;
+		}
+		else {
+			FILE * fileptr = NULL;
+			for (int view = 0; view < NumViews; view++) {
+				ProjPath = ProjPath.substr(0, ProjPath.length() - 5);
+				ProjPath += std::to_string(view + 1) + ".dcm";
+
+				//OFLog::configure(OFLogger::INFO_LOG_LEVEL);
+
+				DicomImage *image = new DicomImage(ProjPath.c_str());
+
+				if (image->getStatus() == EIS_Normal) {
+					unsigned short *pixelData = (unsigned short *)(image->getOutputData(16));
+					if (pixelData != NULL) {
+						memcpy(RawData[view], pixelData, width*height * sizeof(unsigned short));
+					}
+					else
+						std::cerr << "Error: cannot load DICOM image (" << DicomImage::getString(image->getStatus()) << ")" << endl;
+				}
+
+				delete image;
+			}
+		}
+
+		{
+			TomoError test = recon->ReadProjections(GainData, RawData);
+			if (test != Tomo_OK) returnError = test;
+		}
 
 		for (int view = 0; view < NumViews; view++) {
 			//Read and correct projections
@@ -86,19 +142,31 @@ bool MyApp::OnInit(){
 
 	// create the main application window
 	DTRMainWindow *frame = new DTRMainWindow(NULL);
-	wxString filename = wxT("C:\\Users\\jdean\\Desktop\\Patient18\\AcquiredImage1_0.raw");
+	wxString filename = wxT("C:\\Users\\jdean\\Desktop\\NewExamples\\Images\\New folder (2)\\test.dcm");
 #ifdef PROFILER
 	frame->Show(true);
 	static unsigned s_pageAdded = 0;
-	frame->m_auinotebook6->AddPage(frame->CreateNewPage(filename),
-		wxString::Format
-		(
-			wxT("%u"),
-			++s_pageAdded
-		),
-		true);
+	GLFrame * currentFrame = (GLFrame*)frame->CreateNewPage(filename);
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+	frame->m_auinotebook6->AddPage(currentFrame, wxString::Format(wxT("%u"), ++s_pageAdded), true);
 	frame->onContinuous();
-	frame->onContinuous();
+
+	parseFile(recon, filename.mb_str(), filename.mb_str());
+
+	frame->setDataDisplay(currentFrame, iterRecon);
+	recon->initIterative();
+	bool oldLog = recon->getLogView();
+	recon->setLogView(false);
+	for (int i = 0; i < ITERATIONS; i++) {
+		recon->iterStep();
+		recon->singleFrame();
+		recon->resetLight();
+		currentFrame->m_canvas->paint();
+	}
+	recon->finalizeIter();
+	recon->setLogView(oldLog);
+	recon->singleFrame();
+	recon->resetLight();
 	exit(0);
 #else
 	//Run initialization on a dummy frame that will never display, moves interop initialization time to program startup
@@ -185,23 +253,34 @@ derivative_t DTRMainWindow::getEnhance() {
 
 // event handlers
 void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
-	ReconCon* rc = new ReconCon(this);
-	if (rc->canceled) return;
-	rc->canceled = true;
-	rc->ShowModal();
-	if (rc->canceled) return;
+	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
+		"Raw or DICOM Files (*.raw, *.dcm)|*.raw;*.dcm|Raw File (*.raw)|*.raw|DICOM File (*.dcm)|*.dcm", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
-	wxFileName file = rc->filename;
+	if (openFileDialog.ShowModal() == wxID_CANCEL)
+		return;
+
+	wxString filename = openFileDialog.GetPath();
+	GLFrame * currentFrame = (GLFrame*)CreateNewPage(filename);
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	wxFileName file(filename);
 	wxArrayString dirs = file.GetDirs();
 	wxString name = dirs[file.GetDirCount() - 1];
 
 	(*m_textCtrl8) << "Opening new tab titled: \"" << name << "\"\n";
 
-	GLFrame * currentFrame = (GLFrame*)CreateNewPage(rc->filename);
-	TomoRecon* recon = currentFrame->m_canvas->recon;
 	m_auinotebook6->AddPage(currentFrame, name, true);
+
+	//parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	if (parseFile(recon, filename.mb_str(), filename.mb_str()) != Tomo_proj_file) {
+		ReconCon* rc = new ReconCon(this, filename);
+		if (rc->canceled) return;
+		rc->canceled = true;
+		rc->ShowModal();
+		if (rc->canceled) return;
+		recon->setBoundaries(rc->startDis, rc->endDis);
+	}
 	onContinuous();
-	recon->setBoundaries(rc->startDis, rc->endDis);
 
 	setDataDisplay(currentFrame, iterRecon);
 	recon->initIterative();
@@ -262,13 +341,15 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 		return;
 	}
 
-	ReconCon* rc = new ReconCon(this);
-	if (rc->canceled) return;
-	rc->canceled = true;
-	rc->ShowModal();
-	if (rc->canceled) return;
+	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
+		"Raw or DICOM Files (*.raw, *.dcm)|*.raw;*.dcm|Raw File (*.raw)|*.raw|DICOM File (*.dcm)|*.dcm", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
-	wxFileName file = rc->filename;
+	if (openFileDialog.ShowModal() == wxID_CANCEL)
+		return;
+
+	wxString filename = openFileDialog.GetPath();
+
+	wxFileName file = filename;
 	wxArrayString dirs = file.GetDirs();
 	wxString name = dirs[file.GetDirCount() - 1];
 
@@ -276,8 +357,15 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 
 	GLFrame * currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
-	parseFile(recon, gainFilepath.mb_str(), rc->filename.mb_str());
-	recon->setBoundaries(rc->startDis, rc->endDis);
+
+	if (parseFile(recon, filename.mb_str(), filename.mb_str()) != Tomo_proj_file) {
+		ReconCon* rc = new ReconCon(this, filename);
+		if (rc->canceled) return;
+		rc->canceled = true;
+		rc->ShowModal();
+		if (rc->canceled) return;
+		recon->setBoundaries(rc->startDis, rc->endDis);
+	}
 
 	setDataDisplay(currentFrame, iterRecon);
 	recon->resetIterative();
@@ -331,27 +419,46 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 	unsigned short * RawData = new unsigned short[width*height*NumViews];
 
 	if (!ProjPath.substr(ProjPath.length() - 3, ProjPath.length()).compare("dcm")) {
-		//Read projections
-		for (int view = 0; view < NumViews; view++) {
-		//int view = 0; {
-			//Read projections
-			ProjPath = ProjPath.substr(0, ProjPath.length() - 5);
-			ProjPath += std::to_string(view) + ".dcm";//+1
+		//Test for dicom type (projection, display stack, project file)
+		DcmFileFormat dcmff;
+		OFString test;
+		DcmDataset* dset;
+		OFCondition result = dcmff.loadFile(ProjPath.c_str());
+		if (result.good()) {
+			dset = dcmff.getDataset();
+			dset->findAndGetOFString(PRV_PrivateCreator, test);
+		}
 
-			OFLog::configure(OFLogger::INFO_LOG_LEVEL);
+		if (test.compare(PRIVATE_CREATOR_NAME) == 0) {
+			const Uint16 *pixelData = NULL;
+			dset->findAndGetUint16Array(DCM_PixelData, pixelData);
 
-			DicomImage *image = new DicomImage(ProjPath.c_str());
-
-			if (image->getStatus() == EIS_Normal) {
-				unsigned short *pixelData = (unsigned short *)(image->getOutputData(16));
-				if (pixelData != NULL) {
-					memcpy(RawData + view*width*height, pixelData, width*height * sizeof(unsigned short));
-				}
-				else
-					std::cout << "Error: cannot load DICOM image (" << DicomImage::getString(image->getStatus()) << ")" << endl;
+			if (pixelData != NULL) {
+				memcpy(RawData, pixelData, NumViews*width*height * sizeof(unsigned short));
 			}
+		}
+		else {
+			//Read projections
+			for (int view = 0; view < NumViews; view++) {
+				//Read projections
+				ProjPath = ProjPath.substr(0, ProjPath.length() - 5);
+				ProjPath += std::to_string(view) + ".dcm";//+1
 
-			delete image;
+				//OFLog::configure(OFLogger::INFO_LOG_LEVEL);
+
+				DicomImage *image = new DicomImage(ProjPath.c_str());
+
+				if (image->getStatus() == EIS_Normal) {
+					unsigned short *pixelData = (unsigned short *)(image->getOutputData(16));
+					if (pixelData != NULL) {
+						memcpy(RawData + view*width*height, pixelData, width*height * sizeof(unsigned short));
+					}
+					else
+						std::cout << "Error: cannot load DICOM image (" << DicomImage::getString(image->getStatus()) << ")" << endl;
+				}
+
+				delete image;
+			}
 		}
 	}
 	else {
@@ -369,7 +476,54 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 		}
 	}
 
+	//add project data
+	DcmDataDictionary &dict = dcmDataDict.wrlock();
+	dict.addEntry(new DcmDictEntry(PRIVATE_STEP_TAG, EVR_FL, "Step size", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_DERDIS_TAG, EVR_US, "Displayed enhancement", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_EDGERAT_TAG, EVR_FL, "Ratio of original to derivative", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_DATADIS_TAG, EVR_US, "Displayed data type", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_HORFLIP_TAG, EVR_US, "Flip horizontally", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_VERFLIP_TAG, EVR_US, "Flip vertically", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_LOGVIEW_TAG, EVR_US, "Display log corrected view", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_SCVEREN_TAG, EVR_US, "Vertical scanline correction enabled", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_SCVERVL_TAG, EVR_FL, "Vertical scanline correction factor", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_SCHOREN_TAG, EVR_US, "Horizontal scanline correction enabled", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_SCHORVL_TAG, EVR_FL, "Horizontal scanline correction factor", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_OUTNSEN_TAG, EVR_US, "Outlier noise removal enabled", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_OUTNSVL_TAG, EVR_US, "Outlier noise removal factor", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_TVEN_TAG, EVR_US, "Total variation denoising enabled", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_TVLMDA_TAG, EVR_US, "Total variation denoising lambda factor", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_TVITER_TAG, EVR_US, "Total variation denoising iterations", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_DISSRT_TAG, EVR_FL, "Start distance of reconstruction", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_DISEND_TAG, EVR_FL, "End distance of reconstruction", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dcmDataDict.unlock();
+
+	dataset->putAndInsertString(PRV_PrivateCreator, PRIVATE_CREATOR_NAME);
+	dataset->putAndInsertFloat32(PRV_StepSize, recon->getStep());
+	dataset->putAndInsertUint16(PRV_DerDisplay, recon->getDisplay());
+	dataset->putAndInsertFloat32(PRV_EdgeRatio, recon->getEnhanceRatio());
+	dataset->putAndInsertUint16(PRV_DataDisplay, recon->getDataDisplay());
+	dataset->putAndInsertUint16(PRV_HorFlip, recon->getHorFlip() ? 1 : 0);
+	dataset->putAndInsertUint16(PRV_VertFlip, recon->getVertFlip() ? 1 : 0);
+	dataset->putAndInsertUint16(PRV_LogView, recon->getLogView() ? 1 : 0);
+	dataset->putAndInsertUint16(PRV_ScanVertEn, recon->scanVertIsEnabled() ? 1 : 0);
+	dataset->putAndInsertFloat32(PRV_ScanVertVal, recon->getScanVertVal());
+	dataset->putAndInsertUint16(PRV_ScanHorEn, recon->scanHorIsEnabled() ? 1 : 0);
+	dataset->putAndInsertFloat32(PRV_ScanHorVal, recon->getScanHorVal());
+	dataset->putAndInsertUint16(PRV_OutNoiseEn, recon->noiseMaxFilterIsEnabled() ? 1 : 0);
+	dataset->putAndInsertUint16(PRV_OutNoiseMax, recon->getNoiseMaxVal());
+	dataset->putAndInsertUint16(PRV_TVEn, recon->TVIsEnabled() ? 1 : 0);
+	dataset->putAndInsertUint16(PRV_TVLambda, recon->getTVLambda());
+	dataset->putAndInsertUint16(PRV_TVIter, recon->getTVIter());
+	dataset->putAndInsertFloat32(PRV_DisStart, recon->getStartBoundary());
+	dataset->putAndInsertFloat32(PRV_DisEnd, recon->getEndBoundary());
+
+	//Output just the tags for reference
+	fileformat.print(COUT);
+
+	//save the array afterwards to not print it
 	dataset->putAndInsertUint16Array(DCM_PixelData, RawData, width*height*NumViews);
+
 	OFCondition status = fileformat.saveFile(saveFileDialog.GetPath().ToStdString(), EXS_LittleEndianExplicit);
 	if (status.bad())
 		std::cout << "Error: cannot write DICOM file (" << status.text() << ")" << endl;
@@ -394,6 +548,7 @@ void DTRMainWindow::onResetFocus(wxCommandEvent& WXUNUSED(event)) {
 	recon->resetLight();
 
 	currentFrame->m_canvas->paint();
+	if (recon->getDataDisplay() == iterRecon) currentFrame->showScrollBar(recon->getNumSlices(), recon->getActiveProjection());
 }
 
 void DTRMainWindow::onContinuous() {
@@ -404,10 +559,10 @@ void DTRMainWindow::onContinuous() {
 	wxStreamToTextRedirector redirect(m_textCtrl8);
 	m_statusBar1->SetFieldsCount(3, statusWidths);
 
-	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	//parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 
-	recon->resetFocus();
-	recon->resetLight();
+	//recon->resetFocus();
+	//recon->resetLight();
 
 	//Initialize all text fields for canvas
 	currentFrame->m_canvas->paint(false, distanceValue, zoomSlider, zoomVal, windowSlider, windowVal, levelSlider, levelVal);
@@ -443,7 +598,15 @@ void DTRMainWindow::onGainSelect(wxCommandEvent& WXUNUSED(event)) {
 }
 
 void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
-	ReconCon* rc = new ReconCon(this);
+	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
+		"Raw or DICOM Files (*.raw, *.dcm)|*.raw;*.dcm|Raw File (*.raw)|*.raw|DICOM File (*.dcm)|*.dcm", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+
+	if (openFileDialog.ShowModal() == wxID_CANCEL)
+		return;
+
+	wxString filename = openFileDialog.GetPath();
+
+	ReconCon* rc = new ReconCon(this, filename);
 	if (rc->canceled) return;
 	rc->canceled = true;
 	rc->ShowModal();
@@ -465,7 +628,7 @@ void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 	recon->initIterative();
 	bool oldLog = recon->getLogView();
 	recon->setLogView(false);
-	for (int i = 0; i < 100; i++) {
+	for (int i = 0; i < ITERATIONS; i++) {
 		recon->iterStep();
 		recon->singleFrame();
 		recon->resetLight();
@@ -749,6 +912,7 @@ void DTRMainWindow::onDistance(wxCommandEvent& event) {
 	recon->setDistance((float)distVal);
 	recon->singleFrame();
 	currentFrame->m_canvas->paint(true);
+	if(recon->getDataDisplay() == iterRecon) currentFrame->showScrollBar(recon->getNumSlices(), recon->getActiveProjection());
 }
 
 void DTRMainWindow::onAutoFocus(wxCommandEvent& event) {
@@ -764,6 +928,7 @@ void DTRMainWindow::onAutoFocus(wxCommandEvent& event) {
 	}
 	else recon->resetFocus();
 	currentFrame->m_canvas->paint();
+	if (recon->getDataDisplay() == iterRecon) currentFrame->showScrollBar(recon->getNumSlices(), recon->getActiveProjection());
 }
 
 void DTRMainWindow::onStepSlider(wxScrollEvent& event) {
@@ -851,6 +1016,7 @@ void DTRMainWindow::onAutoAll(wxCommandEvent& event) {
 		recon->resetLight();
 	}
 	currentFrame->m_canvas->paint();
+	if (recon->getDataDisplay() == iterRecon) currentFrame->showScrollBar(recon->getNumSlices(), recon->getActiveProjection());
 }
 
 void DTRMainWindow::onVertFlip(wxCommandEvent& event) {
@@ -1308,17 +1474,8 @@ DTRMainWindow::~DTRMainWindow() {
 // Resolution phatom selector frame handling
 // ----------------------------------------------------------------------------
 
-ReconCon::ReconCon(wxWindow* parent) : reconConfig(parent) {
-	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
-		"Raw or DICOM Files (*.raw, *.dcm)|*.raw;*.dcm|Raw File (*.raw)|*.raw|DICOM File (*.dcm)|*.dcm", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
-
-	if (openFileDialog.ShowModal() == wxID_CANCEL)
-		return;
-
+ReconCon::ReconCon(wxWindow* parent, wxString filename) : reconConfig(parent), filename(filename) {
 	canceled = false;
-
-	wxString fn(openFileDialog.GetPath());
-	filename = fn;
 
 	DTRMainWindow* typedParent = (DTRMainWindow*)GetParent();
 
@@ -2238,7 +2395,7 @@ void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {
 
 void CudaGLCanvas::OnChar(wxKeyEvent& event){
 	//Switch the derivative display
-#ifdef USEITERATIVE
+#ifdef DEBUGSPACEBAR
 	static int errorIndex = 0;
 	static int reconIndex = 0;
 	if (event.GetKeyCode() == 32) {

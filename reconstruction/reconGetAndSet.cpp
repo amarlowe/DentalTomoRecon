@@ -59,6 +59,7 @@ TomoError TomoRecon::setHorFlip(bool flip) {
 }
 
 float TomoRecon::getDistance() {
+	if (constants.dataDisplay == iterRecon) return constants.startDis + constants.pitchZ * sliceIndex;
 	return distance;
 }
 
@@ -66,6 +67,12 @@ TomoError TomoRecon::setDistance(float dist) {
 	distance = dist;
 	//if (dist < MINDIS) distance = MINDIS;
 	//if (dist > MAXDIS) distance = MAXDIS;
+	if (constants.dataDisplay == iterRecon) {
+		if (dist < constants.startDis) distance = constants.startDis;
+		if (dist > constants.startDis + constants.pitchZ * constants.slices) distance = constants.startDis + constants.pitchZ * (constants.slices - 1);
+		sliceIndex = round((distance - constants.startDis) / constants.pitchZ);
+		distance = constants.startDis + constants.pitchZ * sliceIndex;
+	}
 	return Tomo_OK;
 }
 
@@ -435,9 +442,17 @@ TomoError TomoRecon::setBoundaries(float begin, float end) {
 	float finish = max(begin, end);
 
 	constants.startDis = start;
-	constants.slices = round((finish - start) / constants.pitchZ);
+	constants.slices = round((finish - start) / constants.pitchZ) + 1;
 	Sys.Recon.Nz = constants.slices;
 	return Tomo_OK;
+}
+
+float TomoRecon::getStartBoundary() {
+	return constants.startDis;
+}
+
+float TomoRecon::getEndBoundary() {
+	return constants.startDis + (constants.slices - 1) * constants.pitchZ;
 }
 
 int TomoRecon::getNumSlices() {

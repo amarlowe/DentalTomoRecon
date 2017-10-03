@@ -975,7 +975,9 @@ TomoError TomoRecon::initGPU(){
 		Sys.Geo.EmitY[i] -= Sys.Geo.IsoY;
 	}
 
-	cudaDeviceSynchronize();
+	constants.pitchZ = Sys.Geo.ZPitch;
+
+	//cudaDeviceSynchronize();
 
 #ifdef PRINTMEMORYUSAGE
 	size_t avail_mem;
@@ -1150,8 +1152,6 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 
 	bool oldLog = constants.log;
 	constants.log = false;
-
-	constants.pitchZ = Sys.Geo.ZPitch;
 
 	//Read the rest of the blank images for given projection sample set 
 	for (int view = 0; view < NumViews; view++) {
@@ -1732,13 +1732,21 @@ TomoError TomoRecon::singleFrame() {
 		}
 		break;
 	case square_mag:
-		if (constants.dataDisplay == projections) {
-			cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
-			cuda(Memcpy(d_Image, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
-		}
-		else {
-			tomo_err_throw(project(inXBuff, buff1));
-			tomo_err_throw(project(inYBuff, d_Image));
+		switch (constants.dataDisplay) {
+			case reconstruction:
+				tomo_err_throw(project(inXBuff, buff1));
+				tomo_err_throw(project(inYBuff, d_Image));
+				break;
+			case projections:
+				cuda(Memcpy(buff1, inXBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+				cuda(Memcpy(d_Image, inYBuff + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+				break;
+			case iterRecon:
+				tomo_err_throw(imageKernel(d_gaussDer, d_gauss, buff1, false));
+				tomo_err_throw(imageKernel(d_gauss, d_gaussDer, d_Image, false));
+				break;
+			case error:
+				break;
 		}
 
 		KERNELCALL2(squareMag, contBlocks, contThreads, d_Image, buff1, d_Image, constants);
@@ -1841,12 +1849,15 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 	static bool linearRegion;
 	static bool firstLin = true;
 	static float bestDist;
+	static int bestSlice;
 	static derivative_t oldDisplay;
 
 	if (firstRun) {
-		step = STARTSTEP;
-		distance = MINDIS;
-		bestDist = MINDIS;
+		step = constants.pitchZ;
+		distance = constants.startDis;
+		bestDist = constants.startDis;
+		sliceIndex = 0;
+		bestSlice = sliceIndex;
 		best = 0;
 		linearRegion = false;
 		oldDisplay = derDisplay;
@@ -1859,14 +1870,22 @@ TomoError TomoRecon::autoFocus(bool firstRun) {
 		if (newVal > best) {
 			best = newVal;
 			bestDist = distance;
+			bestSlice = sliceIndex;
 		}
 
 		distance += step;
+		sliceIndex++;
 
-		if (distance > MAXDIS) {
+		if (distance > constants.startDis + constants.pitchZ*constants.slices || sliceIndex >= constants.slices) {
 			linearRegion = true;
 			firstLin = true;
 			distance = bestDist;
+			sliceIndex = bestSlice;
+			if (constants.dataDisplay == iterRecon) {
+				derDisplay = oldDisplay;
+				singleFrame();
+				return Tomo_Done;
+			}
 		}
 	}
 	else {
@@ -2281,7 +2300,6 @@ TomoError TomoRecon::resetIterative() {
 
 	return Tomo_OK;
 }
-
 
 TomoError TomoRecon::iterStep() {
 	static float iteration = 1.0f;

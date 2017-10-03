@@ -7,23 +7,21 @@ TomoRecon
 - Save configuration settings on project file/directory instead of registry to make them project specific
 - Replace each failure state with it's own error type and dialoag (or pass a string)
 - Look into upres using the mutltiple viewing angles
-- Confirm overwrite on save if file already exists
 - Make an automated test bench for algorithm changes
 - Gui tools for translating scales into real world measurments
 - Image annotations
 - Use autofocus to generate relative geometries
 - Move autodetect geometry to config menu, grey out geo list when this is selected
 - Correct for non-xy shifts in the detector
-- Save all toolbar settings for session end
 - Use a texture gather to detect 0s that would be used in bilinear filtering to further remove artifacts
 - Make it possible to choose beginning index as a default and read in setting
-- Save project settings to DICOM header
 - Move DICOM writes to external library
 - Move all read in functions to initial config list
 - Save all defaults as JSON and registry settings
 - Differentiate between project, projection and reconstruction (or other) DICOM files
 - Open reconstruction and other DICOMs as if the program were just a reader
-- Iterative mode autofocus
+- Option to reverse log correction from projection images
+- Differentiate between export and project save
 
 --------------Bugs---------------------
 
@@ -35,6 +33,12 @@ TomoRecon
 - Save projections as a single DICOM as default save function
 - Replace open and new functions with iterative config window
 - Make DICOM and raw files open the same way
+- Save project settings to DICOM header
+- Save all toolbar settings for session end
+- Edit single pass autofocus to use iterative start and end distances
+- Iterative mode autofocus
+- Confirm overwrite on save if file already exists
+
 --(pre 9/28)
 - Correct for multipixel surface defects (only in iterative)
 - Add DICOM read functions
