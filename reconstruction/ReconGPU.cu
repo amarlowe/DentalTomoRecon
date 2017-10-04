@@ -1259,6 +1259,7 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 
 		//Get x and y derivatives and save to their own buffers
 		cuda(Memcpy(d_Image, d_Sino + view * projPitch / sizeof(float) * Sys.Proj.Ny, sizeIM, cudaMemcpyDeviceToDevice));
+		sourceData oldDisplay = constants.dataDisplay;
 		constants.dataDisplay = projections;
 		tomo_err_throw(imageKernel(d_gaussDer, d_gauss, inXBuff + view * projPitch / sizeof(float) * Sys.Proj.Ny, true));
 		tomo_err_throw(imageKernel(d_gauss, d_gaussDer, inYBuff + view * projPitch / sizeof(float) * Sys.Proj.Ny, true));
@@ -1270,7 +1271,7 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 		KERNELCALL2(mag, contBlocks, contThreads, inXBuff + view * projPitch / sizeof(float) * Sys.Proj.Ny, buff1, d_Image, constants);
 #endif //SQUAREMAGINX
 
-		constants.dataDisplay = reconstruction;
+		constants.dataDisplay = oldDisplay;
 
 #ifdef ENABLEZDER
 		cuda(BindTexture2D(NULL, textError, d_Sino, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));

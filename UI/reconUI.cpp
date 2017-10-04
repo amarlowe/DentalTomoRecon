@@ -97,7 +97,7 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	
 	this->SetMenuBar( m_menubar1 );
 	
-	wxString optionBoxChoices[] = { wxT("Navigation"), wxT("Edge Enhancement"), wxT("Scan Line Removal"), wxT("Denoising") };
+	wxString optionBoxChoices[] = { wxT("Navigation"), wxT("Edge Enhancement") };
 	int optionBoxNChoices = sizeof( optionBoxChoices ) / sizeof( wxString );
 	optionBox = new wxChoice( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, optionBoxNChoices, optionBoxChoices, 0 );
 	optionBox->SetSelection( 0 );
@@ -622,15 +622,53 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	wxBoxSizer* bSizer5;
 	bSizer5 = new wxBoxSizer( wxHORIZONTAL );
 	
-	wxString optionBoxChoices[] = { wxT("Scan Line Removal"), wxT("Denoising") };
+	wxString optionBoxChoices[] = { wxT("Distance Selection"), wxT("Scan Line Removal"), wxT("Denoising") };
 	int optionBoxNChoices = sizeof( optionBoxChoices ) / sizeof( wxString );
 	optionBox = new wxChoice( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, optionBoxNChoices, optionBoxChoices, 0 );
 	optionBox->SetSelection( 0 );
-	bSizer5->Add( optionBox, 0, wxALL, 5 );
+	bSizer5->Add( optionBox, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
+	
+	distanceToolbar = new wxToolBar( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_HORIZONTAL|wxTB_NODIVIDER|wxNO_BORDER ); 
+	distanceLabel = new wxStaticText( distanceToolbar, wxID_ANY, wxT("Currently displayed distance: "), wxDefaultPosition, wxDefaultSize, 0 );
+	distanceLabel->Wrap( -1 );
+	distanceToolbar->AddControl( distanceLabel );
+	distance = new wxTextCtrl( distanceToolbar, wxID_ANY, wxT("5.0"), wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER );
+	distanceToolbar->AddControl( distance );
+	distanceUnits = new wxStaticText( distanceToolbar, wxID_ANY, wxT("mm  "), wxDefaultPosition, wxDefaultSize, 0 );
+	distanceUnits->Wrap( -1 );
+	distanceToolbar->AddControl( distanceUnits );
+	setStartDis = new wxButton( distanceToolbar, wxID_ANY, wxT("Set As Start Distance"), wxDefaultPosition, wxDefaultSize, 0 );
+	distanceToolbar->AddControl( setStartDis );
+	setEndDis = new wxButton( distanceToolbar, wxID_ANY, wxT("Set As End Distance"), wxDefaultPosition, wxDefaultSize, 0 );
+	distanceToolbar->AddControl( setEndDis );
+	m_staticline2 = new wxStaticLine( distanceToolbar, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLI_VERTICAL );
+	distanceToolbar->AddControl( m_staticline2 );
+	startDistanceLabel = new wxStaticText( distanceToolbar, wxID_ANY, wxT("Start Distance:"), wxDefaultPosition, wxDefaultSize, 0 );
+	startDistanceLabel->Wrap( -1 );
+	distanceToolbar->AddControl( startDistanceLabel );
+	startDistance = new wxTextCtrl( distanceToolbar, wxID_ANY, wxT("0.0"), wxDefaultPosition, wxDefaultSize, 0 );
+	distanceToolbar->AddControl( startDistance );
+	startDistanceUnits = new wxStaticText( distanceToolbar, wxID_ANY, wxT("mm"), wxDefaultPosition, wxDefaultSize, 0 );
+	startDistanceUnits->Wrap( -1 );
+	distanceToolbar->AddControl( startDistanceUnits );
+	m_staticline3 = new wxStaticLine( distanceToolbar, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxLI_VERTICAL );
+	distanceToolbar->AddControl( m_staticline3 );
+	endDistanceLabel = new wxStaticText( distanceToolbar, wxID_ANY, wxT("End Distance:"), wxDefaultPosition, wxDefaultSize, 0 );
+	endDistanceLabel->Wrap( -1 );
+	distanceToolbar->AddControl( endDistanceLabel );
+	endDistance = new wxTextCtrl( distanceToolbar, wxID_ANY, wxT("10.0"), wxDefaultPosition, wxDefaultSize, 0 );
+	distanceToolbar->AddControl( endDistance );
+	endDistanceUnit = new wxStaticText( distanceToolbar, wxID_ANY, wxT("mm"), wxDefaultPosition, wxDefaultSize, 0 );
+	endDistanceUnit->Wrap( -1 );
+	distanceToolbar->AddControl( endDistanceUnit );
+	distanceToolbar->Realize(); 
+	
+	bSizer5->Add( distanceToolbar, 1, wxALIGN_CENTER_VERTICAL, 5 );
 	
 	scanToolbar = new wxToolBar( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_HORIZONTAL|wxTB_NODIVIDER|wxNO_BORDER ); 
 	scanToolbar->SetForegroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_CAPTIONTEXT ) );
 	scanToolbar->SetBackgroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_MENU ) );
+	scanToolbar->Hide();
 	
 	scanVertEnable = new wxCheckBox( scanToolbar, wxID_ANY, wxT("Scanline vertical correction factor: "), wxDefaultPosition, wxDefaultSize, 0 );
 	scanVertEnable->SetValue(true); 
@@ -665,11 +703,12 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	scanToolbar->AddControl( scanHorSlider );
 	scanToolbar->Realize(); 
 	
-	bSizer5->Add( scanToolbar, 0, wxEXPAND, 5 );
+	bSizer5->Add( scanToolbar, 1, wxALIGN_CENTER_VERTICAL, 5 );
 	
 	noiseToolbar = new wxToolBar( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_HORIZONTAL|wxTB_NODIVIDER ); 
 	noiseToolbar->SetForegroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_CAPTIONTEXT ) );
 	noiseToolbar->SetBackgroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_MENU ) );
+	noiseToolbar->Hide();
 	
 	outlierEnable = new wxCheckBox( noiseToolbar, wxID_ANY, wxT("Large noise hard removal over value:  "), wxDefaultPosition, wxDefaultSize, 0 );
 	outlierEnable->SetValue(true); 
@@ -703,64 +742,13 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	noiseToolbar->AddControl( iterSlider );
 	noiseToolbar->Realize(); 
 	
-	bSizer5->Add( noiseToolbar, 0, wxEXPAND, 5 );
+	bSizer5->Add( noiseToolbar, 1, wxALIGN_CENTER_VERTICAL, 5 );
 	
 	
 	bSizer6->Add( bSizer5, 1, wxEXPAND, 5 );
 	
-	wxBoxSizer* bSizer9;
-	bSizer9 = new wxBoxSizer( wxHORIZONTAL );
-	
-	startDistanceLabel = new wxStaticText( this, wxID_ANY, wxT("Start Distance:"), wxDefaultPosition, wxDefaultSize, 0 );
-	startDistanceLabel->Wrap( -1 );
-	bSizer9->Add( startDistanceLabel, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	startDistance = new wxTextCtrl( this, wxID_ANY, wxT("0.0"), wxDefaultPosition, wxDefaultSize, 0 );
-	bSizer9->Add( startDistance, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	startDistanceUnits = new wxStaticText( this, wxID_ANY, wxT("mm"), wxDefaultPosition, wxDefaultSize, 0 );
-	startDistanceUnits->Wrap( -1 );
-	bSizer9->Add( startDistanceUnits, 1, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	endDistanceLabel = new wxStaticText( this, wxID_ANY, wxT("End Distance:"), wxDefaultPosition, wxDefaultSize, 0 );
-	endDistanceLabel->Wrap( -1 );
-	bSizer9->Add( endDistanceLabel, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	endDistance = new wxTextCtrl( this, wxID_ANY, wxT("10.0"), wxDefaultPosition, wxDefaultSize, 0 );
-	bSizer9->Add( endDistance, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	endDistanceUnit = new wxStaticText( this, wxID_ANY, wxT("mm"), wxDefaultPosition, wxDefaultSize, 0 );
-	endDistanceUnit->Wrap( -1 );
-	bSizer9->Add( endDistanceUnit, 1, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	ok = new wxButton( this, wxID_ANY, wxT("OK"), wxDefaultPosition, wxDefaultSize, 0 );
-	bSizer9->Add( ok, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	cancel = new wxButton( this, wxID_ANY, wxT("Cancel"), wxDefaultPosition, wxDefaultSize, 0 );
-	bSizer9->Add( cancel, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	
-	bSizer6->Add( bSizer9, 1, wxEXPAND, 5 );
-	
 	wxBoxSizer* bSizer7;
 	bSizer7 = new wxBoxSizer( wxHORIZONTAL );
-	
-	distanceLabel = new wxStaticText( this, wxID_ANY, wxT("Currently displayed distance: "), wxDefaultPosition, wxDefaultSize, 0 );
-	distanceLabel->Wrap( -1 );
-	bSizer7->Add( distanceLabel, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	distance = new wxTextCtrl( this, wxID_ANY, wxT("5.0"), wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER );
-	bSizer7->Add( distance, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	distanceUnits = new wxStaticText( this, wxID_ANY, wxT(" mm"), wxDefaultPosition, wxDefaultSize, 0 );
-	distanceUnits->Wrap( -1 );
-	bSizer7->Add( distanceUnits, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	setStartDis = new wxButton( this, wxID_ANY, wxT("Set As Start Distance"), wxDefaultPosition, wxDefaultSize, 0 );
-	bSizer7->Add( setStartDis, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
-	
-	setEndDis = new wxButton( this, wxID_ANY, wxT("Set As End Distance"), wxDefaultPosition, wxDefaultSize, 0 );
-	bSizer7->Add( setEndDis, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
 	
 	
 	bSizer7->Add( 0, 0, 1, 0, 5 );
@@ -768,6 +756,12 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	m_staticText35 = new wxStaticText( this, wxID_ANY, wxT("Recontruction preview (scroll to change distance):"), wxDefaultPosition, wxDefaultSize, 0 );
 	m_staticText35->Wrap( -1 );
 	bSizer7->Add( m_staticText35, 1, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
+	
+	ok = new wxButton( this, wxID_ANY, wxT("OK"), wxDefaultPosition, wxDefaultSize, 0 );
+	bSizer7->Add( ok, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
+	
+	cancel = new wxButton( this, wxID_ANY, wxT("Cancel"), wxDefaultPosition, wxDefaultSize, 0 );
+	bSizer7->Add( cancel, 0, wxALL|wxALIGN_CENTER_VERTICAL, 5 );
 	
 	
 	bSizer6->Add( bSizer7, 1, wxEXPAND, 5 );
@@ -781,6 +775,9 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	// Connect Events
 	this->Connect( wxEVT_CLOSE_WINDOW, wxCloseEventHandler( reconConfig::onClose ) );
 	optionBox->Connect( wxEVT_COMMAND_CHOICE_SELECTED, wxCommandEventHandler( reconConfig::onToolbarChoice ), NULL, this );
+	distance->Connect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( reconConfig::onDistance ), NULL, this );
+	setStartDis->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onSetStartDis ), NULL, this );
+	setEndDis->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onSetEndDis ), NULL, this );
 	scanVertEnable->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onScanVertEnable ), NULL, this );
 	resetScanVert->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetScanVert ), NULL, this );
 	scanVertSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
@@ -837,9 +834,6 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	iterSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
 	ok->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onOk ), NULL, this );
 	cancel->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onCancel ), NULL, this );
-	distance->Connect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( reconConfig::onDistance ), NULL, this );
-	setStartDis->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onSetStartDis ), NULL, this );
-	setEndDis->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onSetEndDis ), NULL, this );
 }
 
 reconConfig::~reconConfig()
@@ -847,6 +841,9 @@ reconConfig::~reconConfig()
 	// Disconnect Events
 	this->Disconnect( wxEVT_CLOSE_WINDOW, wxCloseEventHandler( reconConfig::onClose ) );
 	optionBox->Disconnect( wxEVT_COMMAND_CHOICE_SELECTED, wxCommandEventHandler( reconConfig::onToolbarChoice ), NULL, this );
+	distance->Disconnect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( reconConfig::onDistance ), NULL, this );
+	setStartDis->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onSetStartDis ), NULL, this );
+	setEndDis->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onSetEndDis ), NULL, this );
 	scanVertEnable->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onScanVertEnable ), NULL, this );
 	resetScanVert->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetScanVert ), NULL, this );
 	scanVertSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
@@ -903,9 +900,6 @@ reconConfig::~reconConfig()
 	iterSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
 	ok->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onOk ), NULL, this );
 	cancel->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onCancel ), NULL, this );
-	distance->Disconnect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( reconConfig::onDistance ), NULL, this );
-	setStartDis->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onSetStartDis ), NULL, this );
-	setEndDis->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onSetEndDis ), NULL, this );
 	
 }
 

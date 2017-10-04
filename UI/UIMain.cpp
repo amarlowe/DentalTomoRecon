@@ -214,6 +214,9 @@ DTRMainWindow::DTRMainWindow(wxWindow* parent) : mainWindow(parent){
 
 	//Get filepath for last opened/saved file
 	gainFilepath = pConfig->Read(wxT("/gainFilepath"), wxT(""));
+
+	int statusWidths[] = { -4, -1, -1 };
+	m_statusBar1->SetFieldsCount(3, statusWidths);
 }
 
 //helpers
@@ -262,6 +265,56 @@ derivative_t DTRMainWindow::getEnhance() {
 	return thisDisplay;
 }
 
+TomoError DTRMainWindow::launchReconConfig(TomoRecon * recon, wxString filename) {
+	ReconCon* rc = new ReconCon(this, filename);
+	//set values
+
+	//Scan line removal
+	rc->scanVertIsEnabled = recon->scanVertIsEnabled();
+	rc->scanHorIsEnabled = recon->scanHorIsEnabled();
+	rc->scanVertVal = recon->getScanVertVal();
+	rc->scanHorVal = recon->getScanHorVal();
+
+	//Outlier denoising
+	rc->noiseMaxIsEnabled = recon->noiseMaxFilterIsEnabled();
+	rc->noiseMaxValue = recon->getNoiseMaxVal();
+
+	//TV Denoising
+	rc->TVIsEnabled = recon->TVIsEnabled();
+	rc->TVLambdaVal = recon->getTVLambda();
+	rc->TVIterVal = recon->getTVIter();
+
+	//distance
+	rc->startDis = recon->getStartBoundary();
+	rc->endDis = recon->getEndBoundary();
+
+	rc->canceled = true;
+	rc->setValues();
+	rc->ShowModal();
+	if (rc->canceled) return Tomo_cancelled;
+	recon->setBoundaries(rc->startDis, rc->endDis);
+
+	//Scan line removal
+	recon->enableScanVert(rc->scanVertIsEnabled);
+	recon->enableScanHor(rc->scanHorIsEnabled);
+	recon->setScanVertVal(rc->scanVertVal);
+	recon->setScanHorVal(rc->scanHorVal);
+
+	//Outlier denoising
+	recon->enableNoiseMaxFilter(rc->noiseMaxIsEnabled);
+	recon->setNoiseMaxVal(rc->noiseMaxValue);
+
+	//TV Denoising
+	recon->enableTV(rc->TVIsEnabled);
+	recon->setTVLambda(rc->TVLambdaVal);
+	recon->setTVIter(rc->TVIterVal);
+
+	//redo to apply changes
+	parseFile(recon, filename.mb_str(), filename.mb_str());
+
+	return Tomo_OK;
+}
+
 // event handlers
 void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
@@ -282,12 +335,7 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 
 	//parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	if (parseFile(recon, filename.mb_str(), filename.mb_str()) != Tomo_proj_file) {
-		ReconCon* rc = new ReconCon(this, filename);
-		if (rc->canceled) return;
-		rc->canceled = true;
-		rc->ShowModal();
-		if (rc->canceled) return;
-		recon->setBoundaries(rc->startDis, rc->endDis);
+		launchReconConfig(recon, filename);
 	}
 
 	m_auinotebook6->AddPage(currentFrame, name, true);
@@ -370,12 +418,7 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	if (parseFile(recon, filename.mb_str(), filename.mb_str()) != Tomo_proj_file) {
-		ReconCon* rc = new ReconCon(this, filename);
-		if (rc->canceled) return;
-		rc->canceled = true;
-		rc->ShowModal();
-		if (rc->canceled) return;
-		recon->setBoundaries(rc->startDis, rc->endDis);
+		launchReconConfig(recon, filename);
 	}
 
 	setDataDisplay(currentFrame, iterRecon);
@@ -608,15 +651,8 @@ void DTRMainWindow::onResetFocus(wxCommandEvent& WXUNUSED(event)) {
 void DTRMainWindow::onContinuous() {
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
-	int statusWidths[] = { -4, -1, -1 };
-
+	
 	wxStreamToTextRedirector redirect(m_textCtrl8);
-	m_statusBar1->SetFieldsCount(3, statusWidths);
-
-	//parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
-
-	//recon->resetFocus();
-	//recon->resetLight();
 
 	//Initialize all text fields for canvas
 	currentFrame->m_canvas->paint(false, distanceValue, zoomSlider, zoomVal, windowSlider, windowVal, levelSlider, levelVal);
@@ -657,17 +693,11 @@ void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 
 	wxString filename = currentFrame->filename;
 
-	ReconCon* rc = new ReconCon(this, filename);
-	if (rc->canceled) return;
-	rc->canceled = true;
-	rc->ShowModal();
-	if (rc->canceled) return;
+	launchReconConfig(recon, filename);
 
-	wxFileName file = rc->filename;
+	wxFileName file = filename;
 	wxArrayString dirs = file.GetDirs();
 	wxString name = dirs[file.GetDirCount() - 1];
-
-	recon->setBoundaries(rc->startDis, rc->endDis);
 
 	setDataDisplay(currentFrame, iterRecon);
 	recon->initIterative();
@@ -866,79 +896,6 @@ void DTRMainWindow::onPageChange(wxAuiNotebookEvent& event) {
 	float ratio = recon->getEnhanceRatio();
 	ratioValue->SetLabelText(wxString::Format(wxT("%2.1f"), ratio));
 	enhanceSlider->SetValue(ratio * ENHANCEFACTOR);
-
-	//Scan line removal
-	if (recon->scanVertIsEnabled()) {
-		scanVertValue->Enable(true);
-		resetScanVert->Enable(true);
-		scanVertSlider->Enable(true);
-	}
-	else {
-		scanVertValue->Enable(false);
-		resetScanVert->Enable(false);
-		scanVertSlider->Enable(false);
-	}
-	scanVertEnable->SetValue(recon->scanVertIsEnabled());
-	if (recon->scanHorIsEnabled()) {
-		scanHorValue->Enable(true);
-		resetScanHor->Enable(true);
-		scanHorSlider->Enable(true);
-	}
-	else {
-		scanHorValue->Enable(false);
-		resetScanHor->Enable(false);
-		scanHorSlider->Enable(false);
-	}
-	scanHorEnable->SetValue(recon->scanHorIsEnabled());
-	float vert = recon->getScanVertVal();
-	scanVertValue->SetLabelText(wxString::Format(wxT("%1.2f"), vert));
-	scanVertSlider->SetValue((int)(vert * SCANFACTOR));
-	float hor = recon->getScanHorVal();
-	scanHorValue->SetLabelText(wxString::Format(wxT("%1.2f"), hor));
-	scanHorSlider->SetValue((int)(hor * SCANFACTOR));
-
-	//Outlier denoising
-	if (recon->noiseMaxFilterIsEnabled()) {
-		noiseMaxVal->Enable(true);
-		resetNoiseMax->Enable(true);
-		noiseMaxSlider->Enable(true);
-	}
-	else {
-		noiseMaxVal->Enable(false);
-		resetNoiseMax->Enable(false);
-		noiseMaxSlider->Enable(false);
-	}
-	outlierEnable->SetValue(recon->noiseMaxFilterIsEnabled());
-	int max = recon->getNoiseMaxVal();
-	noiseMaxVal->SetLabelText(wxString::Format(wxT("%d"), max));
-	noiseMaxSlider->SetValue(max);
-
-	//TV Denoising
-	if (recon->TVIsEnabled()) {
-		lambdaVal->Enable(true);
-		resetLambda->Enable(true);
-		lambdaSlider->Enable(true);
-		iterLabel->Enable(true);
-		iterVal->Enable(true);
-		resetIter->Enable(true);
-		iterSlider->Enable(true);
-	}
-	else {
-		lambdaVal->Enable(false);
-		resetLambda->Enable(false);
-		lambdaSlider->Enable(false);
-		iterLabel->Enable(false);
-		iterVal->Enable(false);
-		resetIter->Enable(false);
-		iterSlider->Enable(false);
-	}
-	TVEnable->SetValue(recon->TVIsEnabled());
-	int lambda = recon->getTVLambda();
-	lambdaVal->SetLabelText(wxString::Format(wxT("%d"), lambda));
-	lambdaSlider->SetValue(lambda);
-	int iter = recon->getTVIter();
-	iterVal->SetLabelText(wxString::Format(wxT("%d"), iter));
-	iterSlider->SetValue(iter);
 
 	return;
 }
@@ -1534,7 +1491,9 @@ ReconCon::ReconCon(wxWindow* parent, wxString filename) : reconConfig(parent), f
 	drawPanel = new GLFrame(this, &Sys, filename);
 	TomoRecon* recon = ((GLFrame*)drawPanel)->m_canvas->recon;
 	recon->enableGain(false);
-	parseFile(recon, filename.mb_str(), filename.mb_str());
+	recon->setDisplay(no_der);
+	gainFilepath = filename;
+	parseFile(recon, gainFilepath.mb_str(), filename.mb_str());
 
 	recon->resetFocus();
 	recon->resetLight();
@@ -1543,6 +1502,144 @@ ReconCon::ReconCon(wxWindow* parent, wxString filename) : reconConfig(parent), f
 
 	bSizer6->Add(drawPanel, 10, wxEXPAND | wxALL);
 	bSizer6->Layout();
+}
+
+void ReconCon::setValues() {
+	TomoRecon* recon = ((GLFrame*)drawPanel)->m_canvas->recon;
+
+	//Scan line removal
+	recon->enableScanVert(scanVertIsEnabled);
+	recon->enableScanHor(scanHorIsEnabled);
+	recon->setScanVertVal(scanVertVal);
+	recon->setScanHorVal(scanHorVal);
+
+	//Outlier denoising
+	recon->enableNoiseMaxFilter(noiseMaxIsEnabled);
+	recon->setNoiseMaxVal(noiseMaxValue);
+
+	//TV Denoising
+	recon->enableTV(TVIsEnabled);
+	recon->setTVLambda(TVLambdaVal);
+	recon->setTVIter(TVIterVal);
+
+	//Distance
+	recon->setBoundaries(startDis, endDis);
+	startDistance->SetValue(std::to_string(startDis));
+	endDistance->SetValue(std::to_string(endDis));
+
+	//Scan line removal
+	if (recon->scanVertIsEnabled()) {
+		scanVertValue->Enable(true);
+		resetScanVert->Enable(true);
+		scanVertSlider->Enable(true);
+	}
+	else {
+		scanVertValue->Enable(false);
+		resetScanVert->Enable(false);
+		scanVertSlider->Enable(false);
+	}
+	scanVertEnable->SetValue(recon->scanVertIsEnabled());
+	if (recon->scanHorIsEnabled()) {
+		scanHorValue->Enable(true);
+		resetScanHor->Enable(true);
+		scanHorSlider->Enable(true);
+	}
+	else {
+		scanHorValue->Enable(false);
+		resetScanHor->Enable(false);
+		scanHorSlider->Enable(false);
+	}
+	scanHorEnable->SetValue(recon->scanHorIsEnabled());
+	float vert = recon->getScanVertVal();
+	scanVertValue->SetLabelText(wxString::Format(wxT("%1.2f"), vert));
+	scanVertSlider->SetValue((int)(vert * SCANFACTOR));
+	float hor = recon->getScanHorVal();
+	scanHorValue->SetLabelText(wxString::Format(wxT("%1.2f"), hor));
+	scanHorSlider->SetValue((int)(hor * SCANFACTOR));
+
+	//Outlier denoising
+	if (recon->noiseMaxFilterIsEnabled()) {
+		noiseMaxVal->Enable(true);
+		resetNoiseMax->Enable(true);
+		noiseMaxSlider->Enable(true);
+	}
+	else {
+		noiseMaxVal->Enable(false);
+		resetNoiseMax->Enable(false);
+		noiseMaxSlider->Enable(false);
+	}
+	outlierEnable->SetValue(recon->noiseMaxFilterIsEnabled());
+	int max = recon->getNoiseMaxVal();
+	noiseMaxVal->SetLabelText(wxString::Format(wxT("%d"), max));
+	noiseMaxSlider->SetValue(max);
+
+	//TV Denoising
+	if (recon->TVIsEnabled()) {
+		lambdaVal->Enable(true);
+		resetLambda->Enable(true);
+		lambdaSlider->Enable(true);
+		iterLabel->Enable(true);
+		iterVal->Enable(true);
+		resetIter->Enable(true);
+		iterSlider->Enable(true);
+	}
+	else {
+		lambdaVal->Enable(false);
+		resetLambda->Enable(false);
+		lambdaSlider->Enable(false);
+		iterLabel->Enable(false);
+		iterVal->Enable(false);
+		resetIter->Enable(false);
+		iterSlider->Enable(false);
+	}
+	TVEnable->SetValue(recon->TVIsEnabled());
+	int lambda = recon->getTVLambda();
+	lambdaVal->SetLabelText(wxString::Format(wxT("%d"), lambda));
+	lambdaSlider->SetValue(lambda);
+	int iter = recon->getTVIter();
+	iterVal->SetLabelText(wxString::Format(wxT("%d"), iter));
+	iterSlider->SetValue(iter);
+}
+
+void ReconCon::onToolbarChoice(wxCommandEvent& WXUNUSED(event)) {
+	GLFrame * currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = ((GLFrame*)drawPanel)->m_canvas->recon;
+	static int thisProjection = 0;
+
+	//Disable all toolbars
+	scanToolbar->Show(false);
+	noiseToolbar->Show(false);
+	distanceToolbar->Show(false);
+
+	if (recon->getDataDisplay() == reconstruction)
+		recon->setActiveProjection(thisProjection);
+	else 
+		thisProjection = recon->getActiveProjection();
+
+	//enable toolbar by selection
+	switch (optionBox->GetSelection()) {
+	case 0:
+		distanceToolbar->Show(true);
+		distanceToolbar->Realize();
+		recon->setDataDisplay(reconstruction);
+		currentFrame->hideScrollBar();
+		break;
+	case 1:
+		scanToolbar->Show(true);
+		scanToolbar->Realize();
+		recon->setDataDisplay(projections);
+		currentFrame->showScrollBar(NUMVIEWS, recon->getActiveProjection());
+		break;
+	case 2:
+		noiseToolbar->Show(true);
+		noiseToolbar->Realize();
+		recon->setDataDisplay(projections);
+		currentFrame->showScrollBar(NUMVIEWS, recon->getActiveProjection());
+		break;
+	}
+
+	recon->singleFrame();
+	((GLFrame*)drawPanel)->m_canvas->paint(true);
 }
 
 void ReconCon::onDistance(wxCommandEvent& event) {
@@ -1556,8 +1653,19 @@ void ReconCon::onDistance(wxCommandEvent& event) {
 }
 
 void ReconCon::onOk(wxCommandEvent& event) {
+	TomoRecon* recon = ((GLFrame*)drawPanel)->m_canvas->recon;
+
 	startDistance->GetValue().ToCDouble(&startDis);
 	endDistance->GetValue().ToCDouble(&endDis);
+	scanVertIsEnabled = recon->scanVertIsEnabled();
+	scanHorIsEnabled = recon->scanHorIsEnabled();
+	scanVertVal = recon->getScanVertVal();
+	scanHorVal = recon->getScanHorVal();
+	noiseMaxIsEnabled = recon->noiseMaxFilterIsEnabled();
+	noiseMaxValue = recon->getNoiseMaxVal();
+	TVIsEnabled = recon->TVIsEnabled();
+	TVLambdaVal = recon->getTVLambda();
+	TVIterVal = recon->getTVIter();
 	canceled = false;
 	Close();
 }
@@ -1578,6 +1686,230 @@ void ReconCon::onSetEndDis(wxCommandEvent& event) {
 void ReconCon::onClose(wxCloseEvent& event) {
 	delete drawPanel;
 	event.Skip();
+}
+
+//Scanline correcction
+void ReconCon::onScanVertEnable(wxCommandEvent& event) {
+	if (scanVertEnable->IsChecked()) {
+		scanVertValue->Enable(true);
+		resetScanVert->Enable(true);
+		scanVertSlider->Enable(true);
+	}
+	else {
+		scanVertValue->Enable(false);
+		resetScanVert->Enable(false);
+		scanVertSlider->Enable(false);
+	}
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->enableScanVert(scanVertEnable->IsChecked());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void ReconCon::onScanVert(wxScrollEvent& event) {
+	float value = event.GetPosition();
+	scanVertValue->SetLabelText(wxString::Format(wxT("%1.2f"), value / SCANFACTOR));
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setScanVertVal(value / SCANFACTOR);
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void ReconCon::onResetScanVert(wxCommandEvent& event) {
+	scanVertValue->SetLabelText(wxString::Format(wxT("%1.2f"), SCANVERTDEFAULT));
+	scanVertSlider->SetValue(SCANVERTDEFAULT * SCANFACTOR);
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setScanVertVal(SCANVERTDEFAULT);
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void ReconCon::onScanHorEnable(wxCommandEvent& event) {
+	if (scanHorEnable->IsChecked()) {
+		scanHorValue->Enable(true);
+		resetScanHor->Enable(true);
+		scanHorSlider->Enable(true);
+	}
+	else {
+		scanHorValue->Enable(false);
+		resetScanHor->Enable(false);
+		scanHorSlider->Enable(false);
+	}
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->enableScanHor(scanHorEnable->IsChecked());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void ReconCon::onScanHor(wxScrollEvent& event) {
+	float value = event.GetPosition();
+	scanHorValue->SetLabelText(wxString::Format(wxT("%1.2f"), value / SCANFACTOR));
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setScanHorVal(value / SCANFACTOR);
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void ReconCon::onResetScanHor(wxCommandEvent& event) {
+	scanHorValue->SetLabelText(wxString::Format(wxT("%1.2f"), SCANHORDEFAULT));
+	scanHorSlider->SetValue(SCANHORDEFAULT * SCANFACTOR);
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setScanHorVal(SCANHORDEFAULT);
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+//Denoising
+void ReconCon::onNoiseMax(wxScrollEvent& event) {
+	int value = event.GetPosition();
+	noiseMaxVal->SetLabelText(wxString::Format(wxT("%d"), value));
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setNoiseMaxVal(noiseMaxSlider->GetValue());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void ReconCon::onResetNoiseMax(wxCommandEvent& WXUNUSED(event)) {
+	noiseMaxVal->SetLabelText(wxString::Format(wxT("%d"), NOISEMAXDEFAULT));
+	noiseMaxSlider->SetValue(NOISEMAXDEFAULT);
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setNoiseMaxVal(noiseMaxSlider->GetValue());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void ReconCon::onNoiseMaxEnable(wxCommandEvent& WXUNUSED(event)) {
+	if (outlierEnable->IsChecked()) {
+		noiseMaxVal->Enable(true);
+		resetNoiseMax->Enable(true);
+		noiseMaxSlider->Enable(true);
+	}
+	else {
+		noiseMaxVal->Enable(false);
+		resetNoiseMax->Enable(false);
+		noiseMaxSlider->Enable(false);
+	}
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->enableNoiseMaxFilter(outlierEnable->IsChecked());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void ReconCon::onTVEnable(wxCommandEvent& WXUNUSED(event)) {
+	if (TVEnable->IsChecked()) {
+		lambdaVal->Enable(true);
+		resetLambda->Enable(true);
+		lambdaSlider->Enable(true);
+		iterLabel->Enable(true);
+		iterVal->Enable(true);
+		resetIter->Enable(true);
+		iterSlider->Enable(true);
+	}
+	else {
+		lambdaVal->Enable(false);
+		resetLambda->Enable(false);
+		lambdaSlider->Enable(false);
+		iterLabel->Enable(false);
+		iterVal->Enable(false);
+		resetIter->Enable(false);
+		iterSlider->Enable(false);
+	}
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->enableTV(TVEnable->IsChecked());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void ReconCon::onResetLambda(wxCommandEvent& WXUNUSED(event)) {
+	lambdaVal->SetLabelText(wxString::Format(wxT("%d"), LAMBDADEFAULT));
+	lambdaSlider->SetValue(LAMBDADEFAULT);
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setTVLambda(lambdaSlider->GetValue());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void ReconCon::onLambdaSlider(wxScrollEvent& event) {
+	int value = event.GetPosition();
+	lambdaVal->SetLabelText(wxString::Format(wxT("%d"), value));
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setTVLambda(value);
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void ReconCon::onResetIter(wxCommandEvent& WXUNUSED(event)) {
+	iterVal->SetLabelText(wxString::Format(wxT("%d"), ITERDEFAULT));
+	iterSlider->SetValue(ITERDEFAULT);
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setTVIter(iterSlider->GetValue());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void ReconCon::onIterSlider(wxScrollEvent& event) {
+	int value = event.GetPosition();
+	iterVal->SetLabelText(wxString::Format(wxT("%d"), value));
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setTVIter(value);
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
 }
 
 ReconCon::~ReconCon() {

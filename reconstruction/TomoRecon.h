@@ -129,7 +129,8 @@ typedef enum {
 	Tomo_DICOM_err,
 	Tomo_CUDA_err,
 	Tomo_Done,
-	Tomo_proj_file
+	Tomo_proj_file,
+	Tomo_cancelled
 } TomoError;
 
 ///Possible types of data that could be displayed through each of the possible filters

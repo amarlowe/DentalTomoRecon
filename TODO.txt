@@ -15,16 +15,17 @@ TomoRecon
 - Correct for non-xy shifts in the detector
 - Use a texture gather to detect 0s that would be used in bilinear filtering to further remove artifacts
 - Make it possible to choose beginning index as a default and read in setting
-- Move DICOM writes to external library
-- Move all read in functions to initial config list
 - Save all defaults as JSON and registry settings
 - Differentiate between project, projection and reconstruction (or other) DICOM files
 - Open reconstruction and other DICOMs as if the program were just a reader
 - Option to reverse log correction from projection images
 - Fill in all relevant DICOM header data
+- Move stepsize to recon config
+- Re-enable gain correction and make it optional
 
 --------------Bugs---------------------
 - Lighting difference between reconstructing display and end display (log corrected vs inverted)
+- Cancel on new is not properly cleaned up
 
 
 -------------Completed------------------
@@ -40,6 +41,8 @@ TomoRecon
 - Confirm overwrite on save if file already exists
 - Differentiate between export and project save
 - Rebuild reconstruction dialog as edit settings dialog
+- Move DICOM writes to external library
+- Move all read in functions to initial config list
 --(pre 9/28)
 - Correct for multipixel surface defects (only in iterative)
 - Add DICOM read functions

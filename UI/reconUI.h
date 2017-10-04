@@ -34,8 +34,8 @@
 #include <wx/aui/aui.h>
 #include <wx/gauge.h>
 #include <wx/dialog.h>
-#include <wx/listctrl.h>
 #include <wx/statline.h>
+#include <wx/listctrl.h>
 #include <wx/gbsizer.h>
 #include <wx/grid.h>
 
@@ -205,6 +205,20 @@ class reconConfig : public wxDialog
 	protected:
 		wxBoxSizer* bSizer6;
 		wxChoice* optionBox;
+		wxToolBar* distanceToolbar;
+		wxStaticText* distanceLabel;
+		wxTextCtrl* distance;
+		wxStaticText* distanceUnits;
+		wxButton* setStartDis;
+		wxButton* setEndDis;
+		wxStaticLine* m_staticline2;
+		wxStaticText* startDistanceLabel;
+		wxTextCtrl* startDistance;
+		wxStaticText* startDistanceUnits;
+		wxStaticLine* m_staticline3;
+		wxStaticText* endDistanceLabel;
+		wxTextCtrl* endDistance;
+		wxStaticText* endDistanceUnit;
 		wxToolBar* scanToolbar;
 		wxCheckBox* scanVertEnable;
 		wxStaticText* scanVertValue;
@@ -227,24 +241,16 @@ class reconConfig : public wxDialog
 		wxStaticText* iterVal;
 		wxButton* resetIter;
 		wxSlider* iterSlider;
-		wxStaticText* startDistanceLabel;
-		wxTextCtrl* startDistance;
-		wxStaticText* startDistanceUnits;
-		wxStaticText* endDistanceLabel;
-		wxTextCtrl* endDistance;
-		wxStaticText* endDistanceUnit;
+		wxStaticText* m_staticText35;
 		wxButton* ok;
 		wxButton* cancel;
-		wxStaticText* distanceLabel;
-		wxTextCtrl* distance;
-		wxStaticText* distanceUnits;
-		wxButton* setStartDis;
-		wxButton* setEndDis;
-		wxStaticText* m_staticText35;
 		
 		// Virtual event handlers, overide them in your derived class
 		virtual void onClose( wxCloseEvent& event ) { event.Skip(); }
 		virtual void onToolbarChoice( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onDistance( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onSetStartDis( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onSetEndDis( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onScanVertEnable( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onResetScanVert( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onScanVert( wxScrollEvent& event ) { event.Skip(); }
@@ -261,9 +267,6 @@ class reconConfig : public wxDialog
 		virtual void onIterSlider( wxScrollEvent& event ) { event.Skip(); }
 		virtual void onOk( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onCancel( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onDistance( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onSetStartDis( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onSetEndDis( wxCommandEvent& event ) { event.Skip(); }
 		
 	
 	public:

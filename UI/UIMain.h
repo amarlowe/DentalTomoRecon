@@ -126,15 +126,47 @@ protected:
 	void onSetStartDis(wxCommandEvent& event);
 	void onSetEndDis(wxCommandEvent& event);
 	void onClose(wxCloseEvent& event);
+
+	void onToolbarChoice(wxCommandEvent& event);
+
+	//Scanline correction
+	void onScanVertEnable(wxCommandEvent& event);
+	void onScanVert(wxScrollEvent& event);
+	void onResetScanVert(wxCommandEvent& event);
+	void onScanHorEnable(wxCommandEvent& event);
+	void onScanHor(wxScrollEvent& event);
+	void onResetScanHor(wxCommandEvent& event);
+
+	//Denoising
+	void onNoiseMaxEnable(wxCommandEvent& event);
+	void onNoiseMax(wxScrollEvent& event);
+	void onResetNoiseMax(wxCommandEvent& event);
+	void onTVEnable(wxCommandEvent& event);
+	void onResetLambda(wxCommandEvent& event);
+	void onLambdaSlider(wxScrollEvent& event);
+	void onResetIter(wxCommandEvent& event);
+	void onIterSlider(wxScrollEvent& event);
 public:
 	/** Constructor */
 	ReconCon(wxWindow* parent, wxString filename);
 	~ReconCon();
 
+	void setValues();
+
 	double startDis = 0.0f;
 	double endDis = 10.0f;
 
 	wxString filename;
+	wxString gainFilepath;
+	bool scanVertIsEnabled;
+	bool scanHorIsEnabled;
+	float scanVertVal;
+	float scanHorVal;
+	bool noiseMaxIsEnabled;//
+	int noiseMaxValue;
+	bool TVIsEnabled;
+	int TVLambdaVal;
+	int TVIterVal;
 	bool canceled = true;
 };
 
@@ -290,6 +322,7 @@ protected:
 	//helpers
 	bool checkForConsole();
 	derivative_t getEnhance();
+	TomoError launchReconConfig(TomoRecon * recon, wxString filename);
 
 	// Handlers for mainWindow events.
 	void onNew(wxCommandEvent& event);
