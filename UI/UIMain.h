@@ -177,7 +177,7 @@ public:
 		wxSlider* window = NULL, wxStaticText* wLbl = NULL, wxSlider* level = NULL, wxStaticText* lLbl = NULL);
 
 	TomoRecon* recon;
-	wxStatusBar* m_status;
+	wxStatusBar* m_status = NULL;
 	wxTextCtrl* distanceControl = NULL;
 	wxSlider* zoomSlider = NULL;
 	wxStaticText* zoomLabel = NULL;
@@ -295,6 +295,7 @@ protected:
 	void onNew(wxCommandEvent& event);
 	void onOpen(wxCommandEvent& event);
 	void onSave(wxCommandEvent& event);
+	void onExportRecon(wxCommandEvent& event);
 	void onQuit(wxCommandEvent& event);
 	void onAbout(wxCommandEvent& event);
 	void onConfig(wxCommandEvent& event);

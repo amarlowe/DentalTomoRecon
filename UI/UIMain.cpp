@@ -79,11 +79,10 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 		}
 		else {
 			FILE * fileptr = NULL;
+			std::string fallBack(ProjPath);
 			for (int view = 0; view < NumViews; view++) {
 				ProjPath = ProjPath.substr(0, ProjPath.length() - 5);
 				ProjPath += std::to_string(view + 1) + ".dcm";
-
-				//OFLog::configure(OFLogger::INFO_LOG_LEVEL);
 
 				DicomImage *image = new DicomImage(ProjPath.c_str());
 
@@ -92,8 +91,20 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 					if (pixelData != NULL) {
 						memcpy(RawData[view], pixelData, width*height * sizeof(unsigned short));
 					}
-					else
-						std::cerr << "Error: cannot load DICOM image (" << DicomImage::getString(image->getStatus()) << ")" << endl;
+					else {
+						std::cout << "Failed to load dicom image set, reverting to displaying as standard viewer." << endl;
+						DicomImage *image = new DicomImage(fallBack.c_str());
+						/* TODO */
+						for (int view = 0; view < NumViews; view++) {
+							//Read and correct projections
+							delete[] RawData[view];
+							delete[] GainData[view];
+						}
+						delete[] RawData;
+						delete[] GainData;
+
+						return Tomo_OK;
+					}
 				}
 
 				delete image;
@@ -269,8 +280,6 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 
 	(*m_textCtrl8) << "Opening new tab titled: \"" << name << "\"\n";
 
-	m_auinotebook6->AddPage(currentFrame, name, true);
-
 	//parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	if (parseFile(recon, filename.mb_str(), filename.mb_str()) != Tomo_proj_file) {
 		ReconCon* rc = new ReconCon(this, filename);
@@ -280,13 +289,15 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 		if (rc->canceled) return;
 		recon->setBoundaries(rc->startDis, rc->endDis);
 	}
+
+	m_auinotebook6->AddPage(currentFrame, name, true);
 	onContinuous();
 
 	setDataDisplay(currentFrame, iterRecon);
 	recon->initIterative();
 	bool oldLog = recon->getLogView();
 	recon->setLogView(false);
-	for (int i = 0; i < 15; i++) {
+	for (int i = 0; i < ITERATIONS; i++) {
 		recon->iterStep();
 		recon->singleFrame();
 		recon->resetLight();
@@ -371,7 +382,7 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	recon->resetIterative();
 	bool oldLog = recon->getLogView();
 	recon->setLogView(false);
-	for (int i = 0; i < 15; i++) {
+	for (int i = 0; i < ITERATIONS; i++) {
 		recon->iterStep();
 		recon->singleFrame();
 		recon->resetLight();
@@ -412,7 +423,6 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 	DcmDataset *dataset = fileformat.getDataset();
 	dataset->putAndInsertString(DCM_SOPClassUID, UID_CTImageStorage);
 	dataset->putAndInsertString(DCM_SOPInstanceUID, dcmGenerateUniqueIdentifier(uid, SITE_INSTANCE_UID_ROOT));
-	dataset->putAndInsertString(DCM_PatientName, "Doe^John");
 	dataset->putAndInsertString(DCM_NumberOfFrames, std::to_string(NumViews).c_str());
 	dataset->putAndInsertString(DCM_Rows, std::to_string(height).c_str());
 	dataset->putAndInsertString(DCM_Columns, std::to_string(width).c_str());
@@ -533,6 +543,50 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 	m_statusBar1->SetStatusText(_("DICOM saved!"));
 }
 
+void DTRMainWindow::onExportRecon(wxCommandEvent& event) {
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	wxFileDialog saveFileDialog(this, _("Select a file to save as."), "", "",
+		"Dicom File (*.dcm)|*.dcm", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+
+	if (saveFileDialog.ShowModal() == wxID_CANCEL)
+		return;
+
+	wxStreamToTextRedirector redirect(m_textCtrl8);
+
+	m_statusBar1->SetStatusText(_("Saving data as DICOM..."));
+
+	int width, height;
+	int numFrames = recon->getNumSlices();
+	recon->getProjectionDimensions(&width, &height);
+
+	char uid[100];
+	DcmFileFormat fileformat;
+	DcmDataset *dataset = fileformat.getDataset();
+	dataset->putAndInsertString(DCM_SOPClassUID, UID_CTImageStorage);
+	dataset->putAndInsertString(DCM_SOPInstanceUID, dcmGenerateUniqueIdentifier(uid, SITE_INSTANCE_UID_ROOT));
+	dataset->putAndInsertString(DCM_NumberOfFrames, std::to_string(numFrames).c_str());
+	dataset->putAndInsertString(DCM_Rows, std::to_string(height).c_str());
+	dataset->putAndInsertString(DCM_Columns, std::to_string(width).c_str());
+	unsigned short * RawData = new unsigned short[width*height*numFrames];
+
+	//recon->SaveDataAsDICOM(saveFileDialog.GetPath().ToStdString());
+	recon->exportRecon(RawData);
+
+	dataset->putAndInsertUint16Array(DCM_PixelData, RawData, width*height*numFrames);
+
+	OFCondition status = fileformat.saveFile(saveFileDialog.GetPath().ToStdString(), EXS_LittleEndianExplicit);
+	if (status.bad())
+		std::cout << "Error: cannot write DICOM file (" << status.text() << ")" << endl;
+
+	delete[] RawData;
+
+	m_statusBar1->SetStatusText(_("DICOM saved!"));
+}
+
 void DTRMainWindow::onQuit(wxCommandEvent& WXUNUSED(event)){
 	// true is to force the frame to close
 	Close();
@@ -598,13 +652,10 @@ void DTRMainWindow::onGainSelect(wxCommandEvent& WXUNUSED(event)) {
 }
 
 void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
-	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
-		"Raw or DICOM Files (*.raw, *.dcm)|*.raw;*.dcm|Raw File (*.raw)|*.raw|DICOM File (*.dcm)|*.dcm", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
 
-	if (openFileDialog.ShowModal() == wxID_CANCEL)
-		return;
-
-	wxString filename = openFileDialog.GetPath();
+	wxString filename = currentFrame->filename;
 
 	ReconCon* rc = new ReconCon(this, filename);
 	if (rc->canceled) return;
@@ -616,12 +667,6 @@ void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 	wxArrayString dirs = file.GetDirs();
 	wxString name = dirs[file.GetDirCount() - 1];
 
-	(*m_textCtrl8) << "Opening new tab titled: \"" << name << "\"\n";
-
-	GLFrame * currentFrame = (GLFrame*)CreateNewPage(rc->filename);
-	TomoRecon* recon = currentFrame->m_canvas->recon;
-	m_auinotebook6->AddPage(currentFrame, name, true);
-	onContinuous();
 	recon->setBoundaries(rc->startDis, rc->endDis);
 
 	setDataDisplay(currentFrame, iterRecon);
@@ -757,7 +802,9 @@ void DTRMainWindow::onPageChange(wxAuiNotebookEvent& event) {
 	if (temp == 0) {//console selected
 		//disable close button and all options that are not applied on new window open
 		m_auinotebook6->SetWindowStyle(NULL);
-		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export")), false);
+		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Save")), false);
+		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export Reconstruction")), false);
+		m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), false);
 		distanceValue->Enable(false);
 		autoFocus->Enable(false);
 		autoLight->Enable(false);
@@ -769,7 +816,9 @@ void DTRMainWindow::onPageChange(wxAuiNotebookEvent& event) {
 	}
 	//re-enable all controls
 	m_auinotebook6->SetWindowStyle(wxAUI_NB_DEFAULT_STYLE);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export")), true);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Save")), true);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export Reconstruction")), true);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), true);
 	distanceValue->Enable();
 	autoFocus->Enable();
 	autoLight->Enable();

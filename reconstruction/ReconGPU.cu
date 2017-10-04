@@ -1123,7 +1123,6 @@ TomoError TomoRecon::initGPU(){
 
 TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short ** RawData) {
 	//Correct projections
-
 	float * sumValsVert = new float[NumViews * Sys.Proj.Nx];
 	float * sumValsHor = new float[NumViews * Sys.Proj.Ny];
 	float * vertOff = new float[NumViews * Sys.Proj.Nx];
@@ -1343,17 +1342,9 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 	return Tomo_OK;
 }
 
-TomoError TomoRecon::WriteDICOMFullData(std::string Path) {//, int slices
-	//Set up the basic path to the raw projection data
-	FILE * ReconData = fopen(Path.c_str(), "ab");
-
-	//Open the path and read data to buffer
-	
-	if (ReconData == NULL)
-		return Tomo_DICOM_err;
+TomoError TomoRecon::exportRecon(unsigned short * exportData) {
 
 	float * RawData = new float[reconPitch / sizeof(float)*Sys.Proj.Ny];
-	unsigned short * output = new unsigned short[reconPitch / sizeof(float)*Sys.Proj.Ny];
 
 	//Create the reconstruction volume around the current location
 	float oldDistance = distance;
@@ -1363,24 +1354,23 @@ TomoError TomoRecon::WriteDICOMFullData(std::string Path) {//, int slices
 		singleFrame();
 		distance += Sys.Geo.ZPitch;
 		cuda(Memcpy(RawData, d_Image, reconPitch*Sys.Recon.Ny, cudaMemcpyDeviceToHost));
-		for (int j = 0; j < reconPitch / sizeof(float)*Sys.Proj.Ny; j++) {
-			float data = RawData[j];
-			if (data != 0.0) {
-				if (constants.log)
-					data = (logf(USHRT_MAX) - logf(data + 1)) / logf(USHRT_MAX) * USHRT_MAX;
-				data = (data - constants.minVal) / (constants.maxVal - constants.minVal) * SHRT_MAX;
-				if (data > SHRT_MAX) data = SHRT_MAX;
-				if (data < 0.0f) data = 0.0f;
+		for (int j = 0; j < Sys.Recon.Ny; j++) {
+			for (int k = 0; k < Sys.Recon.Nx; k++) {
+				float data = RawData[reconPitch / sizeof(float) * j + k];
+				if (data != 0.0) {
+					if (constants.log)
+						data = (logf(USHRT_MAX) - logf(data + 1)) / logf(USHRT_MAX) * USHRT_MAX;
+					data = (data - constants.minVal) / (constants.maxVal - constants.minVal) * SHRT_MAX;
+					if (data > SHRT_MAX) data = SHRT_MAX;
+					if (data < 0.0f) data = 0.0f;
+				}
+				exportData[Sys.Recon.Nx * (j + Sys.Recon.Ny * i) + k] = (unsigned short)data;
 			}
-			output[j] = (unsigned short)data;
 		}
-		fwrite(output, sizeof(unsigned short), reconPitch / sizeof(float)*Sys.Proj.Ny, ReconData);
 	}
-	
+
 	distance = oldDistance;
-	fclose(ReconData);
 	delete[] RawData;
-	delete[] output;
 
 	tomo_err_throw(singleFrame());
 

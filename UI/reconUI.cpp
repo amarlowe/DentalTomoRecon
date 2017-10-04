@@ -31,9 +31,14 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	file->Append( open );
 	
 	wxMenuItem* save;
-	save = new wxMenuItem( file, wxID_ANY, wxString( wxT("Export") ) + wxT('\t') + wxT("Ctrl+S"), wxEmptyString, wxITEM_NORMAL );
+	save = new wxMenuItem( file, wxID_ANY, wxString( wxT("Save") ) + wxT('\t') + wxT("Ctrl+S"), wxEmptyString, wxITEM_NORMAL );
 	file->Append( save );
 	save->Enable( false );
+	
+	wxMenuItem* exportRecon;
+	exportRecon = new wxMenuItem( file, wxID_ANY, wxString( wxT("Export Reconstruction") ) + wxT('\t') + wxT("Ctrl+E"), wxEmptyString, wxITEM_NORMAL );
+	file->Append( exportRecon );
+	exportRecon->Enable( false );
 	
 	wxMenuItem* quit;
 	quit = new wxMenuItem( file, wxID_ANY, wxString( wxT("Exit\tAlt-X") ) , wxEmptyString, wxITEM_NORMAL );
@@ -50,14 +55,12 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	gainSelect = new wxMenuItem( config, wxID_ANY, wxString( wxT("Edit Gain Files") ) , wxEmptyString, wxITEM_NORMAL );
 	config->Append( gainSelect );
 	
-	m_menubar1->Append( config, wxT("Config") ); 
-	
-	reconMenu = new wxMenu();
 	wxMenuItem* reconSetup;
-	reconSetup = new wxMenuItem( reconMenu, wxID_ANY, wxString( wxT("Run Reconstruction") ) + wxT('\t') + wxT("F5"), wxEmptyString, wxITEM_NORMAL );
-	reconMenu->Append( reconSetup );
+	reconSetup = new wxMenuItem( config, wxID_ANY, wxString( wxT("Edit Reconstruction Settings") ) + wxT('\t') + wxT("F5"), wxEmptyString, wxITEM_NORMAL );
+	config->Append( reconSetup );
+	reconSetup->Enable( false );
 	
-	m_menubar1->Append( reconMenu, wxT("Reconstruction") ); 
+	m_menubar1->Append( config, wxT("Config") ); 
 	
 	calibration = new wxMenu();
 	wxMenuItem* resList;
@@ -321,6 +324,7 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	this->Connect( newPage->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onNew ) );
 	this->Connect( open->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onOpen ) );
 	this->Connect( save->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onSave ) );
+	this->Connect( exportRecon->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onExportRecon ) );
 	this->Connect( quit->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onQuit ) );
 	this->Connect( configDialog->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onConfig ) );
 	this->Connect( gainSelect->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onGainSelect ) );
@@ -455,6 +459,7 @@ mainWindow::~mainWindow()
 	this->Disconnect( wxID_NEW, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onNew ) );
 	this->Disconnect( wxID_OPEN, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onOpen ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onSave ) );
+	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onExportRecon ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onQuit ) );
 	this->Disconnect( wxID_PREFERENCES, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onConfig ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onGainSelect ) );
@@ -614,6 +619,95 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	
 	bSizer6 = new wxBoxSizer( wxVERTICAL );
 	
+	wxBoxSizer* bSizer5;
+	bSizer5 = new wxBoxSizer( wxHORIZONTAL );
+	
+	wxString optionBoxChoices[] = { wxT("Scan Line Removal"), wxT("Denoising") };
+	int optionBoxNChoices = sizeof( optionBoxChoices ) / sizeof( wxString );
+	optionBox = new wxChoice( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, optionBoxNChoices, optionBoxChoices, 0 );
+	optionBox->SetSelection( 0 );
+	bSizer5->Add( optionBox, 0, wxALL, 5 );
+	
+	scanToolbar = new wxToolBar( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_HORIZONTAL|wxTB_NODIVIDER|wxNO_BORDER ); 
+	scanToolbar->SetForegroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_CAPTIONTEXT ) );
+	scanToolbar->SetBackgroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_MENU ) );
+	
+	scanVertEnable = new wxCheckBox( scanToolbar, wxID_ANY, wxT("Scanline vertical correction factor: "), wxDefaultPosition, wxDefaultSize, 0 );
+	scanVertEnable->SetValue(true); 
+	scanToolbar->AddControl( scanVertEnable );
+	scanVertValue = new wxStaticText( scanToolbar, wxID_ANY, wxT("0.25"), wxDefaultPosition, wxDefaultSize, 0 );
+	scanVertValue->Wrap( -1 );
+	scanVertValue->Hide();
+	
+	scanToolbar->AddControl( scanVertValue );
+	resetScanVert = new wxButton( scanToolbar, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxSize( 50,20 ), 0 );
+	scanToolbar->AddControl( resetScanVert );
+	scanVertSlider = new wxSlider( scanToolbar, wxID_ANY, 25, 0, 50, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	scanVertSlider->Hide();
+	
+	scanToolbar->AddControl( scanVertSlider );
+	scanHorEnable = new wxCheckBox( scanToolbar, wxID_ANY, wxT("Scanline horizontal correction factor: "), wxDefaultPosition, wxDefaultSize, 0 );
+	scanToolbar->AddControl( scanHorEnable );
+	scanHorValue = new wxStaticText( scanToolbar, wxID_ANY, wxT("0.1"), wxDefaultPosition, wxDefaultSize, 0 );
+	scanHorValue->Wrap( -1 );
+	scanHorValue->Enable( false );
+	scanHorValue->Hide();
+	
+	scanToolbar->AddControl( scanHorValue );
+	resetScanHor = new wxButton( scanToolbar, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxSize( 50,20 ), 0 );
+	resetScanHor->Enable( false );
+	
+	scanToolbar->AddControl( resetScanHor );
+	scanHorSlider = new wxSlider( scanToolbar, wxID_ANY, 10, 0, 50, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	scanHorSlider->Enable( false );
+	scanHorSlider->Hide();
+	
+	scanToolbar->AddControl( scanHorSlider );
+	scanToolbar->Realize(); 
+	
+	bSizer5->Add( scanToolbar, 0, wxEXPAND, 5 );
+	
+	noiseToolbar = new wxToolBar( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_HORIZONTAL|wxTB_NODIVIDER ); 
+	noiseToolbar->SetForegroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_CAPTIONTEXT ) );
+	noiseToolbar->SetBackgroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_MENU ) );
+	
+	outlierEnable = new wxCheckBox( noiseToolbar, wxID_ANY, wxT("Large noise hard removal over value:  "), wxDefaultPosition, wxDefaultSize, 0 );
+	outlierEnable->SetValue(true); 
+	noiseToolbar->AddControl( outlierEnable );
+	noiseMaxVal = new wxStaticText( noiseToolbar, wxID_ANY, wxT("700"), wxDefaultPosition, wxDefaultSize, 0 );
+	noiseMaxVal->Wrap( -1 );
+	noiseToolbar->AddControl( noiseMaxVal );
+	resetNoiseMax = new wxButton( noiseToolbar, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxSize( 50,20 ), 0 );
+	noiseToolbar->AddControl( resetNoiseMax );
+	noiseMaxSlider = new wxSlider( noiseToolbar, wxID_ANY, 700, 300, 800, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	noiseToolbar->AddControl( noiseMaxSlider );
+	TVEnable = new wxCheckBox( noiseToolbar, wxID_ANY, wxT("TV denoising with lambda: "), wxDefaultPosition, wxDefaultSize, 0 );
+	TVEnable->SetValue(true); 
+	noiseToolbar->AddControl( TVEnable );
+	lambdaVal = new wxStaticText( noiseToolbar, wxID_ANY, wxT("2"), wxDefaultPosition, wxDefaultSize, 0 );
+	lambdaVal->Wrap( -1 );
+	noiseToolbar->AddControl( lambdaVal );
+	resetLambda = new wxButton( noiseToolbar, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxDefaultSize, 0 );
+	noiseToolbar->AddControl( resetLambda );
+	lambdaSlider = new wxSlider( noiseToolbar, wxID_ANY, 2, 1, 20, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	noiseToolbar->AddControl( lambdaSlider );
+	iterLabel = new wxStaticText( noiseToolbar, wxID_ANY, wxT("TV iterations: "), wxDefaultPosition, wxDefaultSize, 0 );
+	iterLabel->Wrap( -1 );
+	noiseToolbar->AddControl( iterLabel );
+	iterVal = new wxStaticText( noiseToolbar, wxID_ANY, wxT("20"), wxDefaultPosition, wxDefaultSize, 0 );
+	iterVal->Wrap( -1 );
+	noiseToolbar->AddControl( iterVal );
+	resetIter = new wxButton( noiseToolbar, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxDefaultSize, 0 );
+	noiseToolbar->AddControl( resetIter );
+	iterSlider = new wxSlider( noiseToolbar, wxID_ANY, 20, 1, 50, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	noiseToolbar->AddControl( iterSlider );
+	noiseToolbar->Realize(); 
+	
+	bSizer5->Add( noiseToolbar, 0, wxEXPAND, 5 );
+	
+	
+	bSizer6->Add( bSizer5, 1, wxEXPAND, 5 );
+	
 	wxBoxSizer* bSizer9;
 	bSizer9 = new wxBoxSizer( wxHORIZONTAL );
 	
@@ -686,6 +780,61 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	
 	// Connect Events
 	this->Connect( wxEVT_CLOSE_WINDOW, wxCloseEventHandler( reconConfig::onClose ) );
+	optionBox->Connect( wxEVT_COMMAND_CHOICE_SELECTED, wxCommandEventHandler( reconConfig::onToolbarChoice ), NULL, this );
+	scanVertEnable->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onScanVertEnable ), NULL, this );
+	resetScanVert->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetScanVert ), NULL, this );
+	scanVertSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
+	scanVertSlider->Connect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
+	scanVertSlider->Connect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
+	scanVertSlider->Connect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
+	scanVertSlider->Connect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
+	scanVertSlider->Connect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
+	scanVertSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
+	scanVertSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
+	scanVertSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
+	scanHorEnable->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onScanHorEnable ), NULL, this );
+	resetScanHor->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetScanHor ), NULL, this );
+	scanHorSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	scanHorSlider->Connect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	scanHorSlider->Connect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	scanHorSlider->Connect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	scanHorSlider->Connect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	scanHorSlider->Connect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	scanHorSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	scanHorSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	scanHorSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	outlierEnable->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onNoiseMaxEnable ), NULL, this );
+	resetNoiseMax->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetNoiseMax ), NULL, this );
+	noiseMaxSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Connect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Connect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Connect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Connect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Connect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
+	TVEnable->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onTVEnable ), NULL, this );
+	resetLambda->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetLambda ), NULL, this );
+	lambdaSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onLambdaSlider ), NULL, this );
+	lambdaSlider->Connect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( reconConfig::onLambdaSlider ), NULL, this );
+	lambdaSlider->Connect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( reconConfig::onLambdaSlider ), NULL, this );
+	lambdaSlider->Connect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( reconConfig::onLambdaSlider ), NULL, this );
+	lambdaSlider->Connect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( reconConfig::onLambdaSlider ), NULL, this );
+	lambdaSlider->Connect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( reconConfig::onLambdaSlider ), NULL, this );
+	lambdaSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onLambdaSlider ), NULL, this );
+	lambdaSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onLambdaSlider ), NULL, this );
+	lambdaSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onLambdaSlider ), NULL, this );
+	resetIter->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetIter ), NULL, this );
+	iterSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
+	iterSlider->Connect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
+	iterSlider->Connect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
+	iterSlider->Connect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
+	iterSlider->Connect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
+	iterSlider->Connect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
+	iterSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
+	iterSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
+	iterSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
 	ok->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onOk ), NULL, this );
 	cancel->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onCancel ), NULL, this );
 	distance->Connect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( reconConfig::onDistance ), NULL, this );
@@ -697,6 +846,61 @@ reconConfig::~reconConfig()
 {
 	// Disconnect Events
 	this->Disconnect( wxEVT_CLOSE_WINDOW, wxCloseEventHandler( reconConfig::onClose ) );
+	optionBox->Disconnect( wxEVT_COMMAND_CHOICE_SELECTED, wxCommandEventHandler( reconConfig::onToolbarChoice ), NULL, this );
+	scanVertEnable->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onScanVertEnable ), NULL, this );
+	resetScanVert->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetScanVert ), NULL, this );
+	scanVertSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
+	scanVertSlider->Disconnect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
+	scanVertSlider->Disconnect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
+	scanVertSlider->Disconnect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
+	scanVertSlider->Disconnect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
+	scanVertSlider->Disconnect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
+	scanVertSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
+	scanVertSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
+	scanVertSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
+	scanHorEnable->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onScanHorEnable ), NULL, this );
+	resetScanHor->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetScanHor ), NULL, this );
+	scanHorSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	scanHorSlider->Disconnect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	scanHorSlider->Disconnect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	scanHorSlider->Disconnect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	scanHorSlider->Disconnect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	scanHorSlider->Disconnect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	scanHorSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	scanHorSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	scanHorSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	outlierEnable->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onNoiseMaxEnable ), NULL, this );
+	resetNoiseMax->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetNoiseMax ), NULL, this );
+	noiseMaxSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Disconnect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Disconnect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Disconnect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Disconnect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Disconnect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
+	noiseMaxSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
+	TVEnable->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onTVEnable ), NULL, this );
+	resetLambda->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetLambda ), NULL, this );
+	lambdaSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onLambdaSlider ), NULL, this );
+	lambdaSlider->Disconnect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( reconConfig::onLambdaSlider ), NULL, this );
+	lambdaSlider->Disconnect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( reconConfig::onLambdaSlider ), NULL, this );
+	lambdaSlider->Disconnect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( reconConfig::onLambdaSlider ), NULL, this );
+	lambdaSlider->Disconnect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( reconConfig::onLambdaSlider ), NULL, this );
+	lambdaSlider->Disconnect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( reconConfig::onLambdaSlider ), NULL, this );
+	lambdaSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onLambdaSlider ), NULL, this );
+	lambdaSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onLambdaSlider ), NULL, this );
+	lambdaSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onLambdaSlider ), NULL, this );
+	resetIter->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetIter ), NULL, this );
+	iterSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
+	iterSlider->Disconnect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
+	iterSlider->Disconnect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
+	iterSlider->Disconnect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
+	iterSlider->Disconnect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
+	iterSlider->Disconnect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
+	iterSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
+	iterSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
+	iterSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onIterSlider ), NULL, this );
 	ok->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onOk ), NULL, this );
 	cancel->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onCancel ), NULL, this );
 	distance->Disconnect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( reconConfig::onDistance ), NULL, this );

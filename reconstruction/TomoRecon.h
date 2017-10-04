@@ -95,21 +95,8 @@
 #define LAMBDADEFAULT 2
 #define ITERDEFAULT 20
 
-//UNC version 1
-//#define RECONSLICES 18
-//#define RECONDIS 3.0f
-
-//UNC version 2
-//#define RECONSLICES 18
-//#define RECONDIS -14.0f
-
-//UNC Screws
-#define RECONSLICES 12
-#define RECONDIS -16.0f
-
-//RMI phantoms
-//#define RECONSLICES 30
-//#define RECONDIS 6.0f
+#define RECONSLICES 30
+#define RECONDIS 6.0f
 
 #define TVX 0.2f
 #define TVY 0.2f
@@ -121,7 +108,7 @@
 //#define RECONDERIVATIVE
 //#define SQUAREMAGINX
 
-#define ITERATIONS 15
+#define ITERATIONS 30
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {										\
@@ -806,6 +793,7 @@ public:
 	TomoError ReadProjections(unsigned short ** GainData, unsigned short ** RawData);
 	int getNumViews();
 	void getProjectionDimensions(int * width, int * height);
+	TomoError exportRecon(unsigned short * exportData);
 
 private:
 	/********************************************************************************************/
@@ -848,12 +836,6 @@ private:
 	void CreatePatientandSetSystem(struct PatientInfo * Patient, struct SystemSettings * Set);
 	void CreateScanInsitution(struct ExamInstitution * Institute);
 	void FreeStrings(struct PatientInfo * Patient, struct ExamInstitution * Institute);
-	TomoError WriteDICOMFullData(std::string Path);//, int slices
-	TomoError WriteDICOMHeader(struct SystemSettings * Set, struct PatientInfo * Patient, struct ExamInstitution * Inst, std::string Path, int Nz, int slice);	/*BOOL CheckFilePathForRepeatScans(std::string BasePathIn);
-	int GetNumberOfScans(std::string BasePathIn);
-	int GetNumOfProjectionsPerView(std::string BasePathIn);
-	int GetNumProjectionViews(std::string BasePathIn);
-	TomoError GetGainAverages(const char * gainFile);*/
 
 	//Variables
 

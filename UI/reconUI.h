@@ -53,7 +53,6 @@ class mainWindow : public wxFrame
 		wxMenuBar* m_menubar1;
 		wxMenu* file;
 		wxMenu* config;
-		wxMenu* reconMenu;
 		wxMenu* calibration;
 		wxMenu* help;
 		wxChoice* optionBox;
@@ -120,6 +119,7 @@ class mainWindow : public wxFrame
 		virtual void onNew( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onOpen( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onSave( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onExportRecon( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onQuit( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onConfig( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onGainSelect( wxCommandEvent& event ) { event.Skip(); }
@@ -171,7 +171,7 @@ class mainWindow : public wxFrame
 		wxTextCtrl* m_textCtrl8;
 		wxStatusBar* m_statusBar1;
 		
-		mainWindow( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Tomogrophy Reconstruction"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 1074,681 ), long style = wxDEFAULT_FRAME_STYLE|wxTAB_TRAVERSAL );
+		mainWindow( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Tomogrophy Reconstruction"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 1095,681 ), long style = wxDEFAULT_FRAME_STYLE|wxTAB_TRAVERSAL );
 		wxAuiManager m_mgr;
 		
 		~mainWindow();
@@ -204,6 +204,29 @@ class reconConfig : public wxDialog
 	
 	protected:
 		wxBoxSizer* bSizer6;
+		wxChoice* optionBox;
+		wxToolBar* scanToolbar;
+		wxCheckBox* scanVertEnable;
+		wxStaticText* scanVertValue;
+		wxButton* resetScanVert;
+		wxSlider* scanVertSlider;
+		wxCheckBox* scanHorEnable;
+		wxStaticText* scanHorValue;
+		wxButton* resetScanHor;
+		wxSlider* scanHorSlider;
+		wxToolBar* noiseToolbar;
+		wxCheckBox* outlierEnable;
+		wxStaticText* noiseMaxVal;
+		wxButton* resetNoiseMax;
+		wxSlider* noiseMaxSlider;
+		wxCheckBox* TVEnable;
+		wxStaticText* lambdaVal;
+		wxButton* resetLambda;
+		wxSlider* lambdaSlider;
+		wxStaticText* iterLabel;
+		wxStaticText* iterVal;
+		wxButton* resetIter;
+		wxSlider* iterSlider;
 		wxStaticText* startDistanceLabel;
 		wxTextCtrl* startDistance;
 		wxStaticText* startDistanceUnits;
@@ -221,6 +244,21 @@ class reconConfig : public wxDialog
 		
 		// Virtual event handlers, overide them in your derived class
 		virtual void onClose( wxCloseEvent& event ) { event.Skip(); }
+		virtual void onToolbarChoice( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onScanVertEnable( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onResetScanVert( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onScanVert( wxScrollEvent& event ) { event.Skip(); }
+		virtual void onScanHorEnable( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onResetScanHor( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onScanHor( wxScrollEvent& event ) { event.Skip(); }
+		virtual void onNoiseMaxEnable( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onResetNoiseMax( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onNoiseMax( wxScrollEvent& event ) { event.Skip(); }
+		virtual void onTVEnable( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onResetLambda( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onLambdaSlider( wxScrollEvent& event ) { event.Skip(); }
+		virtual void onResetIter( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onIterSlider( wxScrollEvent& event ) { event.Skip(); }
 		virtual void onOk( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onCancel( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onDistance( wxCommandEvent& event ) { event.Skip(); }

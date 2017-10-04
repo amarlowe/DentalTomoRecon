@@ -21,10 +21,10 @@ TomoRecon
 - Differentiate between project, projection and reconstruction (or other) DICOM files
 - Open reconstruction and other DICOMs as if the program were just a reader
 - Option to reverse log correction from projection images
-- Differentiate between export and project save
+- Fill in all relevant DICOM header data
 
 --------------Bugs---------------------
-
+- Lighting difference between reconstructing display and end display (log corrected vs inverted)
 
 
 -------------Completed------------------
@@ -38,7 +38,8 @@ TomoRecon
 - Edit single pass autofocus to use iterative start and end distances
 - Iterative mode autofocus
 - Confirm overwrite on save if file already exists
-
+- Differentiate between export and project save
+- Rebuild reconstruction dialog as edit settings dialog
 --(pre 9/28)
 - Correct for multipixel surface defects (only in iterative)
 - Add DICOM read functions
