@@ -125,6 +125,7 @@ protected:
 	void onCancel(wxCommandEvent& event);
 	void onSetStartDis(wxCommandEvent& event);
 	void onSetEndDis(wxCommandEvent& event);
+	void onStepSlider(wxScrollEvent& event);
 	void onClose(wxCloseEvent& event);
 
 	void onToolbarChoice(wxCommandEvent& event);
@@ -158,11 +159,12 @@ public:
 
 	wxString filename;
 	wxString gainFilepath;
+	float stepSize;
 	bool scanVertIsEnabled;
 	bool scanHorIsEnabled;
 	float scanVertVal;
 	float scanHorVal;
-	bool noiseMaxIsEnabled;//
+	bool noiseMaxIsEnabled;
 	int noiseMaxValue;
 	bool TVIsEnabled;
 	int TVLambdaVal;
@@ -348,7 +350,6 @@ protected:
 	//Navigation
 	void onDistance(wxCommandEvent& event);
 	void onAutoFocus(wxCommandEvent& event);
-	void onStepSlider(wxScrollEvent& event);
 	void onAutoLight(wxCommandEvent& event);
 	void onWindowSlider(wxScrollEvent& event);
 	void onLevelSlider(wxScrollEvent& event);
@@ -366,24 +367,6 @@ protected:
 	void onAbsEnhance(wxCommandEvent& event);
 	void onResetEnhance(wxCommandEvent& event);
 	void onEnhanceRatio(wxScrollEvent& event);
-
-	//Scanline correction
-	void onScanVertEnable(wxCommandEvent& event);
-	void onScanVert(wxScrollEvent& event);
-	void onResetScanVert(wxCommandEvent& event);
-	void onScanHorEnable(wxCommandEvent& event);
-	void onScanHor(wxScrollEvent& event);
-	void onResetScanHor(wxCommandEvent& event);
-
-	//Denoising
-	void onNoiseMaxEnable(wxCommandEvent& event);
-	void onNoiseMax(wxScrollEvent& event);
-	void onResetNoiseMax(wxCommandEvent& event);
-	void onTVEnable(wxCommandEvent& event);
-	void onResetLambda(wxCommandEvent& event);
-	void onLambdaSlider(wxScrollEvent& event);
-	void onResetIter(wxCommandEvent& event);
-	void onIterSlider(wxScrollEvent& event);
 
 	//constant globals
 	const int NumViews = NUMVIEWS;

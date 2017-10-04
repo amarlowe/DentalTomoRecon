@@ -108,7 +108,7 @@
 //#define RECONDERIVATIVE
 //#define SQUAREMAGINX
 
-#define ITERATIONS 30
+#define ITERATIONS 100
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {										\

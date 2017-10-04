@@ -90,6 +90,7 @@ float TomoRecon::getStep() {
 TomoError TomoRecon::setStep(float dis) {
 	if (dis < 0) return Tomo_invalid_arg;
 	Sys.Geo.ZPitch = dis;
+	constants.pitchZ = dis;
 	return Tomo_OK;
 }
 

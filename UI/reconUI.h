@@ -61,10 +61,6 @@ class mainWindow : public wxFrame
 		wxTextCtrl* distanceValue;
 		wxStaticText* distanceUnits;
 		wxButton* autoFocus;
-		wxStaticText* stepLabel;
-		wxStaticText* stepVal;
-		wxStaticText* stepUnits;
-		wxSlider* stepSlider;
 		wxButton* autoLight;
 		wxStaticText* windowLabel;
 		wxStaticText* windowVal;
@@ -89,28 +85,6 @@ class mainWindow : public wxFrame
 		wxStaticText* ratioValue;
 		wxButton* resetEnhance;
 		wxSlider* enhanceSlider;
-		wxToolBar* scanToolbar;
-		wxCheckBox* scanVertEnable;
-		wxStaticText* scanVertValue;
-		wxButton* resetScanVert;
-		wxSlider* scanVertSlider;
-		wxCheckBox* scanHorEnable;
-		wxStaticText* scanHorValue;
-		wxButton* resetScanHor;
-		wxSlider* scanHorSlider;
-		wxToolBar* noiseToolbar;
-		wxCheckBox* outlierEnable;
-		wxStaticText* noiseMaxVal;
-		wxButton* resetNoiseMax;
-		wxSlider* noiseMaxSlider;
-		wxCheckBox* TVEnable;
-		wxStaticText* lambdaVal;
-		wxButton* resetLambda;
-		wxSlider* lambdaSlider;
-		wxStaticText* iterLabel;
-		wxStaticText* iterVal;
-		wxButton* resetIter;
-		wxSlider* iterSlider;
 		wxPanel* m_panel10;
 		
 		// Virtual event handlers, overide them in your derived class
@@ -133,7 +107,6 @@ class mainWindow : public wxFrame
 		virtual void onToolbarChoice( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onDistance( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onAutoFocus( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onStepSlider( wxScrollEvent& event ) { event.Skip(); }
 		virtual void onAutoLight( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onWindowSlider( wxScrollEvent& event ) { event.Skip(); }
 		virtual void onLevelSlider( wxScrollEvent& event ) { event.Skip(); }
@@ -148,20 +121,6 @@ class mainWindow : public wxFrame
 		virtual void onAbsEnhance( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onResetEnhance( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onEnhanceRatio( wxScrollEvent& event ) { event.Skip(); }
-		virtual void onScanVertEnable( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onResetScanVert( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onScanVert( wxScrollEvent& event ) { event.Skip(); }
-		virtual void onScanHorEnable( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onResetScanHor( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onScanHor( wxScrollEvent& event ) { event.Skip(); }
-		virtual void onNoiseMaxEnable( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onResetNoiseMax( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onNoiseMax( wxScrollEvent& event ) { event.Skip(); }
-		virtual void onTVEnable( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onResetLambda( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onLambdaSlider( wxScrollEvent& event ) { event.Skip(); }
-		virtual void onResetIter( wxCommandEvent& event ) { event.Skip(); }
-		virtual void onIterSlider( wxScrollEvent& event ) { event.Skip(); }
 		virtual void onPageChange( wxAuiNotebookEvent& event ) { event.Skip(); }
 		virtual void onPageClose( wxAuiNotebookEvent& event ) { event.Skip(); }
 		
@@ -219,6 +178,10 @@ class reconConfig : public wxDialog
 		wxStaticText* endDistanceLabel;
 		wxTextCtrl* endDistance;
 		wxStaticText* endDistanceUnit;
+		wxStaticText* stepLabel;
+		wxStaticText* stepVal;
+		wxStaticText* stepUnits;
+		wxSlider* stepSlider;
 		wxToolBar* scanToolbar;
 		wxCheckBox* scanVertEnable;
 		wxStaticText* scanVertValue;
@@ -251,6 +214,7 @@ class reconConfig : public wxDialog
 		virtual void onDistance( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onSetStartDis( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onSetEndDis( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onStepSlider( wxScrollEvent& event ) { event.Skip(); }
 		virtual void onScanVertEnable( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onResetScanVert( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onScanVert( wxScrollEvent& event ) { event.Skip(); }

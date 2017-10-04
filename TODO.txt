@@ -20,8 +20,9 @@ TomoRecon
 - Open reconstruction and other DICOMs as if the program were just a reader
 - Option to reverse log correction from projection images
 - Fill in all relevant DICOM header data
-- Move stepsize to recon config
 - Re-enable gain correction and make it optional
+- Rebuild use while reconstructing
+- Reconstruct by subdividing slices until the desired stepsize is achieved
 
 --------------Bugs---------------------
 - Lighting difference between reconstructing display and end display (log corrected vs inverted)
@@ -43,6 +44,7 @@ TomoRecon
 - Rebuild reconstruction dialog as edit settings dialog
 - Move DICOM writes to external library
 - Move all read in functions to initial config list
+- Move stepsize to recon config
 --(pre 9/28)
 - Correct for multipixel surface defects (only in iterative)
 - Add DICOM read functions
