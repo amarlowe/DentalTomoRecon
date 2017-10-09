@@ -732,8 +732,8 @@ void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 
 	setDataDisplay(currentFrame, iterRecon);
 	currentFrame->showScrollBar(recon->getNumSlices(), 0);
-	//recon->setActiveProjection(0);
-	//recon->restartIterative();
+	recon->setActiveProjection(0);
+	recon->resetIterative();
 	bool oldLog = recon->getLogView();
 	recon->setLogView(false);
 	for (int i = 0; i < ITERATIONS; i++) {
