@@ -357,18 +357,25 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 
 	setDataDisplay(currentFrame, iterRecon);
 	recon->initIterative();
+	m_statusBar1->SetStatusText(_("Reconstructing:"));
+	wxGauge* progress = new wxGauge(m_statusBar1, wxID_ANY, ITERATIONS, wxPoint(100, 3));
+	progress->SetValue(0);
 	bool oldLog = recon->getLogView();
 	recon->setLogView(false);
 	for (int i = 0; i < ITERATIONS; i++) {
 		recon->iterStep();
 		recon->singleFrame();
 		recon->resetLight();
+		progress->SetValue(i);
+		wxYield();
 		currentFrame->m_canvas->paint();
 	}
 	recon->finalizeIter();
 	recon->setLogView(oldLog);
 	recon->singleFrame();
 	recon->resetLight();
+	m_statusBar1->SetStatusText(_(""));
+	delete progress;
 
 	currentFrame->m_canvas->paint();
 }
@@ -446,6 +453,10 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	setDataDisplay(currentFrame, iterRecon);
 	if(recon->resetIterative() != Tomo_OK)
 		(*m_textCtrl8) << "Error remaking iterative memory\n";
+	recon->initIterative();
+	m_statusBar1->SetStatusText(_("Reconstructing:"));
+	wxGauge* progress = new wxGauge(m_statusBar1, wxID_ANY, ITERATIONS, wxPoint(100, 3));
+	progress->SetValue(0);
 	currentFrame->showScrollBar(recon->getNumSlices(), 0);
 	recon->setActiveProjection(0);
 	bool oldLog = recon->getLogView();
@@ -455,6 +466,8 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 			(*m_textCtrl8) << "Error during iterative step\n";
 		recon->singleFrame();
 		recon->resetLight();
+		progress->SetValue(i);
+		wxYield();
 		currentFrame->m_canvas->paint();
 	}
 	if(recon->finalizeIter() != Tomo_OK)
@@ -462,6 +475,8 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	recon->setLogView(oldLog);
 	recon->singleFrame();
 	recon->resetLight();
+	m_statusBar1->SetStatusText(_(""));
+	delete progress;
 
 	currentFrame->m_canvas->paint();
 }
@@ -645,7 +660,6 @@ void DTRMainWindow::onExportRecon(wxCommandEvent& event) {
 	dataset->putAndInsertString(DCM_Columns, std::to_string(width).c_str());
 	unsigned short * RawData = new unsigned short[width*height*numFrames];
 
-	//recon->SaveDataAsDICOM(saveFileDialog.GetPath().ToStdString());
 	recon->exportRecon(RawData);
 
 	dataset->putAndInsertUint16Array(DCM_PixelData, RawData, width*height*numFrames);
@@ -734,18 +748,25 @@ void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 	currentFrame->showScrollBar(recon->getNumSlices(), 0);
 	recon->setActiveProjection(0);
 	recon->resetIterative();
+	m_statusBar1->SetStatusText(_("Reconstructing:"));
+	wxGauge* progress = new wxGauge(m_statusBar1, wxID_ANY, ITERATIONS, wxPoint(100, 3));
+	progress->SetValue(0);
 	bool oldLog = recon->getLogView();
 	recon->setLogView(false);
 	for (int i = 0; i < ITERATIONS; i++) {
 		recon->iterStep();
 		recon->singleFrame();
 		recon->resetLight();
+		progress->SetValue(i);
+		wxYield();
 		currentFrame->m_canvas->paint();
 	}
 	recon->finalizeIter();
 	recon->setLogView(oldLog);
 	recon->singleFrame();
 	recon->resetLight();
+	m_statusBar1->SetStatusText(_(""));
+	delete progress;
 
 	currentFrame->m_canvas->paint();
 }
@@ -2804,4 +2825,81 @@ void CudaGLInCanvas::OnChar(wxKeyEvent& event) {
 	}
 
 	paint();
+}
+
+// ReconThread
+
+DEFINE_EVENT_TYPE(PAINT_IT);
+ReconThread::ReconThread(wxEvtHandler* pParent, TomoRecon* recon, GLFrame* Frame, wxStatusBar* status, wxTextCtrl* m_textCtrl)
+	: wxThread(wxTHREAD_DETACHED), m_pParent(pParent), status(status), currentFrame(Frame), m_recon(recon), m_textCtrl(m_textCtrl) {
+}
+
+wxThread::ExitCode ReconThread::Entry() {
+	wxStreamToTextRedirector redirect(m_textCtrl);
+	wxCommandEvent needsPaint(PAINT_IT, GetId());
+	FILETIME filetime, filetime2, filetime3;
+	LONGLONG time1, time2;
+	GetSystemTimeAsFileTime(&filetime);
+
+	//Run the entire reconstruction
+	//Swtich statement is to make it state aware, but otherwise finishes out whatever is left
+	/*switch (m_recon->currentDisplay) {
+	case raw_images:
+		m_recon->correctProjections();
+		GetSystemTimeAsFileTime(&filetime3);
+		time1 = (((ULONGLONG)filetime.dwHighDateTime) << 32) + filetime.dwLowDateTime;
+		time2 = (((ULONGLONG)filetime3.dwHighDateTime) << 32) + filetime3.dwLowDateTime;
+		std::cout << "Total LoadAndCorrectProjections time: " << (double)(time2 - time1) / 10000000 << " seconds";
+		std::cout << std::endl;
+		//currentFrame->m_canvas->paint();
+		wxPostEvent(m_pParent, needsPaint);
+	case sino_images:
+	case raw_images2:
+		m_recon->reconInit();
+	case norm_images:
+		m_recon->currentDisplay = recon_images;
+		wxMutexGuiEnter();
+		currentFrame->m_scrollBar->SetScrollbar(0, 1, m_recon->Sys->Recon->Nz, 1);
+		wxMutexGuiLeave();
+	case recon_images:
+		wxGauge* progress = new wxGauge(status, wxID_ANY, ITERATIONS, wxPoint(100, 3));
+		progress->SetValue(0);
+		while (!TestDestroy() && m_recon->iteration < ITERATIONS) {
+			m_recon->reconStep();
+			wxPostEvent(m_pParent, needsPaint);
+			status->SetStatusText(wxT("Reconstructing:"));
+			progress->SetValue(m_recon->iteration + 1);
+			this->Sleep(200);
+		}
+		delete progress;
+	}*/
+
+	GetSystemTimeAsFileTime(&filetime2);
+	time1 = (((ULONGLONG)filetime.dwHighDateTime) << 32) + filetime.dwLowDateTime;
+	time2 = (((ULONGLONG)filetime2.dwHighDateTime) << 32) + filetime2.dwLowDateTime;
+	std::cout << "Total Recon time: " << (double)(time2 - time1) / 10000000 << " seconds";
+	std::cout << std::endl;
+
+	std::cout << "Reconstruction finished successfully." << std::endl;
+
+	//status->SetStatusText(wxT("Saving image..."));
+	//m_recon->TomoSave();
+	//status->SetStatusText(wxT("Image saved!"));
+
+	return static_cast<ExitCode>(NULL);
+}
+
+//---------------------------------------------------------------------------
+// saveThread
+//---------------------------------------------------------------------------
+
+saveThread::saveThread(TomoRecon* recon, wxStatusBar* status) : wxThread(wxTHREAD_DETACHED), m_recon(recon), status(status) {
+}
+
+wxThread::ExitCode saveThread::Entry() {
+	status->SetStatusText(wxT("Saving image..."));
+	//m_recon->TomoSave();
+	status->SetStatusText(wxT("Image saved!"));
+
+	return static_cast<ExitCode>(NULL);
 }

@@ -392,3 +392,29 @@ public:
 	//User generated filenames
 	wxString gainFilepath;
 };
+
+BEGIN_DECLARE_EVENT_TYPES()
+DECLARE_EVENT_TYPE(PAINT_IT, -1)
+END_DECLARE_EVENT_TYPES()
+class ReconThread : public wxThread {
+public:
+	ReconThread(wxEvtHandler* pParent, TomoRecon* recon, GLFrame* Frame, wxStatusBar* status, wxTextCtrl* m_textCtrl);
+private:
+	wxEvtHandler* m_pParent;
+	TomoRecon* m_recon;
+	GLFrame* currentFrame;
+	wxStatusBar* status;
+	wxTextCtrl* m_textCtrl;
+
+	ExitCode Entry();
+};
+
+class saveThread : public wxThread {
+public:
+	saveThread(TomoRecon* recon, wxStatusBar* status);
+private:
+	TomoRecon* m_recon;
+	wxStatusBar* status;
+
+	ExitCode Entry();
+};

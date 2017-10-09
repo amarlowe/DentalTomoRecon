@@ -3,27 +3,27 @@ TomoRecon
 -------------Features------------------
 - Confirm cancel or load when values have been edited
 - Check values for input before allowing running, prompt a visit to config
-- Make MAC compiltible (hopefully not)
-- Save configuration settings on project file/directory instead of registry to make them project specific
-- Replace each failure state with it's own error type and dialoag (or pass a string)
 - Make an automated test bench for algorithm changes
 - Gui tools for translating scales into real world measurments
 - Image annotations
 - Use autofocus to generate relative geometries
 - Move autodetect geometry to config menu, grey out geo list when this is selected
 - Correct for non-xy shifts in the detector
-
+- Reconstruct by subdividing slices/all resolutions until the desired stepsize is achieved
+- Option to reverse log correction from projection images
 - Use a texture gather to detect 0s that would be used in bilinear filtering to further remove artifacts
 - Make it possible to choose beginning index as a default and read in setting
-- Save all defaults as JSON and registry settings
+- Alternate reconstruction angles
+
+- Make settings "sticky" so they survive on opening new projects or reopening program
 - Differentiate between project, projection and reconstruction (or other) DICOM files
 - Open reconstruction and other DICOMs as if the program were just a reader
-- Option to reverse log correction from projection images
 - Fill in all relevant DICOM header data
-- Rebuild use while reconstructing
-- Reconstruct by subdividing slices/all resolutions until the desired stepsize is achieved
-- Alternate reconstruction angles
-- Recon progress bar
+- Prevent new tabs when memory will not allow (check on ok or project open)
+- Replace each failure state with it's own error type and dialoag (or pass a string)
+- Update architecture (iterative)
+- Clean up code (iterative)
+- Update documentation (iterative)
 
 ------Next projects
 - Use geometry test to determine max tolerances to drop by 0.5 LP from original
@@ -39,6 +39,7 @@ TomoRecon
 --------------Bugs---------------------
 - Lighting difference between reconstructing display and end display (log corrected vs inverted)
 - Long pause on save
+- Difference in appearance from load project to load from raw
 
 -------------Completed------------------
 -------------Features------------------
@@ -52,6 +53,8 @@ TomoRecon
 - Navigation bar diabled items when viewing 2 and cancellations (bugfix)
 - Fixed issue with opening files over current recon with different slice sizes (bugfix)
 - Re-enable gain correction and make it optional
+- Recon progress bar
+- Rebuild use while reconstructing
 --(9/28 - 10/5)
 - Save projections as a single DICOM as default save function
 - Replace open and new functions with iterative config window
