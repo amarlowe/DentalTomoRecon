@@ -88,7 +88,7 @@
 #endif
 
 //Defaults
-#define ENHANCEDEFAULT 0.5f
+#define ENHANCEDEFAULT 1.0f
 #define SCANVERTDEFAULT 0.25f
 #define SCANHORDEFAULT 0.1f
 #define NOISEMAXDEFAULT 700
@@ -108,7 +108,7 @@
 //#define RECONDERIVATIVE
 //#define SQUAREMAGINX
 
-#define ITERATIONS 100
+#define ITERATIONS 75
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {										\
@@ -788,6 +788,7 @@ public:
 	float getEndBoundary();
 	int getNumSlices();
 	TomoError enableGain(bool enable);
+	bool gainIsEnabled();
 	TomoError getHistogramRecon(unsigned int * histogram);
 	TomoError initIterative();
 	TomoError resetIterative();
@@ -795,6 +796,7 @@ public:
 	int getNumViews();
 	void getProjectionDimensions(int * width, int * height);
 	TomoError exportRecon(unsigned short * exportData);
+	TomoError restartIterative();
 
 private:
 	/********************************************************************************************/

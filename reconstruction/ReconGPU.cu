@@ -443,11 +443,11 @@ __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, uns
 
 		if (val < LOWTHRESH) val = 0.0;
 
-		/*if (consts.useGain) {
+		if (consts.useGain) {
 			val /= Gain[j*consts.Px + i];
 			if (val > HIGHTHRESH) val = 0.0;
 			val *= USHRT_MAX;
-		}*/
+		}
 
 		//if (val / Gain[j*consts.Px + i] > HIGHTHRESH) val = 0.0;
 
@@ -1151,6 +1151,8 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 
 	bool oldLog = constants.log;
 	constants.log = false;
+
+	//setStep(2.0);
 
 	//Read the rest of the blank images for given projection sample set 
 	for (int view = 0; view < NumViews; view++) {
@@ -2251,7 +2253,7 @@ TomoError TomoRecon::initIterative() {
 		KERNELCALL2(invert, contBlocks, contThreads, d_Error + view * projPitch / sizeof(float) * Sys.Proj.Ny, constants);
 	}
 #endif // RECONDERIVATIVE
-
+	
 	cuda(BindTexture2D(NULL, textError, d_Error, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
 	//cuda(BindSurfaceToArray(surfRecon, d_Recon2));
 	for (int slice = 0; slice < Sys.Recon.Nz; slice++) {
@@ -2270,26 +2272,11 @@ TomoError TomoRecon::initIterative() {
 }
 
 TomoError TomoRecon::resetIterative() {
-#ifdef RECONDERIVATIVE
-	cuda(Memcpy2DAsync(d_Error, projPitch, inXBuff, projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny*NUMVIEWS, cudaMemcpyDeviceToDevice));
-#else
+	cuda(DestroySurfaceObject(surfReconObj));
+	cuda(Free(d_ReconOld));
+	cuda(FreeArray(d_Recon2));
 
-	for (int view = 0; view < NumViews; view++) {
-		cuda(Memcpy2DAsync(d_Error + view * projPitch / sizeof(float) * Sys.Proj.Ny, projPitch, d_Sino + view * projPitch / sizeof(float) * Sys.Proj.Ny, projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny, cudaMemcpyDeviceToDevice));
-		KERNELCALL2(invert, contBlocks, contThreads, d_Error + view * projPitch / sizeof(float) * Sys.Proj.Ny, constants);
-	}
-#endif // RECONDERIVATIVE
-
-	cuda(BindTexture2D(NULL, textError, d_Error, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
-	//cuda(BindSurfaceToArray(surfRecon, d_Recon2));
-	for (int slice = 0; slice < Sys.Recon.Nz; slice++) {
-		KERNELCALL2(zeroArray, contBlocks, contThreads, slice, constants, surfReconObj);
-		KERNELCALL2(copySlice, contBlocks, contThreads, d_ReconOld, slice, constants, surfReconObj);
-		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, 1.0f, true, constants, surfReconObj);
-	}
-	cuda(UnbindTexture(textError));
-
-	return Tomo_OK;
+	return initIterative();
 }
 
 TomoError TomoRecon::iterStep() {

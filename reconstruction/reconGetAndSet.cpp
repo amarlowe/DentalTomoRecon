@@ -89,6 +89,8 @@ float TomoRecon::getStep() {
 
 TomoError TomoRecon::setStep(float dis) {
 	if (dis < 0) return Tomo_invalid_arg;
+	constants.slices = round(constants.pitchZ / dis * constants.slices);
+	Sys.Recon.Nz = constants.slices;
 	Sys.Geo.ZPitch = dis;
 	constants.pitchZ = dis;
 	return Tomo_OK;
@@ -463,6 +465,10 @@ int TomoRecon::getNumSlices() {
 TomoError TomoRecon::enableGain(bool enable) {
 	constants.useGain = enable;
 	return Tomo_OK;
+}
+
+bool TomoRecon::gainIsEnabled() {
+	return constants.useGain;
 }
 
 int TomoRecon::getNumViews() {

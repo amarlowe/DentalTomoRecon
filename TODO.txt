@@ -6,13 +6,13 @@ TomoRecon
 - Make MAC compiltible (hopefully not)
 - Save configuration settings on project file/directory instead of registry to make them project specific
 - Replace each failure state with it's own error type and dialoag (or pass a string)
-- Look into upres using the mutltiple viewing angles
 - Make an automated test bench for algorithm changes
 - Gui tools for translating scales into real world measurments
 - Image annotations
 - Use autofocus to generate relative geometries
 - Move autodetect geometry to config menu, grey out geo list when this is selected
 - Correct for non-xy shifts in the detector
+
 - Use a texture gather to detect 0s that would be used in bilinear filtering to further remove artifacts
 - Make it possible to choose beginning index as a default and read in setting
 - Save all defaults as JSON and registry settings
@@ -20,17 +20,38 @@ TomoRecon
 - Open reconstruction and other DICOMs as if the program were just a reader
 - Option to reverse log correction from projection images
 - Fill in all relevant DICOM header data
-- Re-enable gain correction and make it optional
 - Rebuild use while reconstructing
-- Reconstruct by subdividing slices until the desired stepsize is achieved
+- Reconstruct by subdividing slices/all resolutions until the desired stepsize is achieved
+- Alternate reconstruction angles
+- Recon progress bar
+
+------Next projects
+- Use geometry test to determine max tolerances to drop by 0.5 LP from original
+- Automated test software for focal spot measurement
+- Test methods for optimizing learning rates
+- Find optimal tradeoff between accuracy and resolution
+- Increased resolution (resolution pyramid, local reconstruction for output slice)
+- Viewing angle shift, analyze accuracy dropoff
+- Automated geometry finding (x,y,z)
+- Variation between captured image (pitch,roll,raw)
+- Splice together multiple image sets and geometry for more accurate reconstructions
 
 --------------Bugs---------------------
 - Lighting difference between reconstructing display and end display (log corrected vs inverted)
-- Cancel on new is not properly cleaned up
-
+- Long pause on save
 
 -------------Completed------------------
 -------------Features------------------
+--(10/5 - 10/12)
+- Differentiate between export and project save
+- Rebuild reconstruction dialog as edit settings dialog
+- Move DICOM writes to external library
+- Move all read in functions to initial config list
+- Move stepsize to recon config
+- Cancel on new is not properly cleaned up (bugfix)
+- Navigation bar diabled items when viewing 2 and cancellations (bugfix)
+- Fixed issue with opening files over current recon with different slice sizes (bugfix)
+- Re-enable gain correction and make it optional
 --(9/28 - 10/5)
 - Save projections as a single DICOM as default save function
 - Replace open and new functions with iterative config window
@@ -40,11 +61,6 @@ TomoRecon
 - Edit single pass autofocus to use iterative start and end distances
 - Iterative mode autofocus
 - Confirm overwrite on save if file already exists
-- Differentiate between export and project save
-- Rebuild reconstruction dialog as edit settings dialog
-- Move DICOM writes to external library
-- Move all read in functions to initial config list
-- Move stepsize to recon config
 --(pre 9/28)
 - Correct for multipixel surface defects (only in iterative)
 - Add DICOM read functions

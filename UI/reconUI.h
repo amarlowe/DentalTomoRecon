@@ -182,6 +182,7 @@ class reconConfig : public wxDialog
 		wxStaticText* stepVal;
 		wxStaticText* stepUnits;
 		wxSlider* stepSlider;
+		wxCheckBox* useGain;
 		wxToolBar* scanToolbar;
 		wxCheckBox* scanVertEnable;
 		wxStaticText* scanVertValue;
@@ -215,6 +216,7 @@ class reconConfig : public wxDialog
 		virtual void onSetStartDis( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onSetEndDis( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onStepSlider( wxScrollEvent& event ) { event.Skip(); }
+		virtual void onEnableGain( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onScanVertEnable( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onResetScanVert( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onScanVert( wxScrollEvent& event ) { event.Skip(); }
@@ -235,7 +237,7 @@ class reconConfig : public wxDialog
 	
 	public:
 		
-		reconConfig( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Reconstruction configuration"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 970,643 ), long style = wxCAPTION|wxCLOSE_BOX|wxMAXIMIZE_BOX|wxRESIZE_BORDER ); 
+		reconConfig( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Reconstruction configuration"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 1592,773 ), long style = wxCAPTION|wxCLOSE_BOX|wxMAXIMIZE_BOX|wxRESIZE_BORDER ); 
 		~reconConfig();
 	
 };

@@ -458,6 +458,9 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	distanceToolbar->AddControl( stepUnits );
 	stepSlider = new wxSlider( distanceToolbar, wxID_ANY, 5, 1, 10, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
 	distanceToolbar->AddControl( stepSlider );
+	useGain = new wxCheckBox( distanceToolbar, wxID_ANY, wxT("Use Gain Correction"), wxDefaultPosition, wxDefaultSize, 0 );
+	useGain->SetValue(true); 
+	distanceToolbar->AddControl( useGain );
 	distanceToolbar->Realize(); 
 	
 	bSizer5->Add( distanceToolbar, 1, wxALIGN_CENTER_VERTICAL, 5 );
@@ -584,6 +587,7 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	stepSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onStepSlider ), NULL, this );
 	stepSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onStepSlider ), NULL, this );
 	stepSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onStepSlider ), NULL, this );
+	useGain->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onEnableGain ), NULL, this );
 	scanVertEnable->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onScanVertEnable ), NULL, this );
 	resetScanVert->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetScanVert ), NULL, this );
 	scanVertSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
@@ -659,6 +663,7 @@ reconConfig::~reconConfig()
 	stepSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onStepSlider ), NULL, this );
 	stepSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onStepSlider ), NULL, this );
 	stepSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onStepSlider ), NULL, this );
+	useGain->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onEnableGain ), NULL, this );
 	scanVertEnable->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onScanVertEnable ), NULL, this );
 	resetScanVert->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetScanVert ), NULL, this );
 	scanVertSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );

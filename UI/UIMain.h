@@ -70,6 +70,7 @@
 #define PRIVATE_TVITER_TAG		0x0029, 0x100f
 #define PRIVATE_DISSRT_TAG		0x0029, 0x1010
 #define PRIVATE_DISEND_TAG		0x0029, 0x1011
+#define PRIVATE_USEGN_TAG		0x0029, 0x1012
 
 #define PRV_PrivateCreator  DcmTag(PRIVATE_CREATOR_TAG)
 #define PRV_StepSize		DcmTag(PRIVATE_STEP_TAG, PRIVATE_CREATOR_NAME)
@@ -90,6 +91,7 @@
 #define PRV_TVIter			DcmTag(PRIVATE_TVITER_TAG, PRIVATE_CREATOR_NAME)
 #define PRV_DisStart		DcmTag(PRIVATE_DISSRT_TAG, PRIVATE_CREATOR_NAME)
 #define PRV_DisEnd			DcmTag(PRIVATE_DISEND_TAG, PRIVATE_CREATOR_NAME)
+#define PRV_UseGain			DcmTag(PRIVATE_USEGN_TAG, PRIVATE_CREATOR_NAME)
 
 typedef enum {
 	Status = 0,
@@ -127,6 +129,7 @@ protected:
 	void onSetEndDis(wxCommandEvent& event);
 	void onStepSlider(wxScrollEvent& event);
 	void onClose(wxCloseEvent& event);
+	void onEnableGain(wxCommandEvent& event);
 
 	void onToolbarChoice(wxCommandEvent& event);
 
@@ -149,7 +152,7 @@ protected:
 	void onIterSlider(wxScrollEvent& event);
 public:
 	/** Constructor */
-	ReconCon(wxWindow* parent, wxString filename);
+	ReconCon(wxWindow* parent, wxString filename, wxString gainFile);
 	~ReconCon();
 
 	void setValues();
@@ -169,6 +172,7 @@ public:
 	bool TVIsEnabled;
 	int TVLambdaVal;
 	int TVIterVal;
+	bool gainIsEnabled;
 	bool canceled = true;
 };
 
