@@ -65,12 +65,14 @@ float TomoRecon::getDistance() {
 
 TomoError TomoRecon::setDistance(float dist) {
 	distance = dist;
+	float clampedDist = distance;
 	//if (dist < MINDIS) distance = MINDIS;
 	//if (dist > MAXDIS) distance = MAXDIS;
+	
+	if (dist < constants.startDis) clampedDist = constants.startDis;
+	if (dist > constants.startDis + constants.pitchZ * (constants.slices - 1)) clampedDist = constants.startDis + constants.pitchZ * (constants.slices - 1);
+	sliceIndex = round((clampedDist - constants.startDis) / constants.pitchZ);
 	if (constants.dataDisplay == iterRecon) {
-		if (dist < constants.startDis) distance = constants.startDis;
-		if (dist > constants.startDis + constants.pitchZ * constants.slices) distance = constants.startDis + constants.pitchZ * (constants.slices - 1);
-		sliceIndex = round((distance - constants.startDis) / constants.pitchZ);
 		distance = constants.startDis + constants.pitchZ * sliceIndex;
 	}
 	return Tomo_OK;
@@ -78,8 +80,13 @@ TomoError TomoRecon::setDistance(float dist) {
 
 TomoError TomoRecon::stepDistance(int steps) {
 	distance += Sys.Geo.ZPitch * steps;
-	//if (distance < MINDIS) distance = MINDIS;
-	//if (distance > MAXDIS) distance = MAXDIS;
+	float clampedDist = distance;
+	//if (dist < MINDIS) distance = MINDIS;
+	//if (dist > MAXDIS) distance = MAXDIS;
+
+	if (distance < constants.startDis) clampedDist = constants.startDis;
+	if (distance > constants.startDis + constants.pitchZ * (constants.slices - 1)) clampedDist = constants.startDis + constants.pitchZ * (constants.slices - 1);
+	sliceIndex = round((clampedDist - constants.startDis) / constants.pitchZ);
 	return Tomo_OK;
 }
 
@@ -120,6 +127,9 @@ TomoError TomoRecon::setActiveProjection(int index) {
 		|| (constants.dataDisplay == error && index >= constants.Views)
 		|| (constants.dataDisplay == iterRecon && index >= constants.slices)) return Tomo_invalid_arg;
 	sliceIndex = index;
+	if (constants.dataDisplay == iterRecon) {
+		distance = constants.startDis + constants.pitchZ * sliceIndex;
+	}
 	return Tomo_OK;
 }
 

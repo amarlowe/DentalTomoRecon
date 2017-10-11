@@ -15,8 +15,9 @@ TomoRecon
 - Make it possible to choose beginning index as a default and read in setting
 - Alternate reconstruction angles
 
+- Add flip hor and vert to saved variables (also they are not activated on new project loads, mess up reconstruction when active)
+- Make iterations a GUI variable
 - Make settings "sticky" so they survive on opening new projects or reopening program
-- Differentiate between project, projection and reconstruction (or other) DICOM files
 - Open reconstruction and other DICOMs as if the program were just a reader
 - Fill in all relevant DICOM header data
 - Prevent new tabs when memory will not allow (check on ok or project open)
@@ -24,6 +25,7 @@ TomoRecon
 - Update architecture (iterative)
 - Clean up code (iterative)
 - Update documentation (iterative)
+- Comment code for review (iterative)
 
 ------Next projects
 - Use geometry test to determine max tolerances to drop by 0.5 LP from original
@@ -37,9 +39,9 @@ TomoRecon
 - Splice together multiple image sets and geometry for more accurate reconstructions
 
 --------------Bugs---------------------
-- Lighting difference between reconstructing display and end display (log corrected vs inverted)
-- Long pause on save
+- Occasional long pauses on system windows (save/load)
 - Difference in appearance from load project to load from raw
+- Undefined behavior when certian features (ie load) are used mid reconstruction
 
 -------------Completed------------------
 -------------Features------------------
@@ -55,6 +57,10 @@ TomoRecon
 - Re-enable gain correction and make it optional
 - Recon progress bar
 - Rebuild use while reconstructing
+- Lighting difference between reconstructing display and end display (bugfix)
+- Keep distance the same when switching from projection to reconstruction
+- Differentiate between project, projection and reconstruction (or other) DICOM files
+- Added tab naming based on current selected input data
 --(9/28 - 10/5)
 - Save projections as a single DICOM as default save function
 - Replace open and new functions with iterative config window

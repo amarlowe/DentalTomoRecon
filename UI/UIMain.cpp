@@ -21,12 +21,16 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 		//Test for dicom type (projection, display stack, project file)
 		DcmFileFormat dcmff;
 		OFString test;
+		OFString frameString;
 		DcmDataset* dset;
 		OFCondition result = dcmff.loadFile(ProjPath.c_str());
 		if (result.good()) {
 			 dset = dcmff.getDataset();
 			 dset->findAndGetOFString(PRV_PrivateCreator, test);
+			 dset->findAndGetOFString(DCM_NumberOfFrames, frameString);
 		}
+
+		int frames = stoi(frameString);
 
 		if (test.compare(PRIVATE_CREATOR_NAME) == 0) {
 			const Uint16 *pixelData = NULL;
@@ -81,6 +85,10 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 
 			returnError = Tomo_proj_file;
 		}
+		else if (frames > 1) {
+			//treat as a DICOM reader
+			returnError = Tomo_image_stack;
+		}
 		else {
 			FILE * fileptr = NULL;
 			std::string fallBack(ProjPath);
@@ -115,7 +123,7 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 			}
 		}
 
-		{
+		if(returnError != Tomo_image_stack) {
 			TomoError test = recon->ReadProjections(GainData, RawData);
 			if (test != Tomo_OK) returnError = test;
 		}
@@ -341,8 +349,6 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 	wxArrayString dirs = file.GetDirs();
 	wxString name = dirs[file.GetDirCount() - 1];
 
-	(*m_textCtrl8) << "Opening new tab titled: \"" << name << "\"\n";
-
 	//parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
 	if (parseFile(recon, filename.mb_str(), filename.mb_str()) != Tomo_proj_file) {
 		if (launchReconConfig(recon, filename) != Tomo_OK) {
@@ -351,6 +357,9 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 			return;
 		}
 	}
+	else name = file.GetName();
+
+	(*m_textCtrl8) << "Opening new tab titled: \"" << name << "\"\n";
 
 	m_auinotebook6->AddPage(currentFrame, name, true);
 	onContinuous();
@@ -433,8 +442,6 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	wxArrayString dirs = file.GetDirs();
 	wxString name = dirs[file.GetDirCount() - 1];
 
-	(*m_textCtrl8) << "Opening new tab titled: \"" << name << "\"\n";
-
 	GLFrame * currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
@@ -447,8 +454,12 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 			return;
 		}
 	}
+	else name = file.GetName();
 
 	currentFrame->filename = filename;
+
+	(*m_textCtrl8) << "Opening new project titled: \"" << name << "\"\n";
+	m_auinotebook6->SetPageText(m_auinotebook6->GetSelection(), name);
 
 	setDataDisplay(currentFrame, iterRecon);
 	if(recon->resetIterative() != Tomo_OK)
@@ -1115,6 +1126,9 @@ void DTRMainWindow::setDataDisplay(GLFrame* currentFrame, sourceData selection) 
 	switch (recon->getDataDisplay()) {
 	case projections:
 		projIndex = recon->getActiveProjection();
+		break;
+	case reconstruction:
+		reconIndex = recon->getActiveProjection();
 		break;
 	case iterRecon:
 		reconIndex = recon->getActiveProjection();

@@ -108,7 +108,7 @@
 //#define RECONDERIVATIVE
 //#define SQUAREMAGINX
 
-#define ITERATIONS 75
+#define ITERATIONS 70
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {										\
@@ -130,6 +130,7 @@ typedef enum {
 	Tomo_CUDA_err,
 	Tomo_Done,
 	Tomo_proj_file,
+	Tomo_image_stack,
 	Tomo_cancelled
 } TomoError;
 
@@ -244,6 +245,9 @@ struct params {
 	bool orientation;
 	bool flip;
 	bool log;
+
+	//Internal display variable
+	bool isReconstructing = false;
 
 	//Display parameters
 	float minVal = 0.0;

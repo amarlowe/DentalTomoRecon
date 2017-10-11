@@ -40,7 +40,6 @@ union pxl_rgbx_24{
 #define PXL_KERNEL_THREADS_PER_BLOCK  256
 
 surface<void, cudaSurfaceType2D> displaySurface;
-//surface<void, cudaSurfaceType3D> surfRecon;
 texture<float, cudaTextureType3D, cudaReadModeElementType> textRecon;
 texture<float, cudaTextureType2D, cudaReadModeElementType> textImage;
 texture<float, cudaTextureType2D, cudaReadModeElementType> textError;
@@ -674,7 +673,7 @@ __global__ void backProject(float * proj, float * error, int view, params consts
 	else error[j*consts.ProjPitchNum + i] = 0.0f;
 }
 
-__global__ void copySlice(float * image, int slice, params consts, cudaSurfaceObject_t surfRecon) {
+__global__ void copySlice(float * image, int slice, params consts, cudaSurfaceObject_t surfRecon, bool invertLogCorrect = false) {
 	//Define pixel location in x, y, and z
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
@@ -684,8 +683,13 @@ __global__ void copySlice(float * image, int slice, params consts, cudaSurfaceOb
 
 	float returnVal;
 	surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice);
+	if (invertLogCorrect) {
+		if (returnVal > 10) {
+			float correctedMax = logf(USHRT_MAX);
+			returnVal = (correctedMax - logf(USHRT_MAX - returnVal + 1)) / correctedMax * USHRT_MAX;
+		}
+	}
 	image[j*consts.ProjPitchNum + i] = returnVal;
-	//image[j*consts.ProjPitchNum + i] = tex3D(textRecon, i, j, slice);
 }
 
 __global__ void invertRecon(int slice, params consts, cudaSurfaceObject_t surfRecon) {
@@ -883,6 +887,12 @@ __global__ void histogramReconKernel(unsigned int *d_Histogram, int slice, param
 		if (data > 0) {
 			float correctedMax = logf(USHRT_MAX);
 			data = (correctedMax - logf(data + 1)) / correctedMax * USHRT_MAX;
+		}
+	}
+	if (consts.isReconstructing) {
+		if (data > 0) {
+			float correctedMax = logf(USHRT_MAX);
+			data = (correctedMax - logf(USHRT_MAX - data + 1)) / correctedMax * USHRT_MAX;
 		}
 	}
 	if (data > USHRT_MAX) data = USHRT_MAX;
@@ -1594,7 +1604,7 @@ TomoError TomoRecon::singleFrame() {
 		//cuda(Memcpy2DAsync(d_Image, reconPitch, d_Recon + sliceIndex * reconPitch / sizeof(float) * Sys.Recon.Ny, reconPitch, Sys.Recon.Nx * sizeof(float), Sys.Recon.Ny, cudaMemcpyDeviceToDevice));
 		//cudaBindTextureToArray(textRecon, d_Recon2);
 		//cuda(BindSurfaceToArray(surfRecon, d_Recon2));
-		KERNELCALL2(copySlice, contBlocks, contThreads, d_Image, sliceIndex, constants, surfReconObj);
+		KERNELCALL2(copySlice, contBlocks, contThreads, d_Image, sliceIndex, constants, surfReconObj, constants.isReconstructing);
 		break;
 	case error:
 		cuda(Memcpy2DAsync(d_Image, projPitch, d_Error + sliceIndex * projPitch / sizeof(float) * Sys.Proj.Ny, projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny, cudaMemcpyDeviceToDevice));
@@ -2233,6 +2243,7 @@ TomoError TomoRecon::initIterative() {
 #endif // PRINTMEMORYUSAGE
 
 	iterativeInitialized = true;
+	constants.isReconstructing = true;
 	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
 	cudaExtent vol = { Sys.Recon.Nx, Sys.Recon.Ny, Sys.Recon.Nz };
 	cuda(Malloc3DArray(&d_Recon2, &channelDesc, vol, cudaArraySurfaceLoadStore));
@@ -2309,7 +2320,8 @@ TomoError TomoRecon::iterStep() {
 }
 
 TomoError TomoRecon::finalizeIter() {
-	//cuda(BindSurfaceToArray(surfRecon, d_Recon2));
+	constants.isReconstructing = false;
+
 	for (int slice = 0; slice < Sys.Recon.Nz; slice++)
 		KERNELCALL2(invertRecon, contBlocks, contThreads, slice, constants, surfReconObj);
 
