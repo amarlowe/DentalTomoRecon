@@ -367,11 +367,18 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 	setDataDisplay(currentFrame, iterRecon);
 	recon->initIterative();
 	m_statusBar1->SetStatusText(_("Reconstructing:"));
-	wxGauge* progress = new wxGauge(m_statusBar1, wxID_ANY, ITERATIONS, wxPoint(100, 3));
+
+	wxConfigBase *pConfig = wxConfigBase::Get();
+	if (pConfig == NULL)
+		return;
+
+	runIterations = pConfig->Read(wxT("/iterations"), ITERATIONS);
+
+	wxGauge* progress = new wxGauge(m_statusBar1, wxID_ANY, runIterations, wxPoint(100, 3));
 	progress->SetValue(0);
 	bool oldLog = recon->getLogView();
 	recon->setLogView(false);
-	for (int i = 0; i < ITERATIONS; i++) {
+	for (int i = 0; i < runIterations; i++) {
 		recon->iterStep();
 		recon->singleFrame();
 		recon->resetLight();
@@ -466,13 +473,20 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 		(*m_textCtrl8) << "Error remaking iterative memory\n";
 	recon->initIterative();
 	m_statusBar1->SetStatusText(_("Reconstructing:"));
-	wxGauge* progress = new wxGauge(m_statusBar1, wxID_ANY, ITERATIONS, wxPoint(100, 3));
+
+	wxConfigBase *pConfig = wxConfigBase::Get();
+	if (pConfig == NULL)
+		return;
+
+	runIterations = pConfig->Read(wxT("/iterations"), ITERATIONS);
+
+	wxGauge* progress = new wxGauge(m_statusBar1, wxID_ANY, runIterations, wxPoint(100, 3));
 	progress->SetValue(0);
 	currentFrame->showScrollBar(recon->getNumSlices(), 0);
 	recon->setActiveProjection(0);
 	bool oldLog = recon->getLogView();
 	recon->setLogView(false);
-	for (int i = 0; i < ITERATIONS; i++) {
+	for (int i = 0; i < runIterations; i++) {
 		if(recon->iterStep() != Tomo_OK)
 			(*m_textCtrl8) << "Error during iterative step\n";
 		recon->singleFrame();
@@ -488,6 +502,8 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	recon->resetLight();
 	m_statusBar1->SetStatusText(_(""));
 	delete progress;
+
+	refreshToolbars(currentFrame);
 
 	currentFrame->m_canvas->paint();
 }
@@ -760,11 +776,18 @@ void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 	recon->setActiveProjection(0);
 	recon->resetIterative();
 	m_statusBar1->SetStatusText(_("Reconstructing:"));
-	wxGauge* progress = new wxGauge(m_statusBar1, wxID_ANY, ITERATIONS, wxPoint(100, 3));
+
+	wxConfigBase *pConfig = wxConfigBase::Get();
+	if (pConfig == NULL)
+		return;
+
+	runIterations = pConfig->Read(wxT("/iterations"), ITERATIONS);
+
+	wxGauge* progress = new wxGauge(m_statusBar1, wxID_ANY, runIterations, wxPoint(100, 3));
 	progress->SetValue(0);
 	bool oldLog = recon->getLogView();
 	recon->setLogView(false);
-	for (int i = 0; i < ITERATIONS; i++) {
+	for (int i = 0; i < runIterations; i++) {
 		recon->iterStep();
 		recon->singleFrame();
 		recon->resetLight();
@@ -778,6 +801,8 @@ void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 	recon->resetLight();
 	m_statusBar1->SetStatusText(_(""));
 	delete progress;
+
+	refreshToolbars(currentFrame);
 
 	currentFrame->m_canvas->paint();
 }
@@ -891,24 +916,7 @@ void DTRMainWindow::onAbout(wxCommandEvent& WXUNUSED(event)){
 		this);
 }
 
-void DTRMainWindow::onPageChange(wxAuiNotebookEvent& event) {
-	event.Skip();//Required to actually switch the tab
-	int temp = event.GetSelection();
-	if (temp == 0) {//console selected
-		//disable close button and all options that are not applied on new window open
-		m_auinotebook6->SetWindowStyle(NULL);
-		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Save")), false);
-		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export Reconstruction")), false);
-		m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), false);
-		distanceValue->Enable(false);
-		autoFocus->Enable(false);
-		autoLight->Enable(false);
-		windowSlider->Enable(false);
-		levelSlider->Enable(false);
-		zoomSlider->Enable(false);
-		autoAll->Enable(false);
-		return;
-	}
+void DTRMainWindow::refreshToolbars(GLFrame* currentFrame) {
 	//re-enable all controls
 	m_auinotebook6->SetWindowStyle(wxAUI_NB_DEFAULT_STYLE);
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Save")), true);
@@ -922,7 +930,6 @@ void DTRMainWindow::onPageChange(wxAuiNotebookEvent& event) {
 	zoomSlider->Enable();
 	autoAll->Enable();
 
-	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetPage(temp);
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	//set all control values when switching tabs
@@ -956,6 +963,28 @@ void DTRMainWindow::onPageChange(wxAuiNotebookEvent& event) {
 	float ratio = recon->getEnhanceRatio();
 	ratioValue->SetLabelText(wxString::Format(wxT("%2.1f"), ratio));
 	enhanceSlider->SetValue(ratio * ENHANCEFACTOR);
+}
+
+void DTRMainWindow::onPageChange(wxAuiNotebookEvent& event) {
+	event.Skip();//Required to actually switch the tab
+	int temp = event.GetSelection();
+	if (temp == 0) {//console selected
+		//disable close button and all options that are not applied on new window open
+		m_auinotebook6->SetWindowStyle(NULL);
+		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Save")), false);
+		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export Reconstruction")), false);
+		m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), false);
+		distanceValue->Enable(false);
+		autoFocus->Enable(false);
+		autoLight->Enable(false);
+		windowSlider->Enable(false);
+		levelSlider->Enable(false);
+		zoomSlider->Enable(false);
+		autoAll->Enable(false);
+		return;
+	}
+	
+	refreshToolbars((GLFrame*)m_auinotebook6->GetPage(temp));
 
 	return;
 }
@@ -1758,6 +1787,7 @@ DTRConfigDialog::DTRConfigDialog(wxWindow* parent) : configDialog(parent){
 	pixelHeight->SetValue(wxString::Format(wxT("%d"), pConfig->ReadLong(wxT("/pixelHeight"), 1440l)));
 	pitchHeight->SetValue(wxString::Format(wxT("%.4f"), pConfig->ReadDouble(wxT("/pitchHeight"), 0.0185f)));
 	pitchWidth->SetValue(wxString::Format(wxT("%.4f"), pConfig->ReadDouble(wxT("/pitchWidth"), 0.0185f)));
+	iterations->SetValue(wxString::Format(wxT("%d"), pConfig->ReadLong(wxT("/iterations"), ITERATIONS)));
 	for (int i = 0; i < m_grid1->GetNumberCols(); i++)
 		for (int j = 0; j < m_grid1->GetNumberRows(); j++) 
 			m_grid1->SetCellValue(j, i, wxString::Format(wxT("%.4f"), pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"),j,i), 0.0f)));
@@ -2039,6 +2069,14 @@ TomoError DTRConfigDialog::checkInputs() {
 		return Tomo_input_err;
 	}
 	else pConfig->Write(wxT("/pitchWidth"), parsedDouble);
+
+	if (!iterations->GetLineText(0).ToLong(&parsedInt) || parsedInt <= 0) {
+		wxMessageBox(wxT("Invalid input in text box: \"Reconstruction Iterations\".\nMust be a whole number greater than 0."),
+			wxT("Invlaid input"),
+			wxICON_STOP | wxOK);
+		return Tomo_input_err;
+	}
+	else pConfig->Write(wxT("/iterations"), parsedInt);
 
 	for (int i = 0; i < m_grid1->GetNumberCols(); i++) {
 		for (int j = 0; j < m_grid1->GetNumberRows(); j++) {

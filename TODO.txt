@@ -15,17 +15,16 @@ TomoRecon
 - Make it possible to choose beginning index as a default and read in setting
 - Alternate reconstruction angles
 
-- Add flip hor and vert to saved variables (also they are not activated on new project loads, mess up reconstruction when active)
-- Make iterations a GUI variable
+- Horizontal flip causes reconstrution reversal of distance
 - Make settings "sticky" so they survive on opening new projects or reopening program
 - Open reconstruction and other DICOMs as if the program were just a reader
-- Fill in all relevant DICOM header data
 - Prevent new tabs when memory will not allow (check on ok or project open)
 - Replace each failure state with it's own error type and dialoag (or pass a string)
 - Update architecture (iterative)
 - Clean up code (iterative)
 - Update documentation (iterative)
 - Comment code for review (iterative)
+- Software development process outline review and conform (class A)
 
 ------Next projects
 - Use geometry test to determine max tolerances to drop by 0.5 LP from original
@@ -45,6 +44,15 @@ TomoRecon
 
 -------------Completed------------------
 -------------Features------------------
+--(10/19 - 10/26)
+- Make iterations a GUI variable
+- Add flip hor and vert to saved variables (also they are not activated on new project loads, mess up reconstruction when active)
+--(10/12 - 10/19)
+- Lighting difference between reconstructing display and end display (bugfix)
+- Keep distance the same when switching from projection to reconstruction
+- Differentiate between project, projection and reconstruction (or other) DICOM files
+- Added tab naming based on current selected input data
+- Fill in all relevant DICOM header data
 --(10/5 - 10/12)
 - Differentiate between export and project save
 - Rebuild reconstruction dialog as edit settings dialog
@@ -57,10 +65,7 @@ TomoRecon
 - Re-enable gain correction and make it optional
 - Recon progress bar
 - Rebuild use while reconstructing
-- Lighting difference between reconstructing display and end display (bugfix)
-- Keep distance the same when switching from projection to reconstruction
-- Differentiate between project, projection and reconstruction (or other) DICOM files
-- Added tab naming based on current selected input data
+
 --(9/28 - 10/5)
 - Save projections as a single DICOM as default save function
 - Replace open and new functions with iterative config window

@@ -312,6 +312,10 @@ class configDialog : public wxFrame
 		wxTextCtrl* pitchWidth;
 		wxStaticText* m_staticText14;
 		wxGrid* m_grid1;
+		wxStaticText* m_staticText35;
+		wxTextCtrl* iterations;
+		wxPanel* m_panel2;
+		wxPanel* m_panel3;
 		wxButton* loadConfig;
 		wxButton* saveConfig;
 		wxButton* ok;
@@ -327,7 +331,7 @@ class configDialog : public wxFrame
 	
 	public:
 		
-		configDialog( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Reconstruction Configuration"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 1343,248 ), long style = wxDEFAULT_FRAME_STYLE|wxTAB_TRAVERSAL );
+		configDialog( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxT("Reconstruction Configuration"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 1343,277 ), long style = wxDEFAULT_FRAME_STYLE|wxTAB_TRAVERSAL );
 		
 		~configDialog();
 	

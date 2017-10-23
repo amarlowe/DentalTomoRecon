@@ -1162,7 +1162,7 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 	bool oldLog = constants.log;
 	constants.log = false;
 
-	//setStep(2.0);
+	//setStep(1.0);
 
 	//Read the rest of the blank images for given projection sample set 
 	for (int view = 0; view < NumViews; view++) {

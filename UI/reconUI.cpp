@@ -899,6 +899,19 @@ configDialog::configDialog( wxWindow* parent, wxWindowID id, const wxString& tit
 	m_grid1->SetDefaultCellAlignment( wxALIGN_LEFT, wxALIGN_TOP );
 	fgSizer2->Add( m_grid1, 0, wxALL|wxEXPAND, 5 );
 	
+	m_staticText35 = new wxStaticText( this, wxID_ANY, wxT("Reconstruction Iterations"), wxDefaultPosition, wxDefaultSize, 0 );
+	m_staticText35->Wrap( -1 );
+	fgSizer2->Add( m_staticText35, 0, wxALL, 5 );
+	
+	iterations = new wxTextCtrl( this, wxID_ANY, wxT("75"), wxDefaultPosition, wxDefaultSize, 0 );
+	fgSizer2->Add( iterations, 0, wxALL, 5 );
+	
+	m_panel2 = new wxPanel( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL );
+	fgSizer2->Add( m_panel2, 1, wxEXPAND | wxALL, 5 );
+	
+	m_panel3 = new wxPanel( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL );
+	fgSizer2->Add( m_panel3, 1, wxEXPAND | wxALL, 5 );
+	
 	loadConfig = new wxButton( this, wxID_ANY, wxT("Load Config"), wxDefaultPosition, wxDefaultSize, 0 );
 	fgSizer2->Add( loadConfig, 0, wxALL|wxALIGN_CENTER_VERTICAL|wxEXPAND, 5 );
 	

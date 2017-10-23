@@ -329,6 +329,7 @@ protected:
 	bool checkForConsole();
 	derivative_t getEnhance();
 	TomoError launchReconConfig(TomoRecon * recon, wxString filename);
+	void refreshToolbars(GLFrame* currentFrame);
 
 	// Handlers for mainWindow events.
 	void onNew(wxCommandEvent& event);
@@ -374,6 +375,7 @@ protected:
 
 	//constant globals
 	const int NumViews = NUMVIEWS;
+	int runIterations;
 
 public:
 	// Generate a System object from config file
