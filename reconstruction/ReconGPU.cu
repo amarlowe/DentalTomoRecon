@@ -509,7 +509,6 @@ __global__ void projectSlice(float * IM, float distance, params consts) {
 
 	for (int view = 0; view < NUMVIEWS; view++) {
 		float dz = distance / consts.d_Beamz[view];
-		if (consts.orientation) dz = -dz;//z changes sign when flipped in the x direction
 		float x = xMM2P((xR2MM(i, consts.Rx, consts.PitchRx) + consts.d_Beamx[view] * dz), consts.Px, consts.PitchPx);// / (1 + dz)
 		float y = yMM2P((yR2MM(j, consts.Ry, consts.PitchRy) + consts.d_Beamy[view] * dz), consts.Py, consts.PitchPy);
 
@@ -544,7 +543,6 @@ __global__ void projectIter(float * oldRecon, int slice, float iteration, bool s
 
 	for (int view = 0; view < NUMVIEWS; view++) {
 		float dz = (consts.startDis + slice * consts.pitchZ) / consts.d_Beamz[view];
-		if (consts.orientation) dz = -dz;//z changes sign when flipped in the x direction
 		float x = xMM2P((xR2MM(i, consts.Rx, consts.PitchRx) + consts.d_Beamx[view] * dz), consts.Px, consts.PitchPx);// / (1 + dz)
 		float y = yMM2P((yR2MM(j, consts.Ry, consts.PitchRy) + consts.d_Beamy[view] * dz), consts.Py, consts.PitchPy);
 

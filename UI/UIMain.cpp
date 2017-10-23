@@ -471,7 +471,6 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	setDataDisplay(currentFrame, iterRecon);
 	if(recon->resetIterative() != Tomo_OK)
 		(*m_textCtrl8) << "Error remaking iterative memory\n";
-	recon->initIterative();
 	m_statusBar1->SetStatusText(_("Reconstructing:"));
 
 	wxConfigBase *pConfig = wxConfigBase::Get();
