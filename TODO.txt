@@ -27,8 +27,6 @@ TomoRecon
 - Alternate reconstruction angles
 
 - Open reconstruction and other DICOMs as if the program were just a reader
-- Prevent new tabs when memory will not allow (check on ok or project open)
-- Replace each failure state with it's own error type and dialoag (or pass a string)
 - Update architecture (iterative)
 - Clean up code (iterative)
 - Update documentation (iterative)
@@ -37,7 +35,6 @@ TomoRecon
 
 --------------Bugs---------------------
 - Occasional long pauses on system windows (save/load, I think this is a windows problem, not on the program)
-- Difference in appearance from load project to load from raw (gain correction issues)
 - Undefined behavior when certian features (ie load) are used mid reconstruction
 
 -------------Completed------------------
@@ -48,6 +45,9 @@ TomoRecon
 - Add flip hor and vert to saved variables (also they are not activated on new project loads, mess up reconstruction when active)
 - Settings update on load to keep toolbars accurate on reloads
 - Horizontal flip causes reconstrution reversal of distance (bug)
+- Prevent new tabs when memory will not allow (check on ok or project open)
+- Replace each failure state with it's own error type and dialoag (or pass a string)
+- Difference in appearance from load project to load from raw (gain correction issues)(bug)
 --(10/12 - 10/19)
 - Lighting difference between reconstructing display and end display (bugfix)
 - Keep distance the same when switching from projection to reconstruction

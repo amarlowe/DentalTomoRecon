@@ -224,6 +224,8 @@ public:
 	wxSlider* levelSlider = NULL;
 	wxStaticText* levelLabel = NULL;
 
+	TomoError launchError;
+
 private:
 	int imageIndex = 0;
 	int reconIndex = 0;

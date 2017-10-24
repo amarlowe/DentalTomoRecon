@@ -4,6 +4,7 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 	TomoError returnError = Tomo_OK;
 
 	std::string ProjPath = mainFile;
+	std::string GainPath = gainFile;
 
 	if (!ProjPath.substr(ProjPath.length() - 3, ProjPath.length()).compare("dcm")) {
 		//Read projections
@@ -121,6 +122,17 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 
 				delete image;
 			}
+		}
+
+		FILE * fileptr = NULL;
+		for (int view = 0; view < NumViews; view++) {
+			GainPath = GainPath.substr(0, GainPath.length() - 5);
+			GainPath += std::to_string(view) + ".raw";
+
+			fopen_s(&fileptr, GainPath.c_str(), "rb");
+			if (fileptr == NULL) return Tomo_file_err;
+			fread(GainData[view], sizeof(unsigned short), width*height, fileptr);
+			fclose(fileptr);
 		}
 
 		if(returnError != Tomo_image_stack) {
@@ -343,14 +355,19 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 
 	wxString filename = openFileDialog.GetPath();
 	GLFrame * currentFrame = (GLFrame*)CreateNewPage(filename);
+	if (currentFrame->m_canvas->launchError != Tomo_OK) {
+		(*m_textCtrl8) << "Error creating new reconstruction. Please close other tabs, or use the \"open\" command on another reconstruction instead of \"new\". " <<
+			"If this is your first tab or you would like more active tabs, consider using/purchasing a Nvidia graphics card with more VRAM.\n";
+		delete currentFrame;
+		return;
+	}
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	wxFileName file(filename);
 	wxArrayString dirs = file.GetDirs();
 	wxString name = dirs[file.GetDirCount() - 1];
 
-	//parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
-	if (parseFile(recon, filename.mb_str(), filename.mb_str()) != Tomo_proj_file) {
+	if (parseFile(recon, gainFilepath.mb_str(), filename.mb_str()) != Tomo_proj_file) {
 		if (launchReconConfig(recon, filename) != Tomo_OK) {
 			//delete everything
 			delete currentFrame;
@@ -365,7 +382,13 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 	onContinuous();
 
 	setDataDisplay(currentFrame, iterRecon);
-	recon->initIterative();
+	if (recon->initIterative() != Tomo_OK) {
+		(*m_textCtrl8) << "Error creating new reconstruction. Please close other tabs, or use the \"open\" command on another reconstruction instead of \"new\". " <<
+			"If this is your first tab or you would like more active tabs, consider using/purchasing a Nvidia graphics card with more VRAM.\n";
+		m_auinotebook6->DeletePage(m_auinotebook6->GetPageIndex(currentFrame));
+		m_auinotebook6->SetSelection(0);
+		return;
+	}
 	m_statusBar1->SetStatusText(_("Reconstructing:"));
 
 	wxConfigBase *pConfig = wxConfigBase::Get();
@@ -469,8 +492,12 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	m_auinotebook6->SetPageText(m_auinotebook6->GetSelection(), name);
 
 	setDataDisplay(currentFrame, iterRecon);
-	if(recon->resetIterative() != Tomo_OK)
+	if (recon->resetIterative() != Tomo_OK) {
 		(*m_textCtrl8) << "Error remaking iterative memory\n";
+		m_auinotebook6->DeletePage(m_auinotebook6->GetPageIndex(currentFrame));
+		m_auinotebook6->SetSelection(0);
+		return;
+	}
 	m_statusBar1->SetStatusText(_("Reconstructing:"));
 
 	wxConfigBase *pConfig = wxConfigBase::Get();
@@ -486,16 +513,20 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	bool oldLog = recon->getLogView();
 	recon->setLogView(false);
 	for (int i = 0; i < runIterations; i++) {
-		if(recon->iterStep() != Tomo_OK)
+		if (recon->iterStep() != Tomo_OK) {
 			(*m_textCtrl8) << "Error during iterative step\n";
+			return;
+		}
 		recon->singleFrame();
 		recon->resetLight();
 		progress->SetValue(i);
 		wxYield();
 		currentFrame->m_canvas->paint();
 	}
-	if(recon->finalizeIter() != Tomo_OK)
+	if (recon->finalizeIter() != Tomo_OK) {
 		(*m_textCtrl8) << "Error finalizing iterations\n";
+		return;
+	}
 	recon->setLogView(oldLog);
 	recon->singleFrame();
 	recon->resetLight();
@@ -564,8 +595,6 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 				//Read projections
 				ProjPath = ProjPath.substr(0, ProjPath.length() - 5);
 				ProjPath += std::to_string(view) + ".dcm";//+1
-
-				//OFLog::configure(OFLogger::INFO_LOG_LEVEL);
 
 				DicomImage *image = new DicomImage(ProjPath.c_str());
 
@@ -773,7 +802,12 @@ void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 	setDataDisplay(currentFrame, iterRecon);
 	currentFrame->showScrollBar(recon->getNumSlices(), 0);
 	recon->setActiveProjection(0);
-	recon->resetIterative();
+	if (recon->resetIterative() != Tomo_OK) {
+		(*m_textCtrl8) << "Error remaking iterative memory\n";
+		m_auinotebook6->DeletePage(m_auinotebook6->GetPageIndex(currentFrame));
+		m_auinotebook6->SetSelection(0);
+		return;
+	}
 	m_statusBar1->SetStatusText(_("Reconstructing:"));
 
 	wxConfigBase *pConfig = wxConfigBase::Get();
@@ -2542,7 +2576,7 @@ CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemC
 	SetCurrent(*m_glRC);
 
 	recon = new TomoRecon(GetSize().x, GetSize().y, Sys);
-	recon->init();
+	launchError = recon->init();
 }
 
 CudaGLCanvas::~CudaGLCanvas(){
