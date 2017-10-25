@@ -362,9 +362,9 @@ __global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, float scal
 				rgbx.b = sum;
 			}
 			else {
-				rgbx.r = UCHAR_MAX;
-				rgbx.g = UCHAR_MAX;
-				rgbx.b = UCHAR_MAX;
+				rgbx.r = 0;
+				rgbx.g = 0;
+				rgbx.b = 0;
 			}
 		}
 		else {
@@ -618,7 +618,7 @@ __global__ void projectIter(float * oldRecon, int slice, float iteration, bool s
 #ifdef RECONDERIVATIVE
 	if (count == 0 || returnVal < 0.0f) surf3Dwrite(0.0f, surfRecon, i * sizeof(float), j, slice);
 #else
-	if (count == 0 || returnVal < 0.0f) surf3Dwrite(0.0f, surfRecon, i * sizeof(float), j, slice);
+	if (count == 0 || returnVal < 0.0f) surf3Dwrite(0.0f, surfRecon, i * sizeof(float), j, slice);// || returnVal < 0.0f
 #endif // RECONDERIVATIVE
 	else surf3Dwrite(returnVal, surfRecon, i * sizeof(float), j, slice);
 }
@@ -658,7 +658,7 @@ __global__ void backProject(float * proj, float * error, int view, params consts
 		error[j*consts.ProjPitchNum + i] = projVal - (value * (float)consts.Views / (float)count);
 	}
 #else
-	if (projVal > 0.0f && projVal <= USHRT_MAX && count > 0) {
+	if (projVal > 0.0f && projVal <= USHRT_MAX && count > 0) {//projVal > 0.0f && projVal <= USHRT_MAX && 
 #ifdef USELOGITER
 		float correctedMax = logf(USHRT_MAX);
 		projVal = (correctedMax - logf(projVal + 1)) / correctedMax * USHRT_MAX;

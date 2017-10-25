@@ -88,7 +88,18 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 		}
 		else if (frames > 1) {
 			//treat as a DICOM reader
-			returnError = Tomo_image_stack;
+			//returnError = Tomo_image_stack;
+
+			//TODO: Implement as reader, for now we'll treat it as an error
+			for (int view = 0; view < NumViews; view++) {
+				//Read and correct projections
+				delete[] RawData[view];
+				delete[] GainData[view];
+			}
+			delete[] RawData;
+			delete[] GainData;
+
+			return Tomo_image_stack;
 		}
 		else {
 			FILE * fileptr = NULL;
@@ -367,7 +378,14 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 	wxArrayString dirs = file.GetDirs();
 	wxString name = dirs[file.GetDirCount() - 1];
 
-	if (parseFile(recon, gainFilepath.mb_str(), filename.mb_str()) != Tomo_proj_file) {
+	TomoError fileType = parseFile(recon, gainFilepath.mb_str(), filename.mb_str());
+	if (fileType != Tomo_proj_file) {
+		if (fileType == Tomo_image_stack) {
+			(*m_textCtrl8) << "Standard DICOM stack viewing not yet supported.\n";
+			delete currentFrame;
+			m_auinotebook6->SetSelection(0);
+			return;
+		}
 		if (launchReconConfig(recon, filename) != Tomo_OK) {
 			//delete everything
 			delete currentFrame;
@@ -475,7 +493,17 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	GLFrame * currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
-	if (parseFile(recon, gainFilepath.mb_str(), filename.mb_str()) != Tomo_proj_file) {
+	TomoError fileType = parseFile(recon, gainFilepath.mb_str(), filename.mb_str());
+	if (fileType != Tomo_proj_file) {
+		if (fileType == Tomo_image_stack) {
+			(*m_textCtrl8) << "Standard DICOM stack viewing not yet supported.\n";
+			//reset to previous display
+			parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+			recon->singleFrame();
+			currentFrame->m_canvas->paint();
+			m_auinotebook6->SetSelection(0);//Switch to show there was an error
+			return;
+		}
 		if (launchReconConfig(recon, filename) != Tomo_OK) {
 			//reset to previous display
 			parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());

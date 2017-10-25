@@ -11,9 +11,9 @@ TomoError TomoRecon::getLight(unsigned int * minVal, unsigned int * maxVal) {
 }
 
 TomoError TomoRecon::setLight(unsigned int minVal, unsigned int maxVal) {
+	if (minVal < 0 || maxVal < 0 || minVal > maxVal || maxVal > USHRT_MAX) return Tomo_invalid_arg;
 	constants.minVal = minVal;
 	constants.maxVal = maxVal;
-	if (minVal < 0 || maxVal < 0 || minVal > maxVal || maxVal > USHRT_MAX) return Tomo_invalid_arg;
 	return Tomo_OK;
 }
 
