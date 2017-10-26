@@ -399,6 +399,8 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 	m_auinotebook6->AddPage(currentFrame, name, true);
 	onContinuous();
 
+	deactivateMenus(recon);
+
 	setDataDisplay(currentFrame, iterRecon);
 	if (recon->initIterative() != Tomo_OK) {
 		(*m_textCtrl8) << "Error creating new reconstruction. Please close other tabs, or use the \"open\" command on another reconstruction instead of \"new\". " <<
@@ -433,6 +435,9 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 	recon->resetLight();
 	m_statusBar1->SetStatusText(_(""));
 	delete progress;
+
+	activateMenus(recon);
+	refreshToolbars(currentFrame);
 
 	currentFrame->m_canvas->paint();
 }
@@ -519,6 +524,8 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	(*m_textCtrl8) << "Opening new project titled: \"" << name << "\"\n";
 	m_auinotebook6->SetPageText(m_auinotebook6->GetSelection(), name);
 
+	deactivateMenus(recon);
+
 	setDataDisplay(currentFrame, iterRecon);
 	if (recon->resetIterative() != Tomo_OK) {
 		(*m_textCtrl8) << "Error remaking iterative memory\n";
@@ -561,6 +568,7 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	m_statusBar1->SetStatusText(_(""));
 	delete progress;
 
+	activateMenus(recon);
 	refreshToolbars(currentFrame);
 
 	currentFrame->m_canvas->paint();
@@ -844,6 +852,8 @@ void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 
 	runIterations = pConfig->Read(wxT("/iterations"), ITERATIONS);
 
+	deactivateMenus(recon);
+
 	wxGauge* progress = new wxGauge(m_statusBar1, wxID_ANY, runIterations, wxPoint(100, 3));
 	progress->SetValue(0);
 	bool oldLog = recon->getLogView();
@@ -863,6 +873,7 @@ void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 	m_statusBar1->SetStatusText(_(""));
 	delete progress;
 
+	activateMenus(recon);
 	refreshToolbars(currentFrame);
 
 	currentFrame->m_canvas->paint();
@@ -979,17 +990,19 @@ void DTRMainWindow::onAbout(wxCommandEvent& WXUNUSED(event)){
 
 void DTRMainWindow::refreshToolbars(GLFrame* currentFrame) {
 	//re-enable all controls
-	m_auinotebook6->SetWindowStyle(wxAUI_NB_DEFAULT_STYLE);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Save")), true);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export Reconstruction")), true);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), true);
-	distanceValue->Enable();
-	autoFocus->Enable();
-	autoLight->Enable();
-	windowSlider->Enable();
-	levelSlider->Enable();
-	zoomSlider->Enable();
-	autoAll->Enable();
+	if (activeRecon == 0) {
+		m_auinotebook6->SetWindowStyle(wxAUI_NB_DEFAULT_STYLE);
+		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Save")), true);
+		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export Reconstruction")), true);
+		m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), true);
+		distanceValue->Enable();
+		autoFocus->Enable();
+		autoLight->Enable();
+		windowSlider->Enable();
+		levelSlider->Enable();
+		zoomSlider->Enable();
+		autoAll->Enable();
+	}
 
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
@@ -1024,6 +1037,56 @@ void DTRMainWindow::refreshToolbars(GLFrame* currentFrame) {
 	float ratio = recon->getEnhanceRatio();
 	ratioValue->SetLabelText(wxString::Format(wxT("%2.1f"), ratio));
 	enhanceSlider->SetValue(ratio * ENHANCEFACTOR);
+}
+
+void DTRMainWindow::deactivateMenus(TomoRecon* recon) {
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("New")), false);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Open")), false);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Save")), false);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export Reconstruction")), false);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Settings")), false);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Gain Files")), false);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), false);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Set Resolution Phantoms")), false);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Test Geometries")), false);
+	dataDisplay->Disable();
+	logView->Disable();
+
+	//Make sure we're on navigation section
+	optionBox->SetSelection(0);
+	edgeToolbar->Show(false);
+	navToolbar->Show(true);
+	navToolbar->Realize();
+
+	optionBox->Disable();
+
+	//set edge enhance
+	enhanceSave = recon->getEnhanceRatio();
+	recon->setEnhanceRatio(1.0);//Show only reconstruction, edge enhancement does not work mid recon
+
+	m_auinotebook6->SetWindowStyle(NULL);
+	activeRecon = m_auinotebook6->GetSelection();
+}
+
+void DTRMainWindow::activateMenus(TomoRecon* recon) {
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("New")), true);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Open")), true);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Save")), true);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export Reconstruction")), true);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Settings")), true);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Gain Files")), true);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), true);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Set Resolution Phantoms")), true);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Test Geometries")), true);
+	dataDisplay->Enable();
+	logView->Enable();
+	optionBox->Enable();
+
+	//set ratio back to original value
+	recon->setEnhanceRatio(enhanceSave);
+
+	m_auinotebook6->SetSelection(activeRecon);
+	activeRecon = 0;
 }
 
 void DTRMainWindow::onPageChange(wxAuiNotebookEvent& event) {

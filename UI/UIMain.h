@@ -349,6 +349,8 @@ protected:
 	void onRunTest(wxCommandEvent& event);
 	void onTestGeo(wxCommandEvent& event);
 	void onAutoGeo(wxCommandEvent& event);
+	void deactivateMenus(TomoRecon* recon);
+	void activateMenus(TomoRecon* recon);
 	void onPageChange(wxAuiNotebookEvent& event);
 	void onPageClose(wxAuiNotebookEvent& event);
 
@@ -378,6 +380,8 @@ protected:
 	//constant globals
 	const int NumViews = NUMVIEWS;
 	int runIterations;
+	float enhanceSave;
+	int activeRecon = 0;
 
 public:
 	// Generate a System object from config file
