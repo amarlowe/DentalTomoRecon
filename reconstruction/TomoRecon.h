@@ -298,55 +298,58 @@ public:
 	//Functions
 	///System constructor
 	TomoRecon(
-		///width of the OpenGL canvas
+		///width of the OpenGL canvas.
 		int x,
-		///height of the OpenGL canvas
+		///height of the OpenGL canvas.
 		int y,
-		///System parameters
+		///System parameters.
 		struct SystemControl * Sys);
 
 	///System destructor
 	~TomoRecon();
 
-	///Initialization code for CPU and GPU memory
+	///Initialization code for CPU and GPU memory.
 	TomoError init();
 
-	///Load in gain and primary data files for display
+	///Load in gain and primary data files for display.
 	TomoError ReadProjectionsFromFile(
-		///Images taken of the detector with no subject
+		///Images taken of the detector with no subject.
 		const char * gainFile,
-		///Main data file to be reconstructed
+		///Main data file to be reconstructed.
 		const char * mainFile);
 
-	///Cleanup function that should be called in a destructor
+	///Cleanup function that should be called in a destructor.
 	TomoError FreeGPUMemory();
 
-	///Conversion tool to transfer projection selection boxes to the reconstruction space
+	///Conversion tool to transfer projection selection boxes to the reconstruction space.
+
 	///Values are automatically clamped to reconstruction dimensions.
 	TomoError setReconBox(
-		///Projection number that the selection box is from
+		///Projection number that the selection box is from.
 		int index);
 
-	///Get a histogram of brightness value accross an entire image. Limited to values between 0 and USHRT_MAX
+	///Get a histogram of brightness value accross an entire image. Limited to values between 0 and USHRT_MAX.
 	template<typename T>
 	TomoError getHistogram(
-		///The dataset to be histogrammed
+		///The dataset to be histogrammed.
 		T * image, 
-		///The size of the dataset in bytes
+		///The size of the dataset in bytes.
 		unsigned int byteSize, 
-		///Pointer to an array in which the histogram will be returned. Must be of size 256
+		///Pointer to an array in which the histogram will be returned. Must be of size 256.
 		unsigned int *histogram);
 
 	///Render a single frame using predefined datasets and derivative filters
 	TomoError singleFrame();
 
 	///Iterative method used to find the distance the selection is from the detector. 
+
 	///Must be called in a loop until Tomo_Done is returned (useful if the caller wishes to paint each frame.
 	TomoError autoFocus(
 		///Set to true before the loop, false in the loop. Used for initialization.
 		bool firstRun);
 
 	///Experimental function used to automatically detect system geometries.
+
 	///Function must be called in a loop until Tomo_Done is returned.
 	TomoError autoGeo(
 		///True for initialization before the loop, false while in the loop.
@@ -370,14 +373,15 @@ public:
 
 	///Initialize dataset to be tested by the geometry test function.
 	TomoError initTolerances(
-		///The datastructure to be initializaed
+		///The datastructure to be initializaed.
 		std::vector<toleranceData> &data,
-		///Total number of tests that will be performed
+		///Total number of tests that will be performed.
 		int numTests,
-		///Desired offsets to be run
+		///Desired offsets to be run.
 		std::vector<float> offsets);
 
 	///High level function to test all combinations initialized in initTolerances. 
+
 	///Function is iterative and should be called in a loop until Tomo_Done is returned.
 	TomoError testTolerances(
 		///Input datastructure outlining all tests to be performed
@@ -386,62 +390,70 @@ public:
 		bool firstRun);
 
 	///Render the image and place it into the buffer used for display.
+
 	///After this, a swapbuffers() must be called by the parent for the associated openGL canvas to display the rendering.
 	TomoError draw(
-		///OpenGL canvas width
+		///OpenGL canvas width.
 		int x,
-		///OpenGL canvas height
+		///OpenGL canvas height.
 		int y);
 
 	///Function used to ouptut the current reconstruction to file.
+
 	///Reconstruction will save based on current position; half the slices will be in front of the current postion, half will be behind.
 	TomoError SaveDataAsDICOM(
-		///Desired save file name (will be overwritten if it exists)
+		///Desired save file name (will be overwritten if it exists).
 		std::string BaseFileIn);// ,
-		///Number of reconstruction slices to save
+		///Number of reconstruction slices to save.
 		//int slices);
 
 	//Getters and setters
 
-	///Get the window and level currently set for display
+	///Get the window and level currently set for display.
 	TomoError getLight(
-		///Minimum value/level output
+		///Minimum value/level output.
 		unsigned int * minVal,
-		///Maximum value output, used to calculate window
+		///Maximum value output, used to calculate window.
 		unsigned int * maxVal);
 
-	///Set custom minimum and maximum display values
-	///Can be used to set window and level as level=minimum, window = maximum - minimum
+	///Set custom minimum and maximum display values.
+
+	///Can be used to set window and level as level=minimum, window = maximum - minimum.
 	///Returns Tomo_invalid_arg if either is less than 0, if minVal > maxVal or if either is larger than max unsigned short.
 	TomoError setLight(
-		///minimum diplay value
+		///minimum diplay value.
 		unsigned int minVal,
-		///maximum display value
+		///maximum display value.
 		unsigned int maxVal);
 
 	///Setter used as an increment for maximum light, recommended use is scrolling or +/- controls.
+
 	///Returns Tomo_invalid_arg if amount would cause max light to be less than min, or greather than max unsigned short.
 	TomoError appendMaxLight(
-		///amount to increment/decrement max light
+		///amount to increment/decrement max light.
 		int amount);
 
 	///Setter used as an increment for minimum light, recommended use is scrolling or +/- controls.
+
 	///Returns Tomo_invalid_arg if amount would cause min light to be less than 0 or greater than max.
 	TomoError appendMinLight(
-		///amount to increment/decrement min light
+		///amount to increment/decrement min light.
 		int amount);
 
 	///Return set distance from detector used in reconstruction calcluation.
-	///Useful for reading out values after an auto-focus is performed
+
+	///Useful for reading out values after an auto-focus is performed.
 	float getDistance();
 
 	///Set the internal distance variable for reconstruction calculations.
+
 	///Returns Tomo_invalid_arg if value is less than 0.
 	TomoError setDistance(
 		///Distance variable to be set. Value will be clamped between min and max distance.
 		float distance);
 
 	///Increment the distance by the internal step amount.
+
 	///Change step size with setStep.
 	///Useful for calling from a mousewheel.
 	///DIstance value will be clamped between min and max distance.
@@ -458,24 +470,29 @@ public:
 		float dis);
 
 	///Auto-calibrate light from a set selection window.
+
 	///The default selection window is the center quarter of the image.
 	TomoError resetLight();
 
 	///Auto-calibrate focus from a set selection window.
+
 	///The default selection window is the center quarter of the image.
 	TomoError resetFocus();
 
 	///Returns whether or not the inverse log correction is currently in use.
+
 	///Returns true if in use, false if not.
 	bool getLogView();
 
 	///Set or unset use of the inverse log scale for viewing.
+
 	///Setting the view back to standard can sometimes show more contrast in higher ranges.
 	TomoError setLogView(
 		///Set or unset. True == use inverse log, false == use uncorrected intensities.
 		bool useLog);
 
 	///Returns whether or not the image is being flipped vertically.
+
 	///Returns true if in use, false if not.
 	bool getVertFlip();
 
@@ -485,6 +502,7 @@ public:
 		bool flip);
 
 	///Returns whether or not the image is being flipped vertically.
+
 	///Returns true if in use, false if not.
 	bool getHorFlip();
 
@@ -494,12 +512,14 @@ public:
 		bool flip);
 
 	///Sets whether or not an input line pair phantom is vertical or horizontal.
+
 	///Only used in the geometry calibration tests.
 	TomoError setInputVeritcal(
 		///True == vertical, false == horizontal.
 		bool vertical);
 
 	///Set the projection number that will be displayed or otherwise processed.
+
 	///Generally not used if in reconstruction view.
 	///Returns Tomo_invalid_arg if index is not between 0 and total projections - 1.
 	TomoError setActiveProjection(
@@ -507,6 +527,7 @@ public:
 		int index);
 
 	///Set the image display offsets.
+
 	///Only used when the image is zoomed in, otherwise they are set to 0 and fill up the available area.
 	///Values will be clamped to stay within the available window.
 	TomoError setOffsets(
@@ -516,6 +537,7 @@ public:
 		int yOff);
 
 	///Apprend the image display offsets.
+
 	///See setOffsets.
 	///Values will be clamped to stay within the available window.
 	TomoError appendOffsets(
@@ -525,6 +547,7 @@ public:
 		int yOff);
 
 	///Return the values of the offsets set.
+
 	///Values will be 0 if zoomed out.
 	void getOffsets(
 		///Offset in the horizontal direciton. Positive is right.
@@ -533,6 +556,7 @@ public:
 		int * yOff);
 
 	///Set the first set of corrdinates for a selection box.
+
 	///Sets are seperated for ease of input via click and drag.
 	///Values will be clamped to reconstruction dimensions.
 	TomoError setSelBoxStart(
@@ -542,6 +566,7 @@ public:
 		int y);
 
 	///Set the second set of corrdinates for a selection box.
+
 	///Sets are seperated for ease of input via click and drag.
 	///Values will be clamped to reconstruction dimensions.
 	TomoError setSelBoxEnd(
@@ -551,6 +576,7 @@ public:
 		int y);
 
 	///Get the selection box in image coordinates.
+
 	///Coordinates are converted from display (monitor pixel position) space to image space internally, and can be extracted here.
 	TomoError getSelBoxRaw(
 		///First horizontal position set through setSelBoxStart.
@@ -563,6 +589,7 @@ public:
 		int* y2);
 
 	///Set selection box for a projection image.
+
 	///Generally used just for geometry testing, normal setSelBox functions work for displaying projection images.
 	///Values will be clamped to projection dimensions.
 	TomoError setSelBoxProj(
@@ -576,6 +603,7 @@ public:
 		int y2);
 
 	///Sets the coordinates for the upper value of a line pair phantom.
+
 	///Only used for setting line pair phantom tests.
 	///Should be aligned with the 20 pair mark.
 	///Values will be clamped to reconstruction dimensions.
@@ -586,6 +614,7 @@ public:
 		int y);
 
 	///Sets the coordinates for the lower value of a line pair phantom.
+
 	///Only used for setting line pair phantom tests.
 	///Should be aligned with the 4 pair mark.
 	///Values will be clamped to reconstruction dimensions.
@@ -596,6 +625,7 @@ public:
 		int y);
 
 	///Sets the coordinates for the upper value of a line pair phantom of a projection image.
+
 	///Only used for setting line pair phantom tests.
 	///Should be aligned with the 20 pair mark.
 	///Values will be clamped to projection dimensions.
@@ -606,6 +636,7 @@ public:
 		int y);
 
 	///Sets the coordinates for the lower value of a line pair phantom of a projection image.
+
 	///Only used for setting line pair phantom tests.
 	///Should be aligned with the 4 pair mark.
 	///Values will be clamped to projection dimensions.
@@ -616,6 +647,7 @@ public:
 		int y);
 
 	///Return the value previously set for the upper line pair value.
+
 	///Will return -1 if the values were never set.
 	TomoError getUpperTickRaw(
 		///Horizontal position, right is positive.
@@ -624,6 +656,7 @@ public:
 		int* y);
 
 	///Return the value previously set for the lower line pair value.
+
 	///Will return -1 if the values were never set.
 	TomoError getLowerTickRaw(
 		///Horizontal position, right is positive.
@@ -632,28 +665,34 @@ public:
 		int* y);
 
 	///Check is the upper tick value has been set.
+
 	///Returns true if the value was set.
 	bool upperTickReady();
 
 	///Check is the upper tick value has been set.
+
 	///Returns true if the value was set.
 	bool lowerTickReady();
 
 	///Clear the selection box.
+
 	///Used to remove the red lines from the display.
 	TomoError resetSelBox();
 
 	///Check if the selection box has been set.
+
 	///Returns true if the box is set.
 	bool selBoxReady();
 
 	///Increment the zoom value by an integer amount.
+
 	///Zoom caculations are done on an exponential scale.
 	TomoError appendZoom(
 		///Amount to append the zoom. Value will be clamped if requested to go above a max, or below 0.
 		int amount);
 
 	///Return the current value set for zoom.
+
 	///This value is the raw integer value, before exponentiation.
 	int getZoom();
 
@@ -673,7 +712,7 @@ public:
 		///The type of derivative filter to be displayed.
 		derivative_t type);
 
-	///Return the current data type being displayed
+	///Return the current data type being displayed.
 	sourceData getDataDisplay();
 
 	///Set the current source of data.
@@ -685,16 +724,19 @@ public:
 	float getEnhanceRatio();
 
 	///Set the ratio for the edge enhancement filters.
+
 	///Values will be clamped between 0 and 1.
 	TomoError setEnhanceRatio(
 		///Value to be set. Values closer to 0 favor derivatives, values closer to 1 favor the original image.
 		float ratio);
 
 	///Returns if vertical scan line correction is in use.
+
 	///See enableScanVert.
 	bool scanVertIsEnabled();
 
 	///Enable vertical scan line correction.
+
 	///Corrects for vertical dark lines that tend to be a single pixel width. This filter can also produce artifacts if there are artifically strong vertically oriented features.
 	///Recommended only if the detector in use produces vertical scan lines.
 	TomoError enableScanVert(
@@ -705,6 +747,7 @@ public:
 	float getScanVertVal();
 
 	///Set the strength of the vertical scan line correction.
+
 	///Recommended to test different vaules for each detector system to find the minimum value that removes the lines.
 	///Values below 0 will be clamped to 0.
 	TomoError setScanVertVal(
@@ -712,10 +755,12 @@ public:
 		float tau);
 
 	///Returns if horizontal scan line correction is in use.
+
 	///See enableScanVert.
 	bool scanHorIsEnabled();
 
 	///Enable horizontal scan line correction.
+
 	///Corrects for horizontal dark lines that tend to be a single pixel width. This filter can also produce artifacts if there are artifically strong horizontally oriented features.
 	///Recommended only if the detector in use produces horizontal scan lines.
 	TomoError enableScanHor(
@@ -726,6 +771,7 @@ public:
 	float getScanHorVal();
 
 	///Set the strength of the horizontal scan line correction.
+
 	///Recommended to test different vaules for each detector system to find the minimum value that removes the lines.
 	///Values below 0 will be clamped to 0.
 	TomoError setScanHorVal(
@@ -733,6 +779,7 @@ public:
 		float tau);
 
 	///Show negative intensities as a blue color.
+
 	///Standard images shouldn't produce negative vaules, but derivative images will. Edge enhancements may also, if the ratio favors derivatives enough.
 	TomoError setShowNegative(
 		///Value to be set. True == enable. 
@@ -747,10 +794,12 @@ public:
 		bool enable);
 
 	///Return the max value for the outlier removal noise filter.
+
 	///See setNoiseMaxVal.
 	int getNoiseMaxVal();
 
 	///Set the max value for the outlier removal noise filter.
+
 	///This value also deterimines similarity in neighboring pixels, so values that are too small may not produce any results.
 	///Values below 0 will be clamped to 0.
 	TomoError setNoiseMaxVal(
@@ -761,6 +810,7 @@ public:
 	bool TVIsEnabled();
 
 	///Enable the use of blanket total variation denoising accross the projection images.
+
 	///Noise removal helps clear up images, but can remove small features.
 	TomoError enableTV(
 		///Value to be set. True == enable.
@@ -770,6 +820,7 @@ public:
 	float getTVLambda();
 
 	///Set the strength of TV correction per iteration. 
+
 	///Values below 0 will be clamped to 0.
 	TomoError setTVLambda(
 		///Value to be set. Larger values remove more noise, but blur the image more.
@@ -779,21 +830,25 @@ public:
 	float getTVIter();
 
 	///Set the number of TV iterations.
+
 	///Values below 0 will be clamped to 0.
 	TomoError setTVIter(
 		///Value to be set. Larger values remove more noise, but also blur the image and slow down read ins. 
 		float iter);
 
 	///Make a single step in the iteration process. Should be called in a loop after initIterative() or resetIterative().
+
 	///Recommended to use in conjunctions with drawing functions to keep the reconstruction dispaly up to date. 
 	///finalizeIter() should be called after this function is called the desired number of times.
 	TomoError iterStep();
 
 	///Cleans up unsused memory after all iterations have been completed, leaving the main reconstruction structure in tact.
+
 	///It also uninverts the pixels values, so log correction can be re-enabled.
 	TomoError finalizeIter();
 
 	///Returns the index for currently active slice of projection or iterative reconstruction.
+
 	///Note that both projection and iterative reconstruction share the same variable, so be sure to update active slice when switching between displayed data.
 	int getActiveProjection();
 
@@ -811,10 +866,12 @@ public:
 	float getEndBoundary();
 
 	///Return the number of slices allocated in the iterative reconstruction, calculated from start distance, end distance and stepsize.
+
 	///Useful for setting up a slider for scrolling along the reconstruction.
 	int getNumSlices();
 
 	///Enable gain correction for the reconstructions. 
+
 	///Gain file is set seperately in ReadProjections(). 
 	///Gain file only needs to be set once, this can be toggled as many times as necessary without reloading gain file.
 	TomoError enableGain(bool enable);
@@ -823,18 +880,22 @@ public:
 	bool gainIsEnabled();
 
 	///Special use case for getting the histogram for the iterative reconstruction data for the current slice.
+
 	///Usually used to adjust window and level.
 	TomoError getHistogramRecon(unsigned int * histogram);
 
 	///Allocates the necessary memory for the iterative reconstruction and required tools.
+
 	///Start and end distance should alread be set before this function is called. 
 	TomoError initIterative();
 
 	///Cleans up previous iterative reconstructions and internally calls initIterative().
+
 	///Required for switching start/end distances or stepsize.
 	TomoError resetIterative();
 
 	///Reads in parsed data arrays into the GPU.
+
 	///Parameters for the data like width and hieght must be set ahead of calling this function. 
 	///Read in corrections like scanline reduction and TV denosing are done in this step.
 	TomoError ReadProjections(unsigned short ** GainData, unsigned short ** RawData);
@@ -846,9 +907,9 @@ public:
 	void getProjectionDimensions(int * width, int * height);
 
 	///Save the current iterative reconstruction directly to disk.
+
 	///Modifications like edge filters and current lighting will be computed before saving to disk; it will save as currently displayed.
 	TomoError exportRecon(unsigned short * exportData);
-	TomoError restartIterative();
 
 private:
 	/********************************************************************************************/

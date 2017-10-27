@@ -30,7 +30,6 @@ TomoRecon
 - Compress save files and reconstructions
 
 - Clean up code (iterative)
-- Update documentation (iterative)
 - Comment code for review (iterative)
 - Software development process outline review and conform (class A)
 
@@ -42,6 +41,7 @@ TomoRecon
 --(10/26 - 11/2)
 Undefined behavior when certian features (ie load) are used mid reconstruction
 Update architecture (iterative)
+Update documentation (iterative)
 --(10/19 - 10/26)
 - Memory leak on open (bug)
 - Make iterations a GUI variable
