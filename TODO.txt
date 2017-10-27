@@ -29,7 +29,6 @@ TomoRecon
 - Open reconstruction and other DICOMs as if the program were just a reader
 - Compress save files and reconstructions
 
-- Update architecture (iterative)
 - Clean up code (iterative)
 - Update documentation (iterative)
 - Comment code for review (iterative)
@@ -42,6 +41,7 @@ TomoRecon
 -------------Features------------------
 --(10/26 - 11/2)
 Undefined behavior when certian features (ie load) are used mid reconstruction
+Update architecture (iterative)
 --(10/19 - 10/26)
 - Memory leak on open (bug)
 - Make iterations a GUI variable

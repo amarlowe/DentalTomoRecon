@@ -784,21 +784,69 @@ public:
 		///Value to be set. Larger values remove more noise, but also blur the image and slow down read ins. 
 		float iter);
 
+	///Make a single step in the iteration process. Should be called in a loop after initIterative() or resetIterative().
+	///Recommended to use in conjunctions with drawing functions to keep the reconstruction dispaly up to date. 
+	///finalizeIter() should be called after this function is called the desired number of times.
 	TomoError iterStep();
+
+	///Cleans up unsused memory after all iterations have been completed, leaving the main reconstruction structure in tact.
+	///It also uninverts the pixels values, so log correction can be re-enabled.
 	TomoError finalizeIter();
+
+	///Returns the index for currently active slice of projection or iterative reconstruction.
+	///Note that both projection and iterative reconstruction share the same variable, so be sure to update active slice when switching between displayed data.
 	int getActiveProjection();
-	TomoError setBoundaries(float begin, float end);
+
+	///Set the beginning and end distances to reconstruct within. These parameters along with stepsize are used to calculate how many slices are needed for the reconstruction.
+	TomoError setBoundaries(
+		///Start boundary of the iterative reconstruction (mm).
+		float begin, 
+		///End boundary of the iterative reconstruction (mm).
+		float end);
+
+	///Return the currently set start boundary of the iterative reconstruction in millimeters.
 	float getStartBoundary();
+
+	///Return the currently set end boundary of the iterative reconstruction in millimeters.
 	float getEndBoundary();
+
+	///Return the number of slices allocated in the iterative reconstruction, calculated from start distance, end distance and stepsize.
+	///Useful for setting up a slider for scrolling along the reconstruction.
 	int getNumSlices();
+
+	///Enable gain correction for the reconstructions. 
+	///Gain file is set seperately in ReadProjections(). 
+	///Gain file only needs to be set once, this can be toggled as many times as necessary without reloading gain file.
 	TomoError enableGain(bool enable);
+
+	///Returns whether or not the gain correction is currently in use.
 	bool gainIsEnabled();
+
+	///Special use case for getting the histogram for the iterative reconstruction data for the current slice.
+	///Usually used to adjust window and level.
 	TomoError getHistogramRecon(unsigned int * histogram);
+
+	///Allocates the necessary memory for the iterative reconstruction and required tools.
+	///Start and end distance should alread be set before this function is called. 
 	TomoError initIterative();
+
+	///Cleans up previous iterative reconstructions and internally calls initIterative().
+	///Required for switching start/end distances or stepsize.
 	TomoError resetIterative();
+
+	///Reads in parsed data arrays into the GPU.
+	///Parameters for the data like width and hieght must be set ahead of calling this function. 
+	///Read in corrections like scanline reduction and TV denosing are done in this step.
 	TomoError ReadProjections(unsigned short ** GainData, unsigned short ** RawData);
+
+	///Return the number of viewpoints set for projections.
 	int getNumViews();
+
+	///Return the dimensions of the projections.
 	void getProjectionDimensions(int * width, int * height);
+
+	///Save the current iterative reconstruction directly to disk.
+	///Modifications like edge filters and current lighting will be computed before saving to disk; it will save as currently displayed.
 	TomoError exportRecon(unsigned short * exportData);
 	TomoError restartIterative();
 

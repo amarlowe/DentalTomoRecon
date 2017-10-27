@@ -68,3 +68,5 @@
 latex/
 
 *.zip
+
+*.TMP
