@@ -75,6 +75,7 @@
 //#define ENABLESOLVER
 #define PRINTMEMORYUSAGE
 #define USEITERATIVE
+//#define SHOWERROR
 
 #ifdef ENABLEZDER
 //Kernel options
@@ -1004,6 +1005,7 @@ private:
 	float * d_Error;
 	float * d_Sino;
 	cudaArray_t d_Recon2 = NULL;
+	cudaArray_t d_ReconError = NULL;
 	float * d_ReconOld = NULL;
 
 	//Kernel memory
@@ -1057,6 +1059,7 @@ private:
 
 	bool iterativeInitialized = false;
 	cudaSurfaceObject_t surfReconObj = 0;
+	cudaSurfaceObject_t surfErrorObj = 0;
 };
 
 /********************************************************************************************/

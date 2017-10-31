@@ -158,7 +158,7 @@ TomoError TomoRecon::appendOffsets(int x, int y) {
 
 TomoError TomoRecon::checkOffsets(int * x, int * y) {
 	int xLim, yLim;
-	if (constants.dataDisplay == reconstruction) {
+	if (constants.dataDisplay == reconstruction || constants.dataDisplay == iterRecon) {
 		xLim = Sys.Recon.Nx;
 		yLim = Sys.Recon.Ny;
 	}
