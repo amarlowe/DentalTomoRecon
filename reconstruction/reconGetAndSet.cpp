@@ -489,3 +489,8 @@ void TomoRecon::getProjectionDimensions(int* width, int* height) {
 	*width = Sys.Proj.Nx;
 	*height = Sys.Proj.Ny;
 }
+
+void TomoRecon::getReconstructionDimensions(int* width, int* height) {
+	*width = Sys.Recon.Nx;
+	*height = Sys.Recon.Ny;
+}

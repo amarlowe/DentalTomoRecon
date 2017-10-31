@@ -39,7 +39,7 @@
 
 //Projection correction parameters
 #define LOWTHRESH 80.0f
-#define HIGHTHRESH 0.98f
+#define HIGHTHRESH 0.99f
 
 //Autofocus parameters
 #define STARTSTEP 1.0f
@@ -882,7 +882,7 @@ public:
 	///Special use case for getting the histogram for the iterative reconstruction data for the current slice.
 
 	///Usually used to adjust window and level.
-	TomoError getHistogramRecon(unsigned int * histogram);
+	TomoError getHistogramRecon(unsigned int * histogram, bool useall);
 
 	///Allocates the necessary memory for the iterative reconstruction and required tools.
 
@@ -905,6 +905,9 @@ public:
 
 	///Return the dimensions of the projections.
 	void getProjectionDimensions(int * width, int * height);
+
+	///Return the dimensions of the projections.
+	void getReconstructionDimensions(int * width, int * height);
 
 	///Save the current iterative reconstruction directly to disk.
 

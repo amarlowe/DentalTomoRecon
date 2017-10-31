@@ -231,6 +231,9 @@ DTRMainWindow::DTRMainWindow(wxWindow* parent) : mainWindow(parent){
 	wxCommandEvent dummy;
 	onToolbarChoice(dummy);
 
+	wxIcon icon(wxT("./xinvivo_cnt.ico"), wxBITMAP_TYPE_ICO);
+	SetIcons(icon);
+
 	wxConfigBase *pConfig = wxConfigBase::Get();
 	if (pConfig == NULL)
 		return;
@@ -399,9 +402,6 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 	m_auinotebook6->AddPage(currentFrame, name, true);
 	onContinuous();
 
-	deactivateMenus(recon);
-
-	setDataDisplay(currentFrame, iterRecon);
 	if (recon->initIterative() != Tomo_OK) {
 		(*m_textCtrl8) << "Error creating new reconstruction. Please close other tabs, or use the \"open\" command on another reconstruction instead of \"new\". " <<
 			"If this is your first tab or you would like more active tabs, consider using/purchasing a Nvidia graphics card with more VRAM.\n";
@@ -410,6 +410,8 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 		return;
 	}
 	m_statusBar1->SetStatusText(_("Reconstructing:"));
+	setDataDisplay(currentFrame, iterRecon);
+	deactivateMenus(recon);
 
 	wxConfigBase *pConfig = wxConfigBase::Get();
 	if (pConfig == NULL)
@@ -426,8 +428,8 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 		recon->singleFrame();
 		recon->resetLight();
 		progress->SetValue(i);
-		wxYield();
 		currentFrame->m_canvas->paint();
+		wxYield();
 	}
 	recon->finalizeIter();
 	recon->setLogView(oldLog);
@@ -555,8 +557,8 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 		recon->singleFrame();
 		recon->resetLight();
 		progress->SetValue(i);
-		wxYield();
 		currentFrame->m_canvas->paint();
+		wxYield();
 	}
 	if (recon->finalizeIter() != Tomo_OK) {
 		(*m_textCtrl8) << "Error finalizing iterations\n";
@@ -739,7 +741,7 @@ void DTRMainWindow::onExportRecon(wxCommandEvent& event) {
 
 	int width, height;
 	int numFrames = recon->getNumSlices();
-	recon->getProjectionDimensions(&width, &height);
+	recon->getReconstructionDimensions(&width, &height);
 
 	char uid[100];
 	DcmFileFormat fileformat;
@@ -863,8 +865,8 @@ void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 		recon->singleFrame();
 		recon->resetLight();
 		progress->SetValue(i);
-		wxYield();
 		currentFrame->m_canvas->paint();
+		wxYield();
 	}
 	recon->finalizeIter();
 	recon->setLogView(oldLog);
@@ -1904,6 +1906,9 @@ DTRSliceSave::~DTRSliceSave() {
 // ----------------------------------------------------------------------------
 
 DTRConfigDialog::DTRConfigDialog(wxWindow* parent) : configDialog(parent){
+	wxIcon icon(wxT("./xinvivo_cnt.ico"), wxBITMAP_TYPE_ICO);
+	SetIcons(icon);
+
 	//load all values from previously saved settings
 	wxConfigBase *pConfig = wxConfigBase::Get();
 

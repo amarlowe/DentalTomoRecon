@@ -31,7 +31,6 @@ TomoRecon
 
 - Clean up code (iterative)
 - Comment code for review (iterative)
-- Software development process outline review and conform (class A)
 
 --------------Bugs---------------------
 - Occasional long pauses on system windows (save/load, I think this is a windows problem, not on the program)
@@ -39,9 +38,12 @@ TomoRecon
 -------------Completed------------------
 -------------Features------------------
 --(10/26 - 11/2)
-Undefined behavior when certian features (ie load) are used mid reconstruction
+Undefined behavior when certain features (ie load) are used mid reconstruction
 Update architecture (iterative)
 Update documentation (iterative)
+Added Xinvivo icon
+Software development process outline review and conform (class any)
+Found and patched major lighting issue when strong absorbers are not contained in first slice (affected exported recons, not just display)
 --(10/19 - 10/26)
 - Memory leak on open (bug)
 - Make iterations a GUI variable
