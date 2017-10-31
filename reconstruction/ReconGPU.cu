@@ -541,41 +541,15 @@ __global__ void projectIter(float * oldRecon, int slice, float iteration, bool s
 
 	for (int view = 0; view < NUMVIEWS; view++) {
 		float dz = (consts.startDis + slice * consts.pitchZ) / consts.d_Beamz[view];
-		if (consts.Rx < consts.Px) {
-			float LLx = xMM2P((xR2MM(i, consts.Rx, consts.PitchRx) - 0.5 * consts.PitchRx + consts.d_Beamx[view] * dz), consts.Px, consts.PitchPx);
-			float LLy = yMM2P((yR2MM(j, consts.Ry, consts.PitchRy) + 0.5 * consts.PitchRy + consts.d_Beamy[view] * dz), consts.Py, consts.PitchPy);
-			float URx = xMM2P((xR2MM(i, consts.Rx, consts.PitchRx) + 0.5 * consts.PitchRx + consts.d_Beamx[view] * dz), consts.Px, consts.PitchPx);
-			float URy = yMM2P((yR2MM(j, consts.Ry, consts.PitchRy) - 0.5 * consts.PitchRy + consts.d_Beamy[view] * dz), consts.Py, consts.PitchPy);
-			for (int x = floor(LLx); x < ceil(URx); x++) {
-				if (x < 0 || x > consts.Px) continue;
-				float xLen = 1.0f;
-				if (x == (int)floor(URx)) xLen = URx - (float)x;
-				if (x == (int)floor(LLx)) xLen = (float)(x+1) - LLx;
-				for (int y = floor(URy); y < ceil(LLy); y++) {
-					float yLen = 1.0f;
-					if (y == (int)URy) yLen = (float)(y + 1) - URy;
-					if (y == (int)LLy) yLen = LLy - (float)y;
+		float x = xMM2P((xR2MM(i, consts.Rx, consts.PitchRx) + consts.d_Beamx[view] * dz), consts.Px, consts.PitchPx);// / (1 + dz)
+		float y = yMM2P((yR2MM(j, consts.Ry, consts.PitchRy) + consts.d_Beamy[view] * dz), consts.Py, consts.PitchPy);
 
-					float area = xLen * yLen;
-					float value = tex2D(textError, (float)x + 0.5f, (float)(y + view*consts.Py) + 0.5f);
-					if (value != 0) {
-						error += value * area;
-						count += area;
-					}
-				}
-			}
-		}
-		else {
-			float x = xMM2P((xR2MM(i, consts.Rx, consts.PitchRx) + consts.d_Beamx[view] * dz), consts.Px, consts.PitchPx);// / (1 + dz)
-			float y = yMM2P((yR2MM(j, consts.Ry, consts.PitchRy) + consts.d_Beamy[view] * dz), consts.Py, consts.PitchPy);
-
-			//Update the value based on the error scaled and save the scale
-			if (y > 0 && y < consts.Py && x > 0 && x < consts.Px) {
-				float value = tex2D(textError, x, y + view*consts.Py);
-				if (value != 0) {
-					error += value;
-					count++;
-				}
+		//Update the value based on the error scaled and save the scale
+		if (y > 0 && y < consts.Py && x > 0 && x < consts.Px) {
+			float value = tex2D(textError, x, y + view*consts.Py);
+			if (value != 0) {
+				error += value;
+				count++;
 			}
 		}
 	}
