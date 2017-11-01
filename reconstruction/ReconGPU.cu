@@ -936,7 +936,7 @@ __global__ void updhgZ_SoA(float *z1, float *z2, float *f, float tz, float lambd
 //Function to set up the memory on the GPU
 TomoError TomoRecon::initGPU(){
 	//init recon space
-	float redFac = 4.0f;
+	float redFac = 1.0f;
 	Sys.Recon.Pitch_x = Sys.Proj.Pitch_x * redFac;
 	Sys.Recon.Pitch_y = Sys.Proj.Pitch_y * redFac;
 	Sys.Recon.Nx = Sys.Proj.Nx / redFac;
@@ -2297,7 +2297,7 @@ TomoError TomoRecon::iterStep() {
 #ifdef SHOWERROR
 		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, iteration++, false, constants, surfReconObj, surfErrorObj);
 #else 
-		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, 1.0f, true, constants, surfReconObj);
+		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, 1.0f, false, constants, surfReconObj);
 #endif
 		/*for (int i = 0; i < TVITERATIONS; i++) {
 			KERNELCALL2(copySlice, contBlocks, contThreads, d_ReconOld, slice, constants);

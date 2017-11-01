@@ -31,9 +31,11 @@ TomoRecon
 
 - Clean up code (iterative)
 - Comment code for review (iterative)
+- Gain correction doesn't turn off when starting project with it on from new, then turning it off (bug)
 
 --------------Bugs---------------------
 - Occasional long pauses on system windows (save/load, I think this is a windows problem, not on the program)
+- In high derivative areas created by running 1k iterations with no TV, copy errors occur where black boxes appear and dissappear 
 
 -------------Completed------------------
 -------------Features------------------
@@ -44,6 +46,8 @@ Update documentation (iterative)
 Added Xinvivo icon
 Software development process outline review and conform (class any)
 Found and patched major lighting issue when strong absorbers are not contained in first slice (affected exported recons, not just display)
+Offset limiter unlocked in iterative display (bugfix)
+Built a display for projecting current error
 --(10/19 - 10/26)
 - Memory leak on open (bug)
 - Make iterations a GUI variable
