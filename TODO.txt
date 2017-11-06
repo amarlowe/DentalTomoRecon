@@ -31,11 +31,12 @@ TomoRecon
 
 - Clean up code (iterative)
 - Comment code for review (iterative)
-- Gain correction doesn't turn off when starting project with it on from new, then turning it off (bug)
 
 --------------Bugs---------------------
 - Occasional long pauses on system windows (save/load, I think this is a windows problem, not on the program)
 - In high derivative areas created by running 1k iterations with no TV, copy errors occur where black boxes appear and dissappear 
+- Gain correction doesn't turn off when starting project with it on from new, then turning it off
+- Reconstruction completely breaks when run in horizontal flip mode 
 
 -------------Completed------------------
 -------------Features------------------

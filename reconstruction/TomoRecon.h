@@ -99,9 +99,9 @@
 #define RECONSLICES 30
 #define RECONDIS 6.0f
 
-#define TVX 0.2f
-#define TVY 0.2f
-#define TVZ 0.2f
+#define TVX 0.1f
+#define TVY 0.1f
+#define TVZ 0.1f
 #define TVITERATIONS 0
 //#define USELOGITER
 #define MEDIANFAC 0.0f

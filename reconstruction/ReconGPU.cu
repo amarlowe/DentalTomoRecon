@@ -603,7 +603,6 @@ __global__ void backProject(float * proj, float * error, int view, params consts
 
 	for (int slice = 0; slice < consts.slices; slice++) {
 		float dz = (consts.startDis + slice * consts.pitchZ) / consts.d_Beamz[view];
-		if (consts.orientation) dz = -dz;//z changes sign when flipped in the x direction
 		float x = xMM2R((xP2MM(i, consts.Px, consts.PitchPx) - consts.d_Beamx[view] * dz), consts.Rx, consts.PitchRx);
 		float y = yMM2R((yP2MM(j, consts.Py, consts.PitchPy) - consts.d_Beamy[view] * dz), consts.Ry, consts.PitchRy);
 
