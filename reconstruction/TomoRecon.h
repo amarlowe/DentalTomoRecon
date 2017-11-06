@@ -104,6 +104,7 @@
 #define TVZ 0.1f
 #define TVITERATIONS 0
 //#define USELOGITER
+//#define INVERSEITER
 #define MEDIANFAC 0.0f
 
 //#define RECONDERIVATIVE

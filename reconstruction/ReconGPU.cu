@@ -578,6 +578,7 @@ __global__ void projectIter(float * oldRecon, int slice, float iteration, bool s
 	}
 
 	returnVal += error;
+	if (returnVal < 0.1f) returnVal = 0.1f;
 #ifdef SHOWERROR
 	surf3Dwrite(error, errorRecon, i * sizeof(float), j, slice);
 #endif
@@ -585,7 +586,7 @@ __global__ void projectIter(float * oldRecon, int slice, float iteration, bool s
 #ifdef RECONDERIVATIVE
 	if (count == 0 || returnVal < 0.0f) surf3Dwrite(0.0f, surfRecon, i * sizeof(float), j, slice);
 #else
-	if (count == 0 || returnVal < 0.0f) surf3Dwrite(0.0f, surfRecon, i * sizeof(float), j, slice);// || returnVal < 0.0f
+	if (count == 0) surf3Dwrite(0.0f, surfRecon, i * sizeof(float), j, slice);// || returnVal < 0.0f
 #endif // RECONDERIVATIVE
 	else surf3Dwrite(returnVal, surfRecon, i * sizeof(float), j, slice);
 }
@@ -624,14 +625,21 @@ __global__ void backProject(float * proj, float * error, int view, params consts
 		error[j*consts.ProjPitchNum + i] = projVal - (value * (float)consts.Views / (float)count);
 	}
 #else
-	if (projVal > 0.0f && projVal <= USHRT_MAX && count > 0) {//projVal > 0.0f && projVal <= USHRT_MAX && 
+	if (projVal > 0.0f && count > 0) {//projVal > 0.0f && projVal <= USHRT_MAX && 
 #ifdef USELOGITER
 		float correctedMax = logf(USHRT_MAX);
 		projVal = (correctedMax - logf(projVal + 1)) / correctedMax * USHRT_MAX;
 #else
+#ifdef INVERSEITER
 		projVal = USHRT_MAX - projVal;
 #endif
+#endif
 		error[j*consts.ProjPitchNum + i] = projVal - (value * (float)consts.Views / (float)count);
+
+		//this block does something very interesting... but not quite right
+		/*float test = projVal - (value * (float)consts.Views / (float)count);
+		if(test > 0.0f) error[j*consts.ProjPitchNum + i] = test;
+		else error[j*consts.ProjPitchNum + i] = 0.0f;*/
 	}
 #endif // RECONDERIVATIVE
 	else error[j*consts.ProjPitchNum + i] = 0.0f;
@@ -679,6 +687,7 @@ __global__ void scaleRecon(int slice, unsigned int minVal, unsigned int maxVal, 
 
 	float test;
 	surf3Dread(&test, surfRecon, i * sizeof(float), j, slice);
+	if (test == 0.0f) return;
 	test -=  minVal;
 	float maxV = maxVal - minVal;
 	if (test > maxV) test = maxV;
@@ -2242,7 +2251,9 @@ TomoError TomoRecon::initIterative() {
 
 	for (int view = 0; view < NumViews; view++) {
 		cuda(Memcpy2DAsync(d_Error + view * projPitch / sizeof(float) * Sys.Proj.Ny, projPitch, d_Sino + view * projPitch / sizeof(float) * Sys.Proj.Ny, projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny, cudaMemcpyDeviceToDevice));
+#ifdef INVERSEITER
 		KERNELCALL2(invert, contBlocks, contThreads, d_Error + view * projPitch / sizeof(float) * Sys.Proj.Ny, constants);
+#endif // INVERSEITER
 	}
 #endif // RECONDERIVATIVE
 	
@@ -2311,8 +2322,10 @@ TomoError TomoRecon::iterStep() {
 TomoError TomoRecon::finalizeIter() {
 	constants.isReconstructing = false;
 
+#ifdef INVERSEITER
 	for (int slice = 0; slice < Sys.Recon.Nz; slice++)
 		KERNELCALL2(invertRecon, contBlocks, contThreads, slice, constants, surfReconObj);
+#endif //INVERSEITER
 
 	constants.baseXr = 0;
 	constants.baseYr = 0;
