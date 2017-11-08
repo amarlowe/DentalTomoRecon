@@ -421,8 +421,6 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 
 	wxGauge* progress = new wxGauge(m_statusBar1, wxID_ANY, runIterations, wxPoint(100, 3));
 	progress->SetValue(0);
-	bool oldLog = recon->getLogView();
-	recon->setLogView(false);
 	for (int i = 0; i < runIterations; i++) {
 		recon->iterStep();
 		recon->singleFrame();
@@ -432,7 +430,6 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 		wxYield();
 	}
 	recon->finalizeIter();
-	recon->setLogView(oldLog);
 	recon->singleFrame();
 	recon->resetLight();
 	m_statusBar1->SetStatusText(_(""));
@@ -547,8 +544,6 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	progress->SetValue(0);
 	currentFrame->showScrollBar(recon->getNumSlices(), 0);
 	recon->setActiveProjection(0);
-	bool oldLog = recon->getLogView();
-	recon->setLogView(false);
 	for (int i = 0; i < runIterations; i++) {
 		if (recon->iterStep() != Tomo_OK) {
 			(*m_textCtrl8) << "Error during iterative step\n";
@@ -564,7 +559,6 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 		(*m_textCtrl8) << "Error finalizing iterations\n";
 		return;
 	}
-	recon->setLogView(oldLog);
 	recon->singleFrame();
 	recon->resetLight();
 	m_statusBar1->SetStatusText(_(""));
@@ -858,8 +852,6 @@ void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 
 	wxGauge* progress = new wxGauge(m_statusBar1, wxID_ANY, runIterations, wxPoint(100, 3));
 	progress->SetValue(0);
-	bool oldLog = recon->getLogView();
-	recon->setLogView(false);
 	for (int i = 0; i < runIterations; i++) {
 		recon->iterStep();
 		recon->singleFrame();
@@ -869,7 +861,6 @@ void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 		wxYield();
 	}
 	recon->finalizeIter();
-	recon->setLogView(oldLog);
 	recon->singleFrame();
 	recon->resetLight();
 	m_statusBar1->SetStatusText(_(""));
@@ -1547,6 +1538,11 @@ void ReconCon::setValues() {
 	int iter = recon->getTVIter();
 	iterVal->SetLabelText(wxString::Format(wxT("%d"), iter));
 	iterSlider->SetValue(iter);
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
 }
 
 void ReconCon::onEnableGain(wxCommandEvent& WXUNUSED(event)) {

@@ -64,7 +64,7 @@
 #define UMUL(a, b) ( (a) * (b) )
 
 //Autoscale parameters
-#define AUTOTHRESHOLD 50000
+#define AUTOTHRESHOLD 5000
 #define HISTLIMIT 10
 #define HIST_BIN_COUNT 256
 
@@ -99,9 +99,9 @@
 #define RECONSLICES 30
 #define RECONDIS 6.0f
 
-#define TVX 0.1f
-#define TVY 0.1f
-#define TVZ 0.1f
+#define TVX 0.01f
+#define TVY 0.01f
+#define TVZ 0.01f
 #define TVITERATIONS 0
 //#define USELOGITER
 //#define INVERSEITER
