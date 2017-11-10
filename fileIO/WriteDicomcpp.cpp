@@ -13,20 +13,12 @@
 #include "DICOM_TAGS.h"
 #include "DICOM_Functions.h"
 
-/*********************************************************************************************
-* Code to control the wrting of DICOM data
-********************************************************************************************/
-TomoError WriteDICOMHeader(struct SystemControl * Sys, struct SystemSettings * Set,
-	struct PatientInfo * Patient, struct ExamInstitution * Inst, std::string Path, int Nz, int slice){
+TomoError TomoRecon::WriteDICOMHeader(struct SystemSettings * Set, struct PatientInfo * Patient, struct ExamInstitution * Inst, std::string Path, int Nz, int slice){
 	//Open a fstream to the file location to write the header
 	std::ofstream FILE;
 	FILE.open(Path.c_str(), std::ios::binary);
-	if (!FILE.is_open())
-	{
-		std::cout << "Error opening the file: " << Path.c_str() << std::endl;
-		std::cout << "Please check the path and re-run the program." << std::endl;
+	if (!FILE.is_open()) 
 		return Tomo_DICOM_err;
-	}
 
 	//Get the current time and date
 	struct DateAndTimeStamp * TM = new DateAndTimeStamp();
@@ -81,7 +73,7 @@ TomoError WriteDICOMHeader(struct SystemControl * Sys, struct SystemSettings * S
 	//Define group 18: system settings
 	DICOM_Header_Tags<TAG_18> * TAG18 = new DICOM_Header_Tags<TAG_18>();
 	FILE << TAG18->Write_DICOM_Header_Tag(CONTRAST_AGENT, 4, "None").str();
-	FILE << TAG18->Write_DICOM_Header_Tag(SLICE_THICKNESS, NumToStr<float>(Sys->Recon->Pitch_z).length(), NumToStr<float>(Sys->Recon->Pitch_z)).str();
+	FILE << TAG18->Write_DICOM_Header_Tag(SLICE_THICKNESS, NumToStr<float>(Sys.Geo.ZPitch).length(), NumToStr<float>(Sys.Geo.ZPitch)).str();
 	FILE << TAG18->Write_DICOM_Header_Tag(kVp, NumToStr<int>(Set->AnodeVolt).length(), NumToStr<int>(Set->AnodeVolt)).str();
 	FILE << TAG18->Write_DICOM_Header_Tag(SERIAL_NUM, 4, "0001").str();
 	FILE << TAG18->Write_DICOM_Header_Tag(PROTOCOL, 11, "DENTAL TOMO").str();
@@ -98,7 +90,6 @@ TomoError WriteDICOMHeader(struct SystemControl * Sys, struct SystemSettings * S
 	std::string slicestr = SliceNum.str();
 
 	int sliceLoc = slice - 1;
-	if (Nz == Sys->Recon->Nz) sliceLoc = Nz / 2;
 
 	DICOM_Header_Tags<TAG_20> * TAG20 = new DICOM_Header_Tags<TAG_20>();
 	FILE << TAG20->Write_DICOM_Header_Tag(STUDY_ID, 48, DefineUID(3, TM).str()).str();
@@ -114,234 +105,33 @@ TomoError WriteDICOMHeader(struct SystemControl * Sys, struct SystemSettings * S
 	FILE << TAG28->Write_DICOM_Header_Tag(SAMPLE_PER_PIXEL, 2, ConvertIntToHex(1, 2).str()).str();
 	FILE << TAG28->Write_DICOM_Header_Tag(PHOTOMETRIC, 11, "MONOCHROME2").str();
 	FILE << TAG28->Write_DICOM_Header_Tag(NUM_FRAMES, NumToStr<int>(Nz).length(), NumToStr<int>(Nz)).str();
-	FILE << TAG28->Write_DICOM_Header_Tag(ROWS, 2, ConvertIntToHex(Sys->Recon->Ny, 2).str()).str();
-	FILE << TAG28->Write_DICOM_Header_Tag(COLUMNS, 2, ConvertIntToHex(Sys->Recon->Nx, 2).str()).str();
+	FILE << TAG28->Write_DICOM_Header_Tag(ROWS, 2, ConvertIntToHex(Sys.Proj.Ny, 2).str()).str();
+	FILE << TAG28->Write_DICOM_Header_Tag(COLUMNS, 2, ConvertIntToHex(1920, 2).str()).str();//Sys.Proj.Nx
 	FILE << TAG28->Write_DICOM_Header_Tag(PIXEL_SPACING, 15, "0.03300\\0.03300").str();
 	FILE << TAG28->Write_DICOM_Header_Tag(BITS_ALLOCATED, 2, ConvertIntToHex(16, 2).str()).str();
 	FILE << TAG28->Write_DICOM_Header_Tag(BITS_STORED, 2, ConvertIntToHex(16, 2).str()).str();
 	FILE << TAG28->Write_DICOM_Header_Tag(HIGH_BIT, 2, ConvertIntToHex(15, 2).str()).str();
 	FILE << TAG28->Write_DICOM_Header_Tag(PIXEL_REP, 2, ConvertIntToHex(1, 2).str()).str();
-	FILE << TAG28->Write_DICOM_Header_Tag(WIN_CENTER, NumToStr<int>(Sys->Recon->Mean).length(), NumToStr<int>(Sys->Recon->Mean)).str();
-	FILE << TAG28->Write_DICOM_Header_Tag(WIN_WIDTH, NumToStr<int>(Sys->Recon->Width).length(), NumToStr<int>(Sys->Recon->Width)).str();
+	//FILE << TAG28->Write_DICOM_Header_Tag(WIN_CENTER, NumToStr<int>(constants.minVal + constants.maxVal / 2).length(), NumToStr<int>(constants.minVal + constants.maxVal / 2)).str();//Sys->Recon->Mean
+	//FILE << TAG28->Write_DICOM_Header_Tag(WIN_WIDTH, NumToStr<int>(constants.maxVal).length(), NumToStr<int>(constants.maxVal)).str();//Sys->Recon->Width
+	FILE << TAG28->Write_DICOM_Header_Tag(WIN_CENTER, NumToStr<int>(SHRT_MAX / 2).length(), NumToStr<int>(SHRT_MAX / 2)).str();//Sys->Recon->Mean
+	FILE << TAG28->Write_DICOM_Header_Tag(WIN_WIDTH, NumToStr<int>(SHRT_MAX).length(), NumToStr<int>(SHRT_MAX)).str();//Sys->Recon->Width
 	FILE << TAG28->Write_DICOM_Header_Tag(RESCALE_INTERCEPT, 1, "0").str();
 	FILE << TAG28->Write_DICOM_Header_Tag(RESCALE_SLOPE, 1, "1").str();
 	free(TAG28);
 
 	//Define the Pixel information 
-	FILE << SetStartOfPixelInfo(Sys, Nz).str();
+	FILE << SetStartOfPixelInfo(reconPitch/sizeof(float)*sizeof(unsigned short)*Sys.Recon.Ny*Nz).str();
 
 	FILE.close();
 
 	return Tomo_OK;
 }
-
-TomoError WriteDICOMDentalHeader(struct SystemControl * Sys, struct SystemSettings * Set,
-	struct PatientInfo * Patient, struct ExamInstitution * Inst, std::string Path){
-	//Open a fstream to the file location to write the header
-	std::ofstream FILE;
-	FILE.open(Path.c_str(), std::ios::binary);
-	if (!FILE.is_open())
-	{
-		std::cout << "Error opening the file: " << Path.c_str() << std::endl;
-		std::cout << "Please check the path and re-run the program." << std::endl;
-		return Tomo_DICOM_err;
-	}
-
-	//Get the current time and date
-	struct DateAndTimeStamp * TM = new DateAndTimeStamp();
-	std::stringstream DateStream, TimeStream;
-	DateStream << "20" << TM->Year.str() << TM->Month.str() << TM->Day.str();
-	TimeStream << TM->Hour.str() << TM->Min.str() << TM->Sec.str() << ".000000";
-
-	//Set the initial header to describe the system
-	FILE << StandardInitialHeader().str();
-	FILE << SetDentalFileMetaInfo(TM).str();
-
-	std::string company_name = "XinVivo, Inc";
-
-	//Define the group 8 scan setting information
-	DICOM_Header_Tags<TAG_8> * TAG8 = new DICOM_Header_Tags<TAG_8>();
-	FILE << TAG8->Write_DICOM_Header_Tag(CHAR_SET, 10, "ISO_IR 100").str();
-	FILE << TAG8->Write_DICOM_Header_Tag(IMAGE_TYPE, 18, "ORIGINAL\\TOMO_SCAN").str();
-	FILE << TAG8->Write_DICOM_Header_Tag(INSTANCE_DATE, 8, DateStream.str()).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(INSTANCE_TIME, 13, TimeStream.str()).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(SOP_CLASS_UID, 32, DefineUID(2, TM).str()).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(SOP_INST_UID, 60, DefineUID(0, TM).str()).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(STUDY_DATE, 8, DateStream.str()).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(SERIES_DATE, 8, DateStream.str()).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(ACQUIRE_DATE, 8, DateStream.str()).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(IMAGE_DATE, 8, DateStream.str()).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(STUDY_TIME, 13, TimeStream.str()).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(SERIES_TIME, 13, TimeStream.str()).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(ACQUIRE_TIME, 13, TimeStream.str()).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(IMAGE_TIME, 13, TimeStream.str()).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(MODALITY, 2, "IO").str();
-	FILE << TAG8->Write_DICOM_Header_Tag(MANUFACTURER, company_name.length(), company_name).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(INSTITUTION, Inst->Name.length(), Inst->Name).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(REF_PHYSICIAN, Inst->Ref_Physican.length(), Inst->Ref_Physican).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(STATION, Inst->Station.length(), Inst->Station).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(DESCRIPTION, 62, "Synthetic Projection of Tomosythense recon of extracted teeth.").str();
-	FILE << TAG8->Write_DICOM_Header_Tag(PHYSICIAN, Inst->Physicain.length(), Inst->Physicain).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(READER, Inst->Reader.length(), Inst->Reader).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(OPERATOR, Inst->Operator.length(), Inst->Operator).str();
-	FILE << TAG8->Write_DICOM_Header_Tag(MODEL_NUM, 6, "000001").str();
-	free(TAG8);
-
-	//Define the group 10: patient information
-	DICOM_Header_Tags<TAG_10> * TAG10 = new DICOM_Header_Tags<TAG_10>();
-	FILE << TAG10->Write_DICOM_Header_Tag(NAME, Patient->Name.length(), Patient->Name).str();
-	FILE << TAG10->Write_DICOM_Header_Tag(ID_NUM, Patient->IDNum.length(), Patient->IDNum).str();
-	FILE << TAG10->Write_DICOM_Header_Tag(BIRTHDAY, 8, Patient->Birthday).str();
-	FILE << TAG10->Write_DICOM_Header_Tag(ALERTS, Patient->Alerts.length(), Patient->Alerts).str();
-	FILE << TAG10->Write_DICOM_Header_Tag(ALLERGIES, Patient->Allergies.length(), Patient->Allergies).str();
-	FILE << TAG10->Write_DICOM_Header_Tag(COMMENTS, Patient->Comments.length(), Patient->Comments).str();
-	free(TAG10);
-
-	//Define group 18: system settings
-	DICOM_Header_Tags<TAG_18> * TAG18 = new DICOM_Header_Tags<TAG_18>();
-	free(TAG18);
-
-	//Define group 20: series settings
-	DICOM_Header_Tags<TAG_20> * TAG20 = new DICOM_Header_Tags<TAG_20>();
-	FILE << TAG20->Write_DICOM_Header_Tag(STUDY_ID, 48, DefineUID(3, TM).str()).str();
-	FILE << TAG20->Write_DICOM_Header_Tag(SERIES_ID, 59, DefineUID(4, TM).str()).str();
-	FILE << TAG20->Write_DICOM_Header_Tag(SERIES_NUM, 4, "0001").str();
-	free(TAG20);
-
-	//Define the 28: Image settings
-	DICOM_Header_Tags<TAG_28> * TAG28 = new DICOM_Header_Tags<TAG_28>();
-	FILE << TAG28->Write_DICOM_Header_Tag(SAMPLE_PER_PIXEL, 2, ConvertIntToHex(1, 2).str()).str();
-	FILE << TAG28->Write_DICOM_Header_Tag(PHOTOMETRIC, 11, "MONOCHROME2").str();
-	FILE << TAG28->Write_DICOM_Header_Tag(ROWS, 2, ConvertIntToHex(Sys->Recon->Nx, 2).str()).str();
-	FILE << TAG28->Write_DICOM_Header_Tag(COLUMNS, 2, ConvertIntToHex(Sys->Recon->Ny, 2).str()).str();
-	FILE << TAG28->Write_DICOM_Header_Tag(PIXEL_SPACING, 15, "0.03300\\0.03300").str();
-	FILE << TAG28->Write_DICOM_Header_Tag(BITS_ALLOCATED, 2, ConvertIntToHex(16, 2).str()).str();
-	FILE << TAG28->Write_DICOM_Header_Tag(BITS_STORED, 2, ConvertIntToHex(16, 2).str()).str();
-	FILE << TAG28->Write_DICOM_Header_Tag(HIGH_BIT, 2, ConvertIntToHex(15, 2).str()).str();
-	FILE << TAG28->Write_DICOM_Header_Tag(PIXEL_REP, 2, ConvertIntToHex(1, 2).str()).str();
-	FILE << TAG28->Write_DICOM_Header_Tag(WIN_CENTER, NumToStr<int>(Sys->Proj->Mean).length(), NumToStr<int>(Sys->Proj->Mean)).str();
-	FILE << TAG28->Write_DICOM_Header_Tag(WIN_WIDTH, NumToStr<int>(Sys->Proj->Width).length(), NumToStr<int>(Sys->Proj->Width)).str();
-	FILE << TAG28->Write_DICOM_Header_Tag(RESCALE_INTERCEPT, 1, "0").str();
-	FILE << TAG28->Write_DICOM_Header_Tag(RESCALE_SLOPE, 1, "1").str();
-	free(TAG28);
-
-	//Define the Pixel information 
-	FILE << SetStartOfPixelInfo(Sys, 1).str();
-
-	FILE.close();
-
-	return Tomo_OK;
-}
-
-TomoError WriteDICOMFullData(struct SystemControl * Sys, std::string Path){
-	//Set up the basic path to the raw projection data
-	FILE * ReconData = NULL;
-
-	//Open the path and read data to buffer
-	fopen_s(&ReconData, Path.c_str(), "ab");
-	if (ReconData == NULL)
-	{
-		std::cout << "Error opening the file: " << Path.c_str() << std::endl;
-		std::cout << "Please check the path and re-run the program." << std::endl;
-		return Tomo_DICOM_err;
-	}
-
-	//Write the reconstructed data into the predefine memory location
-	fwrite(Sys->Recon->ReconIm, sizeof(unsigned short), Sys->Recon->Nx * Sys->Recon->Ny * Sys->Recon->Nz, ReconData);
-	fclose(ReconData);
-
-	return Tomo_OK;
-}
-
-TomoError WriteDICOMFullDataDental(struct SystemControl * Sys, std::string Path){
-	//Set up the basic path to the raw projection data
-	FILE * ProjData = NULL;
-
-	//Open the path and read data to buffer
-	fopen_s(&ProjData, Path.c_str(), "ab");
-	if (ProjData == NULL)
-	{
-		std::cout << "Error opening the file: " << Path.c_str() << std::endl;
-		std::cout << "Please check the path and re-run the program." << std::endl;
-		return Tomo_DICOM_err;
-	}
-
-	//Write the reconstructed data into the predefine memory location
-	fwrite(Sys->Proj->SyntData, sizeof(unsigned short), Sys->Proj->Nx * Sys->Proj->Ny, ProjData);
-	fclose(ProjData);
-
-	return Tomo_OK;
-}
-
-TomoError WriteDICOMSingleData(struct SystemControl * Sys, std::string Path, int slice){
-	//Set up the basic path to the raw projection data
-	FILE * ReconData = NULL;
-
-	//Open the path and read data to buffer
-	fopen_s(&ReconData, Path.c_str(), "ab");
-	if (ReconData == NULL)
-	{
-		std::cout << "Error opening the file: " << Path.c_str() << std::endl;
-		std::cout << "Please check the path and re-run the program." << std::endl;
-		return Tomo_DICOM_err;
-	}
-	int sizeIm = Sys->Recon->Nx * Sys->Recon->Ny;
-
-	//Write the reconstructed data into the predefine memory location
-	fwrite(Sys->Recon->ReconIm + slice * sizeIm, sizeof(unsigned short), sizeIm, ReconData);
-	fclose(ReconData);
-
-	return Tomo_OK;
-}
-
-TomoError WriteRawData(struct SystemControl * Sys, std::string Path, int slice){
-	//Set up the basic path to the raw projection data
-	FILE * ReconData = NULL;
-
-	//Open the path and read data to buffer
-	fopen_s(&ReconData, Path.c_str(), "wb");
-	if (ReconData == NULL)
-	{
-		std::cout << "Error opening the file: " << Path.c_str() << std::endl;
-		std::cout << "Please check the path and re-run the program." << std::endl;
-		return Tomo_DICOM_err;
-	}
-	int sizeIm = Sys->Recon->Nx * Sys->Recon->Ny;
-
-	//Write the reconstructed data into the predefine memory location
-	fwrite(Sys->Recon->ReconIm + slice * sizeIm, sizeof(unsigned short), sizeIm, ReconData);
-	fclose(ReconData);
-
-	return Tomo_OK;
-}
-
-
-TomoError WriteRawProj(struct SystemControl * Sys, std::string Path){
-	//Set up the basic path to the raw projection data
-	FILE * ProjData = NULL;
-
-	//Open the path and read data to buffer
-	fopen_s(&ProjData, Path.c_str(), "wb");
-	if (ProjData == NULL)
-	{
-		std::cout << "Error opening the file: " << Path.c_str() << std::endl;
-		std::cout << "Please check the path and re-run the program." << std::endl;
-		return Tomo_DICOM_err;
-	}
-	int sizeProj = Sys->Proj->Nx * Sys->Proj->Ny;
-
-	//Write the reconstructed data into the predefine memory location
-	fwrite(Sys->Proj->SyntData, sizeof(unsigned short), sizeProj, ProjData);
-	fclose(ProjData);
-
-	return Tomo_OK;
-}
-
 
 /*********************************************************************************************
 * Define Fictional Patient, system, and institution
 ********************************************************************************************/
-void CreatePatientandSetSystem(struct PatientInfo * Patient, struct SystemSettings * Set, struct SystemControl * Sys){
+void TomoRecon::CreatePatientandSetSystem(struct PatientInfo * Patient, struct SystemSettings * Set){
 	//Simple example using progam author
 	std::stringstream PhanNumStream;
 	PhanNumStream << std::setw(4) << 1.0;
@@ -358,14 +148,14 @@ void CreatePatientandSetSystem(struct PatientInfo * Patient, struct SystemSettin
 	Set->AnodeVolt = 70;
 	Set->Exposure = 1;
 	Set->Current = 7;
-	Set->EmitX = Sys->SysGeo.EmitX[0];
-	Set->EmitY = Sys->SysGeo.EmitY[0];
-	Set->EmitZ = Sys->SysGeo.EmitZ[0];
-	Set->NumEmit = Sys->Proj->NumViews;
+	Set->EmitX = Sys.Geo.EmitX[0];
+	Set->EmitY = Sys.Geo.EmitY[0];
+	Set->EmitZ = Sys.Geo.EmitZ[0];
+	Set->NumEmit = Sys.Proj.NumViews;
 	Set->Tilt = 0.0;
 }
 
-void CreateScanInsitution(struct ExamInstitution * Institute){
+void TomoRecon::CreateScanInsitution(struct ExamInstitution * Institute){
 	//Set the physicans based on people working on the dental project
 	Institute->Name = "UNC School of Dentistry";
 	Institute->Ref_Physican = "Platin, Rick";
@@ -375,7 +165,7 @@ void CreateScanInsitution(struct ExamInstitution * Institute){
 	Institute->Station = "XinVivo Dental Tomo";
 }
 
-void FreeStrings(struct PatientInfo * Patient, struct ExamInstitution * Institute){
+void TomoRecon::FreeStrings(struct PatientInfo * Patient, struct ExamInstitution * Institute){
 	Patient->Name.clear();
 	Patient->IDNum.clear();
 	Patient->Birthday.clear();
@@ -391,12 +181,9 @@ void FreeStrings(struct PatientInfo * Patient, struct ExamInstitution * Institut
 	Institute->Station.clear();
 }
 
-/*********************************************************************************************
-* Simple Function to conver the data to DICOM scale
-********************************************************************************************/
-void ConvertImage(struct SystemControl * Sys){
+void TomoRecon::ConvertImage(){
 	//Create a temp image to store the data in
-	int size_IM = Sys->Recon->Nx * Sys->Recon->Ny * Sys->Recon->Nz;
+	/*int size_IM = Sys.Recon.Nx * Sys.Recon.Ny * Sys->Recon->Nz;
 	unsigned short * TempIm = new unsigned short[size_IM];
 
 	//Cycle through the image an convert scale and change ordering of data
@@ -406,133 +193,41 @@ void ConvertImage(struct SystemControl * Sys){
 				int loc1 = (x + z * Sys->Recon->Ny) * Sys->Recon->Nx + y;
 				int loc2 = (Sys->Recon->Nx - y - 1 + z * Sys->Recon->Nx) * Sys->Recon->Ny + x;
 				float val = (float)Sys->Recon->ReconIm[loc1];
-				//float val2 = (val / 32768.0f)*Sys->Recon->MaxVal;
-				//float nVal = (val2/0.25f)*(32768.0f / 100.0f);
-//				TempIm[loc2] = (unsigned short)(val);
 				TempIm[loc1] = (unsigned short)(val);
 			}
 		}
 	}
 
-
-	Sys->Recon->Mean = (int)32768 / 2;// (600.0f * Sys->Recon->MaxVal);
+	Sys->Recon->Mean = (int)32768 / 2;
 	Sys->Recon->Width = 2 * Sys->Recon->Mean;
 
 	//copy the temp image to image setting data buffer
 	memcpy(Sys->Recon->ReconIm, TempIm, size_IM * sizeof(unsigned short));
-	delete[] TempIm;
-}
-
-void ConvertImageSynthetic(struct SystemControl * Sys){
-	//Create a temp image to store the data in
-	int size_IM = Sys->Proj->Nx * Sys->Proj->Ny;
-	unsigned short * TempIm = new unsigned short[size_IM];
-
-	//Cycle through the image an convert scale and change ordering of data
-	float maxVal = 0;
-	for (int x = 0; x < Sys->Proj->Ny; x++) {
-		for (int y = 0; y < Sys->Proj->Nx; y++) {
-			int loc1 = x*Sys->Proj->Nx + y;
-			//			int loc2 = (Sys->Proj->Nx - y - 1) * Sys->Proj->Ny + x;
-			float val = (float)Sys->Proj->SyntData[loc1];
-			if (val > maxVal) maxVal = val;
-			//		float val2 = ((val) / 32768.0f)*(log(40000.0f) / ((float)Sys->Recon->Nz));
-			//		float nVal = (val2 / 0.25f)*(32768.0f / 100.0f);
-			//		TempIm[loc2] = (unsigned short)(nVal);
-		}
-	}
-	//	std::cout << maxVal << std::endl;
-	for (int x = 0; x < Sys->Proj->Ny; x++) {
-		for (int y = 0; y < Sys->Proj->Nx; y++) {
-			int loc1 = x*Sys->Proj->Nx + y;
-			int loc2 = (Sys->Proj->Nx - y - 1) * Sys->Proj->Ny + x;
-			float val = (float)Sys->Proj->SyntData[loc1];
-			//		float val2 = ((val) / 32768.0f)*(log(40000.0f) / ((float)Sys->Recon->Nz));
-			//		float nVal = (val2 / 0.25f)*(32768.0f / 100.0f);
-			float nVal = val / maxVal;
-			if (nVal < 0) nVal = 0;
-			else if (nVal > 1.0f) nVal = 1.0f;
-			TempIm[loc2] = (unsigned short)(nVal * 32767.0f);
-		}
-	}
-
-
-	Sys->Proj->Mean = (int)32768 / 2;// (int)(600.0f * (log(40000.0f) / ((float)Sys->Recon->Nz)));
-	Sys->Proj->Width = 2 * Sys->Proj->Mean;
-
-	//copy the temp image to image setting data buffer
-	memcpy(Sys->Proj->SyntData, TempIm, size_IM * sizeof(unsigned short));
-	delete[] TempIm;
+	delete[] TempIm;*/
 }
 
 /*********************************************************************************************
 * Function to control the saving of the dicom images
 ********************************************************************************************/
-TomoError TomoRecon::SaveDataAsDICOM(std::string BaseFileIn){
+TomoError TomoRecon::SaveDataAsDICOM(std::string BaseFileIn){//, int slices){
 	//Set the patient and System settings
 	struct SystemSettings * Set = new SystemSettings;
 	struct PatientInfo * Patient = new PatientInfo;
-	CreatePatientandSetSystem(Patient, Set, Sys);
+	CreatePatientandSetSystem(Patient, Set);
 
 	//Set the Exam Institution Physician Information
 	struct ExamInstitution * Institute = new ExamInstitution;
 	CreateScanInsitution(Institute);
 
 	//Conver the image to DICOM scale
-	ConvertImage(Sys);
-//	char * BaseFilePath;
-//	BaseFilePath = (char*)BaseFileIn.c_str();
-//	PathRemoveFileSpec(BaseFilePath);
-//	std::string Path;
-//	Path = BaseFilePath;
-//	Path += "/Reconstructions";
-	//Path += "c:/Users/XinVivo/Documents/Reconstructions/";
-
-//	int FileExists = PathFileExists(Path.c_str());
-//	if (FileExists != 1)
-//	{
-//		CreateDirectory(Path.c_str(), NULL);
-//	}
-	
-	std::string FullImagePath;
-//	FullImagePath = Path + "/TomoRecon-";
-//	FullImagePath += Sys->Name->ScanName;
-
-	FullImagePath = BaseFileIn;
-
-//	FullImagePath = "D:\\Patients\\Reconstructions\\TomoRecon";
-	//int clip = Sys->Name->ScanName.length() - Sys->Name->ScanName.find("-");
-	//FullImagePath.erase(FullImagePath.length() - clip, clip);
+	ConvertImage();
 
 	//Write the DICOM Header based on the System Info
-	tomo_err_throw(WriteDICOMHeader(Sys, Set, Patient, Institute, FullImagePath, Sys->Recon->Nz, 0));
+	tomo_err_throw(WriteDICOMHeader(Set, Patient, Institute, BaseFileIn, constants.slices, 0));
 
 	//Write dicom data
-	tomo_err_throw(WriteDICOMFullData(Sys, FullImagePath));
-	/*
-	//Save the full data as individual dicom images as well
-	Path += "\\Slices";
-	if (PathFileExists(Path.c_str()) != 1)
-	{
-		CreateDirectory(Path.c_str(), NULL);
-	}
+	tomo_err_throw(WriteDICOMFullData(BaseFileIn));// , slices));
 
-	for (int slice = 0; slice < Sys->Recon->Nz; slice++)
-	{
-		std::string SingleImagePath;
-		std::stringstream slicestream;
-		slicestream << slice + 1;
-		SingleImagePath = Path + "/TomoRecon-";
-		SingleImagePath += Sys->Name->ScanName;
-		int clip = Sys->Name->ScanName.length() - Sys->Name->ScanName.find("-");
-		SingleImagePath.erase(SingleImagePath.length() - clip, clip);
-		SingleImagePath += "-" + slicestream.str();
-
-		WriteDICOMHeader(Sys, Set, Patient, Institute, SingleImagePath, 1, slice + 1);
-		//		WriteRawData(Sys, SingleImagePath,slice);
-		WriteDICOMSingleData(Sys, SingleImagePath, slice);
-	}
-	*/
 	//Delete structure pointers, can't just delete the structures with strings
 	FreeStrings(Patient, Institute);
 	free(Patient);
@@ -542,7 +237,7 @@ TomoError TomoRecon::SaveDataAsDICOM(std::string BaseFileIn){
 	
 	return Tomo_OK;
 }
-
+/*
 TomoError TomoRecon::SaveCorrectedProjections(std::string BaseFileIn){
 	//Set up the basic path to the raw projection dark and gain data
 	FILE * ProjData = NULL;
@@ -555,26 +250,22 @@ TomoError TomoRecon::SaveCorrectedProjections(std::string BaseFileIn){
 	Path = BaseFilePath;
 	//Path += "c:/Users/XinVivo/Documents/Reconstructions/";
 	Path += "/Projections";
-	if (PathFileExists(Path.c_str()) != 1)
-	{
+	if (PathFileExists(Path.c_str()) != 1){
 		CreateDirectory(Path.c_str(), NULL);
 	}
 
 	Path += "/Corrected";
-	if (PathFileExists(Path.c_str()) != 1)
-	{
+	if (PathFileExists(Path.c_str()) != 1){
 		CreateDirectory(Path.c_str(), NULL);
 	}
 
 	Path += "/" + Sys->Name->StudyName;
 
-	if (PathFileExists(Path.c_str()) != 1)
-	{
+	if (PathFileExists(Path.c_str()) != 1){
 		CreateDirectory(Path.c_str(), NULL);
 	}
 
-	for (int view = 0; view < Sys->Proj->NumViews; view++)
-	{
+	for (int view = 0; view < Sys->Proj->NumViews; view++){
 		std::string ViewPath;
 		std::stringstream viewstream;
 		viewstream << Sys->Proj->Views[view];
@@ -585,8 +276,7 @@ TomoError TomoRecon::SaveCorrectedProjections(std::string BaseFileIn){
 
 		//Open the path and read data to buffer
 		fopen_s(&ProjData, ViewPath.c_str(), "wb");
-		if (ProjData == NULL)
-		{
+		if (ProjData == NULL){
 			std::cout << "Error opening the file: " << ViewPath.c_str() << std::endl;
 			std::cout << "Please check the path and re-run the program." << std::endl;
 			return Tomo_DICOM_err;
@@ -599,50 +289,4 @@ TomoError TomoRecon::SaveCorrectedProjections(std::string BaseFileIn){
 	}
 
 	return Tomo_OK;
-}
-
-TomoError TomoRecon::SaveSyntheticProjections(int PhantomNum, std::string BaseFileIn){
-	//Set the patient and System settings
-	struct SystemSettings * Set = new SystemSettings;
-	struct PatientInfo * Patient = new PatientInfo;
-	CreatePatientandSetSystem(Patient, Set, Sys);
-
-	//Set the Exam Institution Physician Information
-	struct ExamInstitution * Institute = new ExamInstitution;
-	CreateScanInsitution(Institute);
-
-	//Conver the image to DICOM scale
-	ConvertImageSynthetic(Sys);
-
-	//Define a path to save the data
-	char * BaseFilePath;
-	BaseFilePath = (char*)BaseFileIn.c_str();
-	PathRemoveFileSpec(BaseFilePath);
-	std::string Path;
-	Path = BaseFilePath;
-	Path += "\\Projections\\Synthetic\\";
-
-	if (PathFileExists(Path.c_str()) != 1)
-	{
-		CreateDirectory(Path.c_str(), NULL);
-	}
-
-	//std::string Path = "C:/Users/TomoD/Desktop/NewData/Projections/Synthetic";
-	Path += Sys->Name->StudyName;
-
-	//	Path += ".raw";
-	//Write the DICOM Header based on the System Info
-	tomo_err_throw(WriteDICOMDentalHeader(Sys, Set, Patient, Institute, Path));
-
-	tomo_err_throw(WriteDICOMFullDataDental(Sys, Path));
-	//	WriteRawProj(Sys, Path);
-
-	//Delete structure pointers, can't just delete the structures with strings
-	FreeStrings(Patient, Institute);
-	free(Patient);
-	free(Institute);
-
-	delete[] Set;
-
-	return Tomo_OK;
-}
+}*/

@@ -1,16 +1,4 @@
 /********************************************************************************************/
-/* TomoRecon.cpp																			*/
-/* Copyright 2016, XinRay Inc., All rights reserved											*/
-/********************************************************************************************/
-
-/********************************************************************************************/
-/* Version: 1.2																				*/
-/* Date: October 27, 2016																	*/
-/* Author: Brian Gonzales																	*/
-/* Project: TomoD IntraOral Tomosynthesis													*/
-/********************************************************************************************/
-
-/********************************************************************************************/
 /* Include a general header																	*/
 /********************************************************************************************/
 #include "TomoRecon.h"
@@ -19,103 +7,206 @@
 /* Constructor and destructor																*/
 /********************************************************************************************/
 
-TomoRecon::TomoRecon(int x, int y, struct SystemControl * Sys) : interop(x, y), Sys(Sys){
+TomoRecon::TomoRecon(int x, int y, struct SystemControl * Sys) : interop(x, y), Sys(*Sys){
 	cuda(StreamCreate(&stream));
 }
 
 TomoRecon::~TomoRecon() {
-	cuda(StreamDestroy(stream));
+	cudaDeviceSynchronize();
+	//cuda(StreamDestroy(stream));
 	FreeGPUMemory();
-	if (Sys->Proj->RawDataThresh != NULL)
-		delete[] Sys->Proj->RawDataThresh;
-	delete[] Sys->Proj->RawData;
-	delete[] Sys->Proj->SyntData;
-	delete[] Sys->SysGeo.EmitX;
-	delete[] Sys->SysGeo.EmitY;
-	delete[] Sys->SysGeo.EmitZ;
-	delete[] Sys->Norm->DarkData;
-	delete[] Sys->Norm->GainData;
-	delete[] Sys->Norm->ProjBuf;
-	delete[] Sys->Norm->CorrBuf;
-	delete[] Sys->Recon->ReconIm;
-	//delete Sys->Proj;
-	delete Sys;
+	delete[] Sys.Geo.EmitX;
+	delete[] Sys.Geo.EmitY;
+	delete[] Sys.Geo.EmitZ;
 }
 
-TomoError TomoRecon::init(const char * gainFile, const char * darkFile) {
-	//Step 1: Get and example file for get the path
-#ifdef PROFILER
-	char filename[] = "C:\\Users\\jdean\\Desktop\\Patient18\\AcquiredImage1_0.raw";
-#else
-	char filename[MAX_PATH];
-
-	OPENFILENAME ofn;
-	ZeroMemory(&filename, sizeof(filename));
-	ZeroMemory(&ofn, sizeof(ofn));
-	ofn.lStructSize = sizeof(ofn);
-	ofn.hwndOwner = NULL;  // If you have a window to center over, put its HANDLE here
-	ofn.lpstrFilter = "Raw File\0*.raw\0Any File\0*.*\0";
-	ofn.lpstrFile = filename;
-	ofn.nMaxFile = MAX_PATH;
-	ofn.lpstrTitle = "Select one raw image file";
-	ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST;
-
-	GetOpenFileNameA(&ofn);
-#endif
-
-	//Seperate base path from the example file path
-	char * GetFilePath;
-	std::string BasePath;
-	std::string FilePath;
-	std::string FileName;
-	savefilename = filename;
-	GetFilePath = filename;
-	PathRemoveFileSpec(GetFilePath);
-	FileName = PathFindFileName(GetFilePath);
-	FilePath = GetFilePath;
-	PathRemoveFileSpec(GetFilePath);
-
-	//Define Base Path
-	BasePath = GetFilePath;
-	if (CheckFilePathForRepeatScans(BasePath)) {
-		FileName = PathFindFileName(GetFilePath);
-		FilePath = GetFilePath;
-		PathRemoveFileSpec(GetFilePath);
-		BasePath = GetFilePath;
-	}
-
-	//Output FilePaths
-	std::cout << "Reconstructing image set entitled: " << FileName << std::endl;
+TomoError TomoRecon::init() {
 	NumViews = NUMVIEWS;
 
-	//Step 3. Read the normalizaton data (dark and gain)
-	PathRemoveFileSpec(GetFilePath);
-	std::string GainPath = GetFilePath;
-	//	ReadDarkandGainImages(Sys, NumViews, GainPath);
-	tomo_err_throw(ReadDarkImages(darkFile));
-	tomo_err_throw(ReadGainImages(gainFile));
-
-	//Step 5. Read Raw Data
-	tomo_err_throw(ReadRawProjectionData(FilePath, savefilename));
-
 	//Step 4. Set up the GPU for Reconstruction
-	tomo_err_throw(SetUpGPUForRecon());
-	std::cout << "GPU Ready" << std::endl;
+	tomo_err_throw(initGPU());
 
-	initialized = true;
+	zoom = 0;
+	xOff = 0;
+	yOff = 0;
+
+	return Tomo_OK;
 }
 
-TomoError TomoRecon::TomoSave() {
-	std::string whichsubstr = "AcquiredImage";
+TomoError TomoRecon::ReadProjectionsFromFile(const char * gainFile, const char * mainFile) {
+	TomoError returnError;
 
-	std::size_t pos = savefilename.find(whichsubstr);
+	//Read projections
+	unsigned short ** RawData = new unsigned short *[NumViews];
+	unsigned short ** GainData = new unsigned short *[NumViews];
+	FILE * fileptr = NULL;
+	std::string ProjPath = mainFile;
+	std::string GainPath = gainFile;
 
-	std::string str2 = savefilename.substr(0, pos + whichsubstr.length() + 1);
-	str2 += "_Recon.dcm";
+	for (int view = 0; view < NumViews; view++) {
+		//Read and correct projections
+		RawData[view] = new unsigned short[Sys.Proj.Nx*Sys.Proj.Ny];
+		GainData[view] = new unsigned short[Sys.Proj.Nx*Sys.Proj.Ny];
 
-	//Copy the reconstructed images to the CPU
-	tomo_err_throw(CopyAndSaveImages());
+		ProjPath = ProjPath.substr(0, ProjPath.length() - 5);
+		ProjPath += std::to_string(view) + ".raw";
+		GainPath = GainPath.substr(0, GainPath.length() - 5);
+		GainPath += std::to_string(view) + ".raw";
 
-	//Save Images
-	tomo_err_throw(SaveDataAsDICOM(str2));
+		fopen_s(&fileptr, ProjPath.c_str(), "rb");
+		if (fileptr == NULL) return Tomo_file_err;
+		fread(RawData[view], sizeof(unsigned short), Sys.Proj.Nx * Sys.Proj.Ny, fileptr);
+		fclose(fileptr);
+
+		fopen_s(&fileptr, GainPath.c_str(), "rb");
+		if (fileptr == NULL) return Tomo_file_err;
+		fread(GainData[view], sizeof(unsigned short), Sys.Proj.Nx * Sys.Proj.Ny, fileptr);
+		fclose(fileptr);
+	}
+
+	returnError = ReadProjections(GainData, RawData);
+
+	for (int view = 0; view < NumViews; view++) {
+		//Read and correct projections
+		delete[] RawData[view];
+		delete[] GainData[view];
+	}
+	delete[] RawData;
+	delete[] GainData;
+
+	return returnError;
+}
+
+TomoError TomoRecon::setNOOP(float kernel[KERNELSIZE]) {
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
+		kernel[i + KERNELRADIUS] = 0.0;
+	}
+	kernel[KERNELRADIUS] = 1.0;
+
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setGauss(float kernel[KERNELSIZE]) {
+	float factor = 1.0f / ((float)sqrt(2.0 * M_PI) * SIGMA);
+	float denom = 2.0f * pow(SIGMA, 2);
+	float sum = 0.0f;
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
+		float temp = factor * exp(-pow((float)i, 2) / denom);
+		kernel[i + KERNELRADIUS] = temp;
+		sum += temp;
+	}
+	sum--;//Make it sum to 1, not 0
+
+	//must make sum = 0
+	sum /= KERNELSIZE;
+
+	//subtracting sum/variables is constrained optimization of gaussian
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++)
+		kernel[i + KERNELRADIUS] -= sum;
+
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setGaussDer(float kernel[KERNELSIZE]) {
+	float factor = 1 / ((float)sqrt(2.0 * M_PI) * pow(SIGMA,3));
+	float denom = 2 * pow(SIGMA, 2);
+	float sum = 0;
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
+		float temp = -i * factor * exp(-pow((float)i, 2) / denom);
+		kernel[i + KERNELRADIUS] = temp;
+		if(i < 0) sum += temp;
+	}
+
+	//must make sum = 1
+	sum -= 1;
+	sum /= KERNELRADIUS;
+
+	//subtracting sum/variables is constrained optimization of gaussian
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
+		if (i < 0) kernel[i + KERNELRADIUS] -= sum;
+		else if(i > 0) kernel[i + KERNELRADIUS] += sum;
+	}
+
+
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setGaussDer2(float kernel[KERNELSIZE]) {
+	float factor1 = 1 / ((float)sqrt(2.0 * M_PI) * pow(SIGMA, 3));
+	float factor2 = 1 / ((float)sqrt(2.0 * M_PI) * pow(SIGMA, 5));
+	float denom = 2 * pow(SIGMA, 2);
+	float sum = 0;
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
+		float temp = (pow((float)i,2) * factor2 - factor1) * exp(-pow((float)i, 2) / denom);
+		kernel[i + KERNELRADIUS] = temp;
+		sum += temp;
+	}
+
+	//must make sum = 0
+	sum /= KERNELSIZE;
+
+	//subtracting sum/variables is constrained optimization of gaussian
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++)
+		kernel[i + KERNELRADIUS] -= sum;
+
+	return Tomo_OK;
+}
+
+TomoError TomoRecon::setGaussDer3(float kernel[KERNELSIZE]) {
+	float factor1 = 1 / pow(SIGMA, 2);
+	float factor2 = 1 / ((float)sqrt(2.0 * M_PI) * pow(SIGMA, 5));
+	float denom = 2 * pow(SIGMA, 2);
+	float sum = 0;
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++) {
+		float temp = i * factor2*(3 - pow((float)i, 2)*factor1) * exp(-pow((float)i, 2) / denom);
+		kernel[i + KERNELRADIUS] = temp;
+		sum += temp;
+	}
+
+	//must make sum = 0
+	sum /= KERNELSIZE;
+
+	//subtracting sum/variables is constrained optimization of gaussian
+	for (int i = -KERNELRADIUS; i <= KERNELRADIUS; i++)
+		kernel[i + KERNELRADIUS] -= sum;
+
+	return Tomo_OK;
+}
+
+//difference of differences in x and y (normalizes for derivative)
+void TomoRecon::diver(float *z, float * d, int n){
+	double a, b;
+	int i, j, adr;
+
+	adr = 0;
+	for (i = 0; i < n; i++) {
+		if (i == 0) d[adr] = z[adr];
+		else if (i == n - 1) d[adr] = -z[adr - 1];
+		else d[adr] = z[adr] - z[adr - 1];
+		adr++;
+	}
+}
+
+//difference with right/upper neighbor
+void TomoRecon::nabla(float *u, float *g, int n){
+	int i, j, adr;
+
+	adr = 0;
+	for (i = 0; i < n; i++) {
+		if (i == (n - 1)) g[adr] = 0;
+		else g[adr] = u[adr + 1] - u[adr];
+		adr++;
+	}
+}
+
+//average difference on either side
+void TomoRecon::lapla(float *a, float *b, int n){
+	int x, y, idx = 0;
+	for (x = 0; x<n; x++){
+		float AX = 0, BX = 0;
+		if (x>0) { BX += a[idx - 1]; AX++; }
+		if (x<n - 1) { BX += a[idx + 1]; AX++; }
+		b[idx] = -AX*a[idx] + BX;
+		idx++;
+	}
 }

@@ -1,54 +1,105 @@
 TomoRecon
 
+Ideal cap conditions: 25 iterations, 1 learning rate
+
+------Next projects
+- Use geometry test to determine max tolerances to drop by 0.5 LP from original
+- Automated test software for focal spot measurement
+- Test methods for optimizing learning rates
+- Find optimal tradeoff between accuracy and resolution
+- Increased resolution (resolution pyramid, local reconstruction for output slice)
+- Viewing angle shift, analyze accuracy dropoff
+- Automated geometry finding (x,y,z)
+- Variation between captured image (pitch,roll,raw)
+- Splice together multiple image sets and geometry for more accurate reconstructions
+
 -------------Features------------------
-- Switch between inputs in form using tab and/or enter
 - Confirm cancel or load when values have been edited
 - Check values for input before allowing running, prompt a visit to config
-- Open opens a render, not the raw files (used for self comparisons)
-- Make MAC compiltible (hopefully not)
-- Save configuration settings on project file/directory instead of registry to make them project specific
-- "Set default" options for configuration and any other setting we can come up with
-- Replace each failure state with it's own error type and dialoag (or pass a string)
-- Inefficienicies in initial load and correction, can remove the final blur step and blurxy array
-- Recon norm has essentially uniform values across the entire image, consider killing to save memory (incorrect value was being read from it in the past)
-- Evaluate need to iterate through captures instead of all at once
-- Look at the lighting change from the first to others
-- Add timers to reconstructions
-- Automatic phantom reader
-- Zoom with ctrl + mouse wheel
-- Color correction within current viewport
-- Look into upres using the mutltiple viewing angles
-- Clean up all non-recon memory when recon finishes
-- Siphon mem from open recons by reading from disk and just having a buffer of slices
-- Confirm overwrite on save if file already exists
-- Include distance to the detector in status bar
-- Add Units to all number descriptions in settings
-- Make a labled and colored rectangular selection tool
-- Make a dialoag box that adds selections 
 - Make an automated test bench for algorithm changes
-- Correct for dead pixels (not necessarily on all projection inputs)
-- Older version has apparently higher constrast, although it seems to be produced by recon artifacts
-- Recon artifacts are occuring whenever there are high derivative areas, if a lossy filter is a solution, make it optional
-- Need to rescale lighting to accent constrast, possibly with HDR algorigthms
 - Gui tools for translating scales into real world measurments
-- Window and lighting adjustment presets for diffent diagnosis types
-- Edit lighting and contrast
 - Image annotations
-- Remove focus artifacts, only show in focus areas
+- Use autofocus to generate relative geometries
+- Move autodetect geometry to config menu, grey out geo list when this is selected
+- Correct for non-xy shifts in the detector
+- Reconstruct by subdividing slices/all resolutions until the desired stepsize is achieved
+- Option to reverse log correction from projection images
+- Use a texture gather to detect 0s that would be used in bilinear filtering to further remove artifacts
+- Make it possible to choose beginning index as a default and read in setting
+- Alternate reconstruction angles
+- Bar guage to show used memory and divide it by active tabs
+- Open reconstruction and other DICOMs as if the program were just a reader
+- Compress save files and reconstructions
+
+- Clean up code (iterative)
+- Comment code for review (iterative)
 
 --------------Bugs---------------------
-- AutoDetection breaks reconstruction badly
-- Disable console close button
-- Close behavior breaks when the console is the selected tab
-- Number of Slices to Reconstruct too large may crash program
-- Throw all tomo errors instead of crashing the program
-- No boundary checking when changing between display types (ie, out of bounds if recon has fewer slices than input and left on the final slice)
-- Cancel on new does not cancel operation
-- Changing config after opening image set does not update
-- Images saved are offset by about 10 pixels, giving garbage data at the top and cutting off the bottom
-- If left to run, error comes in from bottom and does not stop
+- Occasional long pauses on system windows (save/load, I think this is a windows problem, not on the program)
+- In high derivative areas created by running 1k iterations with no TV, copy errors occur where black boxes appear and dissappear 
+- Gain correction doesn't turn off when starting project with it on from new, then turning it off
 
 -------------Completed------------------
+-------------Features------------------
+--(11/2 - 11/9)
+Reconstruction breaks when run in horizontal flip mode (bug)
+Found new method for reconstruction that greatly reduces metal artifacts and increases resolution
+Window and level do not threshold based on current selection (bug)
+Window and level do not properly account for horizontal and vertical flips (bug)
+Updated lighting to work with new style of reconstruction, there's now seamless transition between active recon and completed 
+Preview window does not update with settings input from load in (bug)
+Noise correction factor is lost on project load (bug)
+--(10/26 - 11/2)
+Undefined behavior when certain features (ie load) are used mid reconstruction
+Update architecture (iterative)
+Update documentation (iterative)
+Added Xinvivo icon
+Software development process outline review and conform (class any)
+Found and patched major lighting issue when strong absorbers are not contained in first slice (affected exported recons, not just display)
+Offset limiter unlocked in iterative display (bugfix)
+Built a display for projecting current error
+--(10/19 - 10/26)
+- Memory leak on open (bug)
+- Make iterations a GUI variable
+- Add flip hor and vert to saved variables (also they are not activated on new project loads, mess up reconstruction when active)
+- Settings update on load to keep toolbars accurate on reloads
+- Horizontal flip causes reconstrution reversal of distance (bug)
+- Prevent new tabs when memory will not allow (check on ok or project open)
+- Replace each failure state with it's own error type and dialoag (or pass a string)
+- Difference in appearance from load project to load from raw (gain correction issues)(bug)
+- Window/level can hit illegal values to odd effect (bug)
+--(10/12 - 10/19)
+- Lighting difference between reconstructing display and end display (bugfix)
+- Keep distance the same when switching from projection to reconstruction
+- Differentiate between project, projection and reconstruction (or other) DICOM files
+- Added tab naming based on current selected input data
+- Fill in all relevant DICOM header data
+--(10/5 - 10/12)
+- Differentiate between export and project save
+- Rebuild reconstruction dialog as edit settings dialog
+- Move DICOM writes to external library
+- Move all read in functions to initial config list
+- Move stepsize to recon config
+- Cancel on new is not properly cleaned up (bugfix)
+- Navigation bar diabled items when viewing 2 and cancellations (bugfix)
+- Fixed issue with opening files over current recon with different slice sizes (bugfix)
+- Re-enable gain correction and make it optional
+- Recon progress bar
+- Rebuild use while reconstructing
+
+--(9/28 - 10/5)
+- Save projections as a single DICOM as default save function
+- Replace open and new functions with iterative config window
+- Make DICOM and raw files open the same way
+- Save project settings to DICOM header
+- Save all toolbar settings for session end
+- Edit single pass autofocus to use iterative start and end distances
+- Iterative mode autofocus
+- Confirm overwrite on save if file already exists
+--(pre 9/28)
+- Correct for multipixel surface defects (only in iterative)
+- Add DICOM read functions
+- Move sys generation to initializer
 - Fix readGainAndDarkimages
 - Remove magic numbers and filepaths
 - Implement cjson struct building
@@ -59,8 +110,46 @@ TomoRecon
 - New prompts for opening of raw files, processes and displays
 - Init openGl on program launch for minor speedups in first tab open
 - Only allow one config window to be open at a time 
--------------Features------------------
+- Corrected edge ringing by adapdtive error normalization
+- Evaluate need to iterate through captures instead of all at once
+- Add timers to reconstructions
+- Made recons continuous instead of batch
+- Look at the lighting change from the first to others (made a basic color corrector based on averages)
+- Include distance to the detector in status bar
+- Zoom with ctrl + mouse wheel
+- Drag to move around in zoomed in space
+- Zoom targets current mouse position as center
+- Alt + wheel to change lighting
+- Automatic phantom reader
+- Color correction within current viewport
+- Make a labled and colored rectangular selection tool
+- Inefficienicies in initial load and correction, can remove the final blur step and blurxy array
+- Recon norm has essentially uniform values across the entire image, consider killing to save memory (incorrect value was being read from it in the past)
+- Clean up all non-recon memory when recon finishes
+- Siphon mem from open recons by reading from disk and just having a buffer of slices (turned into just a single slice recon)
+- Make a dialoag box that adds selections
+- Recon artifacts are occuring whenever there are high derivative areas, if a lossy filter is a solution, make it optional (removed backprojection)
+- Need to rescale lighting to accent constrast, possibly with HDR algorigthms (imageJ win+lvl)
+- Window and lighting adjustment presets for diffent diagnosis types (autoadjustment based on selections)
+- Add a display and save filter for log values
+- Add popup for vertial or horizontal phantom orientation
+- Calculate relative distances given a baseline with approximate geometries
+- Remove internal pixel buffer in favor of generating everything on the fly
+- Redo read-raw-projections for speed, stability, and color correction accuracy
+- Correct for scan lines
+- Switch to single buffer as the output, calculate pitch widths from pixel ratios
+- Built toolbars for user parameters
+- Edit lighting and contrast panel
+- Switch between inputs in form using tab and/or enter
+- Add Units to all number descriptions in settings 
+- Save recon as DICOM from reconstruction mode
+- Correct for dead pixels
+- Name tabs based on filename
+- Throw all tomo errors instead of crashing the program
+
 --------------Bugs---------------------
+- Zbuffs are inaccessible on host code for gpu memory cleanup
+- Border artifacts in edge enhancement
 - additional lines included on increasing z size
 - index out of bounds and other conditions set array values to an explicit -10 (removed TV+sq)
 - image edges given tails that are not explicitly dealt with
@@ -75,3 +164,21 @@ TomoRecon
 - Loading more than 2 projections causes odd bugs
 - Check for console tab before running reconstructions
 - Y axis not checked for out of bounds, leading to white noise on top and bottom
+- Number of Slices to Reconstruct too large may crash program
+- No boundary checking when changing between display types (ie, out of bounds if recon has fewer slices than input and left on the final slice)
+- Cancel on new does not cancel operation
+- Images saved are offset by about 10 pixels, giving garbage data at the top and cutting off the bottom
+- If left to run, error comes in from bottom and does not stop
+- Conflict between continous mode and others
+- Cuda constants are global, not object specific
+- offset maximums are not calculated correctly, have overshoot
+- If left untouched for some time, becomes completely unresponsive
+- Zooming out then changing z distance causes a jump in offsets
+- GPU memory leaks abound
+- White artifacts around reconstruction corners
+- Flip causes pictures to go negative, not sure if we should fix/detect
+- Disable console close button
+- Close behavior breaks when the console is the selected tab
+- Changing config after opening image set does not update
+- Histogram lighting has some issues (see rmi single)
+- Toolbar settings do not update on tab change
