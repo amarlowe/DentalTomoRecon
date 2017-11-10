@@ -578,9 +578,9 @@ __global__ void projectIter(float * oldRecon, int slice, float iteration, bool s
 		error += BX - AX*returnVal;
 	}
 
-	returnVal += error;
-	//returnVal *= 0.97;
-	if (returnVal < 0.1f) returnVal = 0.1f;
+	returnVal += error;// *0.5;
+	//returnVal *= 0.90;
+	//if (returnVal < 0.1f) returnVal = 0.1f;
 	//if (firstRun) returnVal /= ITERATIONS;
 #ifdef SHOWERROR
 	surf3Dwrite(error, errorRecon, i * sizeof(float), j, slice);
@@ -588,10 +588,11 @@ __global__ void projectIter(float * oldRecon, int slice, float iteration, bool s
 
 #ifdef RECONDERIVATIVE
 	if (count == 0 || returnVal < 0.0f) surf3Dwrite(0.0f, surfRecon, i * sizeof(float), j, slice);
-#else
-	if (count == 0) surf3Dwrite(0.0f, surfRecon, i * sizeof(float), j, slice);// || returnVal < 0.0f
-#endif // RECONDERIVATIVE
 	else surf3Dwrite(returnVal, surfRecon, i * sizeof(float), j, slice);
+#else
+	//if (count == 0) surf3Dwrite(0.0f, surfRecon, i * sizeof(float), j, slice);// || returnVal < 0.0f
+	surf3Dwrite(returnVal, surfRecon, i * sizeof(float), j, slice);
+#endif // RECONDERIVATIVE
 }
 
 __global__ void backProject(float * proj, float * error, int view, float iteration, float totalIterations, params consts) {
@@ -641,8 +642,8 @@ __global__ void backProject(float * proj, float * error, int view, float iterati
 
 		//this block does something very interesting... but not quite right
 		float test = projVal - (value * (float)consts.Views / (float)count);// *totalIterations / iteration);
-		if (test > 0.1f) error[j*consts.ProjPitchNum + i] = test * 0.5;// / totalIterations;
-		else error[j*consts.ProjPitchNum + i] = 0.1f;
+		if (test > 0.1f) error[j*consts.ProjPitchNum + i] = test;// / totalIterations;
+		else error[j*consts.ProjPitchNum + i] = 0.1f;//Change to 0.0 to give a max style effect
 	}
 #endif // RECONDERIVATIVE
 	else error[j*consts.ProjPitchNum + i] = 0.0f;
@@ -2317,7 +2318,7 @@ TomoError TomoRecon::iterStep() {
 #ifdef SHOWERROR
 		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, iteration, false, constants, surfReconObj, surfErrorObj);
 #else 
-		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, 1.0f, false, constants, surfReconObj);
+		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, 1.0f, true, constants, surfReconObj);
 #endif
 		/*for (int i = 0; i < TVITERATIONS; i++) {
 			KERNELCALL2(copySlice, contBlocks, contThreads, d_ReconOld, slice, constants);

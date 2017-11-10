@@ -1,5 +1,7 @@
 TomoRecon
 
+Ideal cap conditions: 25 iterations, 1 learning rate
+
 ------Next projects
 - Use geometry test to determine max tolerances to drop by 0.5 LP from original
 - Automated test software for focal spot measurement
@@ -46,6 +48,7 @@ Window and level do not threshold based on current selection (bug)
 Window and level do not properly account for horizontal and vertical flips (bug)
 Updated lighting to work with new style of reconstruction, there's now seamless transition between active recon and completed 
 Preview window does not update with settings input from load in (bug)
+Noise correction factor is lost on project load (bug)
 --(10/26 - 11/2)
 Undefined behavior when certain features (ie load) are used mid reconstruction
 Update architecture (iterative)

@@ -84,7 +84,6 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	wxMenuItem* autoGeo;
 	autoGeo = new wxMenuItem( calibration, wxID_ANY, wxString( wxT("Auto-detect Geometry") ) , wxEmptyString, wxITEM_NORMAL );
 	calibration->Append( autoGeo );
-	autoGeo->Enable( false );
 	
 	m_menubar1->Append( calibration, wxT("Calibration") ); 
 	

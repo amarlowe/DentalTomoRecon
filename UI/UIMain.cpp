@@ -69,7 +69,7 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 				dset->findAndGetUint16(PRV_OutNoiseEn, tempShrt);
 				recon->enableNoiseMaxFilter(tempShrt == 1);
 				dset->findAndGetUint16(PRV_OutNoiseMax, tempShrt);
-				recon->setNoiseMaxVal(tempFlt);
+				recon->setNoiseMaxVal(tempShrt);
 				dset->findAndGetUint16(PRV_TVEn, tempShrt);
 				recon->enableTV(tempShrt == 1);
 				dset->findAndGetUint16(PRV_TVLambda, tempShrt);
