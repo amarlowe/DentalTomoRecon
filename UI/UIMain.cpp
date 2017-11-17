@@ -892,7 +892,8 @@ void DTRMainWindow::onRunTest(wxCommandEvent& event) {
 
 void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 	wxConfigBase *pConfig = wxConfigBase::Get();
-	std::vector<float> offsets = { 0.1f, 0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 5.0f };
+	//std::vector<float> offsets = { 0.1f, 0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 5.0f };
+	std::vector<float> offsets = { 0.05f, 0.075f, 0.1f, 0.15f, 0.2f, 0.25f, 0.3f, 0.35f, 0.4f, 0.45f, 0.5f, 0.55f, 0.6f, 0.65f, 0.7f };
 	std::vector<toleranceData> data;
 	for (int i = 0; i < pConfig->Read(wxT("/resPhanItems"), 0l); i++){
 		wxFileName filename = pConfig->Read(wxString::Format(wxT("/resPhanFile%d"), i));
@@ -907,6 +908,7 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 			//recon->continuousMode = true;
 			recon->setDisplay(no_der);
 			recon->enableNoiseMaxFilter(false);
+			recon->enableTV(false);
 			recon->enableScanVert(false);
 			recon->enableScanHor(false);
 			recon->setDataDisplay(reconstruction);
@@ -918,6 +920,7 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 		recon->ReadProjectionsFromFile(gainFilepath.mb_str(), filename.GetFullPath().mb_str());
 		recon->singleFrame();
 		recon->resetLight();
+		recon->setBoundaries(-1.0f, -20.0f);
 
 		if (data.empty()) recon->initTolerances(data, 1, offsets);
 
@@ -930,9 +933,7 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 		recon->setReconBox(0);
 		recon->autoFocus(true);
 		currentFrame->m_canvas->paint();
-		recon->setReconBox(0);
 		while (recon->autoFocus(false) == Tomo_OK) {
-			recon->setReconBox(0);
 			currentFrame->m_canvas->paint();
 		}
 
@@ -965,9 +966,85 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 }
 
 void DTRMainWindow::onAutoGeo(wxCommandEvent& event) {
-	wxMessageBox(wxT("TODO"),
-		wxT("TODO"),
-		wxICON_INFORMATION | wxOK);
+	wxFileDialog openFileDialog(this, _("Select one raw image file or dicom stack of a geometry calibration phantom."), "", "",
+		"Raw or DICOM Files (*.raw, *.dcm)|*.raw;*.dcm|Raw File (*.raw)|*.raw|DICOM File (*.dcm)|*.dcm", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+
+	if (openFileDialog.ShowModal() == wxID_CANCEL)
+		return;
+
+	m_auinotebook6->SetSelection(0);//Set to console to not interfere with current recon on cancel
+
+	wxString filename = openFileDialog.GetPath();
+	GLFrame * currentFrame = (GLFrame*)CreateNewPage(filename);
+	if (currentFrame->m_canvas->launchError != Tomo_OK) {
+		(*m_textCtrl8) << "Error creating new reconstruction. Please close other tabs, or use the \"open\" command on another reconstruction instead of \"new\". " <<
+			"If this is your first tab or you would like more active tabs, consider using/purchasing a Nvidia graphics card with more VRAM.\n";
+		delete currentFrame;
+		return;
+	}
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->enableScanVert(false);
+	recon->enableScanHor(false);
+
+	wxFileName file(filename);
+	wxArrayString dirs = file.GetDirs();
+	wxString name = dirs[file.GetDirCount() - 1];
+
+	TomoError fileType = parseFile(recon, gainFilepath.mb_str(), filename.mb_str());
+
+	(*m_textCtrl8) << "Opening new tab titled: \"" << name << "\"\n";
+
+	m_auinotebook6->AddPage(currentFrame, name, true);
+
+	onContinuous();
+	recon->setDataDisplay(projections);
+	deactivateMenus(recon);
+
+	float* image;
+	unsigned int histogram[HIST_BIN_COUNT];
+	recon->setLogView(false);
+
+	wxConfigBase *pConfig = wxConfigBase::Get();
+	float pitchHeight = pConfig->ReadDouble(wxT("/pitchHeight"), 0.0185f);
+	float pitchWidth = pConfig->ReadDouble(wxT("/pitchWidth"), 0.0185f);
+
+	(*m_textCtrl8) << "Found geometry:\n";
+
+	int length, width;
+	recon->getProjectionDimensions(&width, &length);
+	float X, Y;
+	for (int view = 0; view < NumViews; view++) {
+		int max = 0, maxVal = 0;
+		currentFrame->showScrollBar(NUMVIEWS, view);
+		recon->setActiveProjection(view);
+		recon->singleFrame(true, &image, histogram);
+		recon->resetLight();
+		currentFrame->m_canvas->paint();
+
+		for (int i = 1; i < HIST_BIN_COUNT; i++) {
+			if (histogram[i] > maxVal) {
+				maxVal = histogram[i];
+				max = i;
+			}
+		}
+		max -= 20;
+		max *= HIST_BIN_COUNT;
+		findGeometry(image, length, width, max, &X, &Y);
+		X *= pitchWidth;
+		Y *= pitchHeight;
+
+		pConfig->Write(wxString::Format(wxT("/beamLoc%d-%d"), view, 0), X);
+		pConfig->Write(wxString::Format(wxT("/beamLoc%d-%d"), view, 1), Y);
+
+		(*m_textCtrl8) << "beam " << view << ": x: " << X << " mm, y: " << Y << " mm\n";
+	}
+	activateMenus(recon);
+	m_auinotebook6->DeletePage(m_auinotebook6->GetPageIndex(currentFrame));
+
+	(*m_textCtrl8) << "Geometry can be reviewed and modified in the Config->Settings menu.\n";
+
+	delete[] image;
 }
 
 void DTRMainWindow::onAbout(wxCommandEvent& WXUNUSED(event)){
@@ -1042,8 +1119,8 @@ void DTRMainWindow::deactivateMenus(TomoRecon* recon) {
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), false);
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Set Resolution Phantoms")), false);
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Test Geometries")), false);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry")), false);
 	dataDisplay->Disable();
-	logView->Disable();
 
 	//Make sure we're on navigation section
 	optionBox->SetSelection(0);
@@ -1071,8 +1148,8 @@ void DTRMainWindow::activateMenus(TomoRecon* recon) {
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), true);
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Set Resolution Phantoms")), true);
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Test Geometries")), true);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry")), true);
 	dataDisplay->Enable();
-	logView->Enable();
 	optionBox->Enable();
 
 	//set ratio back to original value

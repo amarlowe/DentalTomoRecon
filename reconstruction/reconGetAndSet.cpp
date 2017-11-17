@@ -280,6 +280,8 @@ inline TomoError TomoRecon::checkBoundaries(int * x, int * y) {
 		xLim = Sys.Proj.Nx;
 		yLim = Sys.Proj.Ny;
 	}
+	if (constants.flip) *y = yLim - 1 - *y;
+	if (constants.orientation) *x = xLim - 1 - *x;
 	if (*x > xLim) *x = xLim;
 	if (*x < 0) *x = 0;
 	if (*y > yLim) *y = yLim;
