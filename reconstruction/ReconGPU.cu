@@ -445,7 +445,7 @@ __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, uns
 
 		if (consts.useGain) {
 			val /= Gain[j*consts.Px + i];
-			if (val > HIGHTHRESH) val = 0.0;
+			if (val > HIGHTHRESH) val = 1.0;
 			val *= USHRT_MAX;
 		}
 
