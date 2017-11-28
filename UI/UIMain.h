@@ -12,6 +12,7 @@
 
 #include "reconUI.h"
 #include "../reconstruction/TomoRecon.h"
+#include "../reconstruction/geometry.h"
 
 #include <stdlib.h>
 #include <stdio.h>

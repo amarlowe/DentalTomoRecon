@@ -445,7 +445,7 @@ __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, uns
 
 		if (consts.useGain) {
 			val /= Gain[j*consts.Px + i];
-			if (val > HIGHTHRESH) val = 0.0;
+			if (val > HIGHTHRESH) val = 1.0;
 			val *= USHRT_MAX;
 		}
 
@@ -1559,8 +1559,9 @@ TomoError TomoRecon::draw(int x, int y) {
 				Sys.Recon.Nx, Sys.Recon.Ny, width, height, scale, xOff, yOff, derDisplay != no_der, constants);
 		}
 		if (constants.baseXr >= 0 && constants.currXr >= 0)
-			KERNELCALL4(drawSelectionBox, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, I2D(max(constants.baseXr, constants.currXr), true),
-				I2D(max(constants.baseYr, constants.currYr), false), I2D(min(constants.baseXr, constants.currXr), true), I2D(min(constants.baseYr, constants.currYr), false), width);
+			KERNELCALL4(drawSelectionBox, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, max(I2D(constants.baseXr, true), I2D(constants.currXr, true)),
+				max(I2D(constants.baseYr, false), I2D(constants.currYr, false)), min(I2D(constants.baseXr, true), I2D(constants.currXr, true)),
+				min(I2D(constants.baseYr, false), I2D(constants.currYr, false)), width);
 		if (lowXr >= 0)
 			KERNELCALL4(drawSelectionBar, blocks, PXL_KERNEL_THREADS_PER_BLOCK, 0, stream, I2D(lowXr, true), I2D(lowYr, false), width, vertical);
 		if (upXr >= 0)
@@ -1576,7 +1577,7 @@ TomoError TomoRecon::draw(int x, int y) {
 	return Tomo_OK;
 }
 
-TomoError TomoRecon::singleFrame() {
+TomoError TomoRecon::singleFrame(bool outputFrame, float** output, unsigned int * histogram) {
 	//Initial projection
 	switch (constants.dataDisplay) {
 	case reconstruction:
@@ -1831,6 +1832,23 @@ TomoError TomoRecon::singleFrame() {
 		//KERNELCALL2(add, contBlocks, contThreads, d_Image, buff1, d_Image, reconPitchNum, true, false, constants);
 	}
 		break;
+	}
+
+	if (outputFrame) {
+		*output = new float[Sys.Proj.Nx * Sys.Proj.Ny];
+
+		constants.baseXr = 7 * Sys.Proj.Nx / 8;
+		constants.baseYr = 7 * Sys.Proj.Ny / 8;
+		constants.currXr = Sys.Proj.Nx / 8;
+		constants.currYr = Sys.Proj.Ny / 8;
+
+		cuda(Memcpy2D(*output, Sys.Proj.Nx * sizeof(float), d_Image, projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny, cudaMemcpyDeviceToHost));
+		getHistogram(d_Image, reconPitch*Sys.Recon.Ny, histogram);
+
+		constants.baseXr = -1;
+		constants.baseYr = -1;
+		constants.currXr = -1;
+		constants.currYr = -1;
 	}
 
 	return Tomo_OK;
@@ -2548,7 +2566,7 @@ int TomoRecon::I2D(int i, bool xDir) {
 		else sysWidth = Sys.Recon.Nx;
 		float innerOffx = (width - sysWidth / scale) / 2.0f;
 
-		return (int)((i - xOff) / scale + innerOffx);
+		return constants.orientation ? (int)((sysWidth - 1 - i - xOff) / scale + innerOffx) : (int)((i - xOff) / scale + innerOffx);
 	}
 	//else
 	int sysHeight;
@@ -2556,7 +2574,7 @@ int TomoRecon::I2D(int i, bool xDir) {
 	else sysHeight = Sys.Recon.Ny;
 	float innerOffy = (height - sysHeight / scale) / 2.0f;
 
-	return (int)((i - yOff) / scale + innerOffy);
+	return constants.flip ? (int)((sysHeight - 1 - i - yOff) / scale + innerOffy) : (int)((i - yOff) / scale + innerOffy);
 }
 
 //On-screen coordinates to image space

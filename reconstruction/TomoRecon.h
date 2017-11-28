@@ -51,7 +51,7 @@
 
 //Phantom reader parameters
 #define LINEPAIRS 5
-#define INTENSITYTHRESH 100
+#define INTENSITYTHRESH 150
 #define UPPERBOUND 20.0f
 #define LOWERBOUND 4.0f
 
@@ -341,7 +341,7 @@ public:
 		unsigned int *histogram);
 
 	///Render a single frame using predefined datasets and derivative filters
-	TomoError singleFrame();
+	TomoError singleFrame(bool outputFrame = false, float** output = NULL, unsigned int * histogram = NULL);
 
 	///Iterative method used to find the distance the selection is from the detector. 
 
