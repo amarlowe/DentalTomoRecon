@@ -34,6 +34,8 @@ Ideal cap conditions: 25 iterations, 1 learning rate
 - Clean up code (iterative)
 - Comment code for review (iterative)
 
+- Fix output lighting issue
+
 --------------Bugs---------------------
 - Occasional long pauses on system windows (save/load, I think this is a windows problem, not on the program)
 - In high derivative areas created by running 1k iterations with no TV, copy errors occur where black boxes appear and dissappear 
@@ -41,6 +43,15 @@ Ideal cap conditions: 25 iterations, 1 learning rate
 
 -------------Completed------------------
 -------------Features------------------
+--(11/30 - 12/7)
+Got handy detector running in UNC control software (bug in driver still needs addressing)
+Implemented confirmation dialog in control software
+Collected 10 sets of geometry data for verification
+- Adapted raw image read in to work with reverse byte order and 1-indexed images
+--(11/16 - 11/30)
+Met with Rick and got specific feedback
+fixed issue with gain, largest cause of discrepency 
+Disabled lighting match, had some issues with light anomoly in first beam
 --(11/2 - 11/9)
 Reconstruction breaks when run in horizontal flip mode (bug)
 Found new method for reconstruction that greatly reduces metal artifacts and increases resolution

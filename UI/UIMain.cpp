@@ -1023,12 +1023,12 @@ void DTRMainWindow::onAutoGeo(wxCommandEvent& event) {
 		currentFrame->m_canvas->paint();
 
 		for (int i = 1; i < HIST_BIN_COUNT; i++) {
-			if (histogram[i] > maxVal) {
-				maxVal = histogram[i];
+			if (histogram[i] > maxVal * 0.8) {
+				if(histogram[i] > maxVal) maxVal = histogram[i];
 				max = i;
 			}
 		}
-		max -= 20;
+		max -= 35;
 		max *= HIST_BIN_COUNT;
 		findGeometry(image, length, width, max, &X, &Y);
 		X *= pitchWidth;
