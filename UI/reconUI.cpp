@@ -905,11 +905,11 @@ configDialog::configDialog( wxWindow* parent, wxWindowID id, const wxString& tit
 	iterations = new wxTextCtrl( this, wxID_ANY, wxT("75"), wxDefaultPosition, wxDefaultSize, 0 );
 	fgSizer2->Add( iterations, 0, wxALL, 5 );
 	
+	rawCheckBox = new wxCheckBox( this, wxID_ANY, wxT("Raw images from detector"), wxDefaultPosition, wxDefaultSize, 0 );
+	fgSizer2->Add( rawCheckBox, 0, wxALL, 5 );
+	
 	m_panel2 = new wxPanel( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL );
 	fgSizer2->Add( m_panel2, 1, wxEXPAND | wxALL, 5 );
-	
-	m_panel3 = new wxPanel( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL );
-	fgSizer2->Add( m_panel3, 1, wxEXPAND | wxALL, 5 );
 	
 	loadConfig = new wxButton( this, wxID_ANY, wxT("Load Config"), wxDefaultPosition, wxDefaultSize, 0 );
 	fgSizer2->Add( loadConfig, 0, wxALL|wxALIGN_CENTER_VERTICAL|wxEXPAND, 5 );

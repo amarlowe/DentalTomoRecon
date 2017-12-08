@@ -43,11 +43,16 @@ Ideal cap conditions: 25 iterations, 1 learning rate
 
 -------------Completed------------------
 -------------Features------------------
+--(12/7 - 12/14)
+Fully integrated raw from detector switch
 --(11/30 - 12/7)
 Got handy detector running in UNC control software (bug in driver still needs addressing)
 Implemented confirmation dialog in control software
 Collected 10 sets of geometry data for verification
-- Adapted raw image read in to work with reverse byte order and 1-indexed images
+Adapted raw image read in to work with reverse byte order and 1-indexed images
+Modified threshold algorithm to work within this dataset (more tuning may be required when we have more data)
+Proved average is an effective tool to counteract variations, especially outliers
+Edited software development documents
 --(11/16 - 11/30)
 Met with Rick and got specific feedback
 fixed issue with gain, largest cause of discrepency 
