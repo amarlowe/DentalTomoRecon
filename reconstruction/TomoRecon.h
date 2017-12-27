@@ -99,8 +99,8 @@
 #define RECONSLICES 30
 #define RECONDIS 6.0f
 
-#define TVX 0.00f
-#define TVY 0.00f
+#define TVX 0.005f
+#define TVY 0.005f
 #define TVZ 0.00f
 #define TVITERATIONS 0
 //#define USELOGITER
@@ -887,7 +887,7 @@ public:
 	///Special use case for getting the histogram for the iterative reconstruction data for the current slice.
 
 	///Usually used to adjust window and level.
-	TomoError getHistogramRecon(unsigned int * histogram, bool useall);
+	TomoError getHistogramRecon(unsigned int * histogram, bool useall, bool useLog);
 
 	///Allocates the necessary memory for the iterative reconstruction and required tools.
 

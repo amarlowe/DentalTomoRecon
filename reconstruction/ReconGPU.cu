@@ -579,7 +579,8 @@ __global__ void projectIter(float * oldRecon, int slice, float iteration, bool s
 	}
 
 	returnVal += error;// *0.5;
-	//returnVal *= 0.90;
+	//returnVal -= 0.00001 * pow(returnVal, 2.0f);
+	//returnVal *= 0.99;
 	//if (returnVal < 0.1f) returnVal = 0.1f;
 	//if (firstRun) returnVal /= ITERATIONS;
 #ifdef SHOWERROR
@@ -638,7 +639,7 @@ __global__ void backProject(float * proj, float * error, int view, float iterati
 		projVal = USHRT_MAX - projVal;
 #endif
 #endif
-		error[j*consts.ProjPitchNum + i] = projVal - (value * (float)consts.Views / (float)count);
+		error[j*consts.ProjPitchNum + i] = (projVal - (value * (float)consts.Views / (float)count)) * pow(0.99f, iteration);
 
 		//this block does something very interesting... but not quite right
 		/*float test = projVal - (value * (float)consts.Views / (float)count);// *totalIterations / iteration);
@@ -849,7 +850,7 @@ __global__ void histogram256Kernel(unsigned int *d_Histogram, T *d_Data, unsigne
 	atomicAdd(d_Histogram + ((unsigned short)data >> 8), 1);//bin by the upper 256 bits
 }
 
-__global__ void histogramReconKernel(unsigned int *d_Histogram, int slice, params consts, cudaSurfaceObject_t surfRecon) {
+__global__ void histogramReconKernel(unsigned int *d_Histogram, int slice, bool useLog, params consts, cudaSurfaceObject_t surfRecon) {
 	//Define pixel location in x, y, and z
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
@@ -866,7 +867,7 @@ __global__ void histogramReconKernel(unsigned int *d_Histogram, int slice, param
 
 	float data = 0;
 	surf3Dread(&data, surfRecon, i * sizeof(float), j, slice);
-	if (consts.log) {
+	if (consts.log && useLog) {
 		if (data > 0) {
 			float correctedMax = logf(USHRT_MAX);
 			data = (correctedMax - logf(data + 1)) / correctedMax * USHRT_MAX;
@@ -880,7 +881,7 @@ __global__ void histogramReconKernel(unsigned int *d_Histogram, int slice, param
 	}
 	if (data > USHRT_MAX) data = USHRT_MAX;
 	if (data < 0.0f) return;// data = 0.0f;
-	atomicAdd(d_Histogram + ((unsigned short)data >> 8), 1);//bin by the upper 256 bits
+	atomicAdd(d_Histogram + ((unsigned short)data >> 8), 1);//bin by the upper 8 bits
 }
 
 // u=  (1 - tu) * uold + tu .* ( f + 1/lambda*div(z) );
@@ -1340,8 +1341,13 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 }
 
 TomoError TomoRecon::exportRecon(unsigned short * exportData) {
-
 	float * RawData = new float[reconPitch / sizeof(float)*Sys.Proj.Ny];
+	int oldProjection = getActiveProjection();
+
+	float maxVal, minVal;
+	unsigned int histogram[HIST_BIN_COUNT];
+	tomo_err_throw(getHistogramRecon(histogram, true, false));
+	tomo_err_throw(autoLight(histogram, 0, &minVal, &maxVal));
 
 	//Create the reconstruction volume around the current location
 	float oldDistance = distance;
@@ -1357,12 +1363,15 @@ TomoError TomoRecon::exportRecon(unsigned short * exportData) {
 			for (int k = 0; k < Sys.Recon.Nx; k++) {
 				float data = RawData[reconPitch / sizeof(float) * j + k];
 				if (data != 0.0) {
-					if (constants.log)
-						data = (logf(USHRT_MAX) - logf(data + 1)) / logf(USHRT_MAX) * 255;// *USHRT_MAX;
+					data *= 2.0f;
+					if (constants.log) {
+						if (data > USHRT_MAX) data = USHRT_MAX;
+						data = (logf(USHRT_MAX) - logf(data)) / logf(USHRT_MAX) * USHRT_MAX;
+					}
 					//data = (data - constants.minVal) / (constants.maxVal - constants.minVal) * SHRT_MAX;
 
-					if (data > SHRT_MAX) data = SHRT_MAX;
-					if (data < 0.0f) data = 0.0f;
+					//if (data > USHRT_MAX) data = USHRT_MAX;
+					//if (data < 0.0f) data = 0.0f;
 				}
 				int x = k;
 				if (constants.orientation) x = Sys.Recon.Nx - 1 - k;
@@ -1371,6 +1380,7 @@ TomoError TomoRecon::exportRecon(unsigned short * exportData) {
 		}
 	}
 
+	setActiveProjection(oldProjection);
 	distance = oldDistance;
 	delete[] RawData;
 
@@ -1512,7 +1522,7 @@ TomoError TomoRecon::getHistogram(T * image, unsigned int byteSize, unsigned int
 	return Tomo_OK;
 }
 
-TomoError TomoRecon::getHistogramRecon(unsigned int *histogram, bool useall = false) {
+TomoError TomoRecon::getHistogramRecon(unsigned int *histogram, bool useall = false, bool useLog = true) {
 	unsigned int * d_Histogram;
 
 	cuda(Malloc((void **)&d_Histogram, HIST_BIN_COUNT * sizeof(unsigned int)));
@@ -1521,11 +1531,11 @@ TomoError TomoRecon::getHistogramRecon(unsigned int *histogram, bool useall = fa
 	//cuda(BindSurfaceToArray(surfRecon, d_Recon2));
 	if (useall) {
 		for (int slice = 0; slice < Sys.Recon.Nz; slice++) {
-			KERNELCALL2(histogramReconKernel, contBlocks, contThreads, d_Histogram, slice, constants, surfReconObj);
+			KERNELCALL2(histogramReconKernel, contBlocks, contThreads, d_Histogram, slice, useLog, constants, surfReconObj);
 		}
 	}
 	else {
-		KERNELCALL2(histogramReconKernel, contBlocks, contThreads, d_Histogram, sliceIndex, constants, surfReconObj);
+		KERNELCALL2(histogramReconKernel, contBlocks, contThreads, d_Histogram, sliceIndex, useLog, constants, surfReconObj);
 	}
 
 	cuda(Memcpy(histogram, d_Histogram, HIST_BIN_COUNT * sizeof(unsigned int), cudaMemcpyDeviceToHost));
@@ -2341,7 +2351,7 @@ TomoError TomoRecon::iterStep() {
 #ifdef SHOWERROR
 		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, iteration, false, constants, surfReconObj, surfErrorObj);
 #else 
-		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, 1.0f, true, constants, surfReconObj);
+		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, iteration, false, constants, surfReconObj);
 #endif
 		/*for (int i = 0; i < TVITERATIONS; i++) {
 			KERNELCALL2(copySlice, contBlocks, contThreads, d_ReconOld, slice, constants);
@@ -2368,19 +2378,17 @@ TomoError TomoRecon::finalizeIter() {
 	constants.currXr = Sys.Recon.Nx;
 	constants.currYr = Sys.Recon.Ny;
 
-	bool oldLog = constants.log;
-	constants.log = false;
-
 	float maxVal, minVal;
 	unsigned int histogram[HIST_BIN_COUNT];
-	tomo_err_throw(getHistogramRecon(histogram, true));
-	tomo_err_throw(autoLight(histogram, 0, &minVal, &maxVal));
+	tomo_err_throw(getHistogramRecon(histogram, true, false));
+	tomo_err_throw(autoLight(histogram, 20, &minVal, &maxVal));
 
 	//cuda(BindSurfaceToArray(surfRecon, d_Recon2));
 	for (int slice = 0; slice < Sys.Recon.Nz; slice++)
 		KERNELCALL2(scaleRecon, contBlocks, contThreads, slice, minVal, maxVal, constants, surfReconObj);
 
-	constants.log = oldLog;
+	tomo_err_throw(getHistogramRecon(histogram, true, false));
+	tomo_err_throw(autoLight(histogram, 20, &minVal, &maxVal));
 
 	constants.baseXr = -1;
 	constants.baseYr = -1;
