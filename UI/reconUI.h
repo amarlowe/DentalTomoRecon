@@ -314,8 +314,8 @@ class configDialog : public wxFrame
 		wxGrid* m_grid1;
 		wxStaticText* m_staticText35;
 		wxTextCtrl* iterations;
+		wxCheckBox* rawCheckBox;
 		wxPanel* m_panel2;
-		wxPanel* m_panel3;
 		wxButton* loadConfig;
 		wxButton* saveConfig;
 		wxButton* ok;

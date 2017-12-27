@@ -185,6 +185,7 @@ protected:
 	void onOK(wxCommandEvent& event);
 	void onCancel(wxCommandEvent& event);
 	void onConfigChar(wxCommandEvent& event);
+	void onCheckRaw(wxCommandEvent& event);
 
 	TomoError ParseLegacyTxt(std::string FilePath);
 	TomoError ParseJSONFile(std::string FilePath);

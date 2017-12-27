@@ -1,6 +1,6 @@
 #include "geometry.h"
 
-#define MAX_NUM_OBJECTS		100
+#define MAX_NUM_OBJECTS		1000
 
 #include <opencv2/core/core.hpp>
 #include <opencv2\highgui.hpp>
@@ -280,7 +280,8 @@ void findGeometry(float* input, int length, int width, int threshold, float * le
 		}
 	}
 
-	//Size size(width / 2, length / 2);
-	//resize(img, img, size);
-	//imshow("output", img);
+	/*Size size(width / 2, length / 2);
+	resize(img, img, size);
+	imshow("output", img);
+	waitKey(0);*/
 }

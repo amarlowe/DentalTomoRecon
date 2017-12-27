@@ -441,11 +441,11 @@ __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, uns
 
 		float val = Proj[j*consts.Px + i];
 
-		if (val < LOWTHRESH) val = 0.0;
+		//if (val < LOWTHRESH) val = 0.0;
 
 		if (consts.useGain) {
 			val /= Gain[j*consts.Px + i];
-			if (val > HIGHTHRESH) val = 1.0;
+			if (val > HIGHTHRESH) val = HIGHTHRESH;
 			val *= USHRT_MAX;
 		}
 
@@ -638,12 +638,12 @@ __global__ void backProject(float * proj, float * error, int view, float iterati
 		projVal = USHRT_MAX - projVal;
 #endif
 #endif
-		//error[j*consts.ProjPitchNum + i] = projVal - (value * (float)consts.Views / (float)count);
+		error[j*consts.ProjPitchNum + i] = projVal - (value * (float)consts.Views / (float)count);
 
 		//this block does something very interesting... but not quite right
-		float test = projVal - (value * (float)consts.Views / (float)count);// *totalIterations / iteration);
+		/*float test = projVal - (value * (float)consts.Views / (float)count);// *totalIterations / iteration);
 		if (test > 0.1f) error[j*consts.ProjPitchNum + i] = test;// / totalIterations;
-		else error[j*consts.ProjPitchNum + i] = 0.1f;//Change to 0.0 to give a max style effect
+		else error[j*consts.ProjPitchNum + i] = 0.1f;//Change to 0.0 to give a max style effect*/
 	}
 #endif // RECONDERIVATIVE
 	else error[j*consts.ProjPitchNum + i] = 0.0f;
@@ -834,8 +834,8 @@ __global__ void histogram256Kernel(unsigned int *d_Histogram, T *d_Data, unsigne
 
 	if (i < minX || i > maxX || j < minY || j > maxY) return;
 
-	if (consts.orientation) i = consts.Px - 1 - i;
-	if (consts.flip) j = consts.Py - 1 - j;
+	//if (consts.orientation) i = consts.Px - 1 - i;
+	//if (consts.flip) j = consts.Py - 1 - j;
 
 	float data = abs(d_Data[MUL_ADD(j, consts.ReconPitchNum, i)]);//whatever it currently is, cast it to ushort
 	if (consts.log) {

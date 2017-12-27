@@ -159,7 +159,7 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 		delete[] RawData;
 		delete[] GainData;
 	}
-	else recon->ReadProjectionsFromFile(gainFile, mainFile);
+	else recon->ReadProjectionsFromFile(gainFile, mainFile, recon->hasRawInput());
 
 	return returnError;
 }
@@ -465,6 +465,7 @@ TomoError DTRMainWindow::genSys(struct SystemControl * Sys) {
 		Sys->Geo.EmitY[j] = pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"), j, 1), 0.0f);
 		Sys->Geo.EmitZ[j] = pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"), j, 2), 0.0f);
 	}
+	Sys->Geo.raw = pConfig->ReadLong(wxT("/rawInput"), 0l) == 1 ? true : false;
 
 	return Tomo_OK;
 }
@@ -917,7 +918,7 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 			recon->setVertFlip(true);
 			recon->setShowNegative(true);
 		}
-		recon->ReadProjectionsFromFile(gainFilepath.mb_str(), filename.GetFullPath().mb_str());
+		recon->ReadProjectionsFromFile(gainFilepath.mb_str(), filename.GetFullPath().mb_str(), recon->hasRawInput());
 		recon->singleFrame();
 		recon->resetLight();
 		recon->setBoundaries(-1.0f, -20.0f);
@@ -1023,12 +1024,12 @@ void DTRMainWindow::onAutoGeo(wxCommandEvent& event) {
 		currentFrame->m_canvas->paint();
 
 		for (int i = 1; i < HIST_BIN_COUNT; i++) {
-			if (histogram[i] > maxVal) {
-				maxVal = histogram[i];
+			if (histogram[i] > maxVal * 0.8) {
+				if(histogram[i] > maxVal) maxVal = histogram[i];
 				max = i;
 			}
 		}
-		max -= 20;
+		max -= 35;
 		max *= HIST_BIN_COUNT;
 		findGeometry(image, length, width, max, &X, &Y);
 		X *= pitchWidth;
@@ -2291,6 +2292,7 @@ TomoError DTRConfigDialog::checkInputs() {
 			else pConfig->Write(wxString::Format(wxT("/beamLoc%d-%d"), j, i), parsedDouble);
 		}
 	}
+	pConfig->Write(wxT("/rawInput"), rawCheckBox->IsChecked() ? 1 : 0);
 
 	return Tomo_OK;
 }
@@ -2462,7 +2464,7 @@ void DTRResDialog::onAddNew(wxCommandEvent& event) {
 		recon->setVertFlip(true);
 		recon->enableTV(false);
 
-		recon->ReadProjectionsFromFile(((DTRMainWindow*)GetParent())->gainFilepath.mb_str(), openFileDialog.GetPath().mb_str());
+		recon->ReadProjectionsFromFile(((DTRMainWindow*)GetParent())->gainFilepath.mb_str(), openFileDialog.GetPath().mb_str(), recon->hasRawInput());
 		recon->singleFrame();
 
 		recon->resetLight();

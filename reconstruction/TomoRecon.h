@@ -209,6 +209,7 @@ struct SysGeometry {
 	float IsoY;								//Location of the system isocenter in y direction
 	float IsoZ;								//Location of the system isocenter in z direction
 	float ZPitch;							//The distance between slices
+	bool raw;
 };
 
 ///Desired system outputs
@@ -318,7 +319,9 @@ public:
 		///Images taken of the detector with no subject.
 		const char * gainFile,
 		///Main data file to be reconstructed.
-		const char * mainFile);
+		const char * mainFile,
+		///Raw file directly from detector
+		bool raw);
 
 	///Cleanup function that should be called in a destructor.
 	TomoError FreeGPUMemory();
@@ -910,6 +913,8 @@ public:
 
 	///Return the dimensions of the projections.
 	void getReconstructionDimensions(int * width, int * height);
+
+	bool hasRawInput();
 
 	///Save the current iterative reconstruction directly to disk.
 

@@ -496,3 +496,7 @@ void TomoRecon::getReconstructionDimensions(int* width, int* height) {
 	*width = Sys.Recon.Nx;
 	*height = Sys.Recon.Ny;
 }
+
+bool TomoRecon::hasRawInput() {
+	return Sys.Geo.raw;
+}
