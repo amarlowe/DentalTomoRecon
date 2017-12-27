@@ -1352,16 +1352,21 @@ TomoError TomoRecon::exportRecon(unsigned short * exportData) {
 		distance += Sys.Geo.ZPitch;
 		cuda(Memcpy(RawData, d_Image, reconPitch*Sys.Recon.Ny, cudaMemcpyDeviceToHost));
 		for (int j = 0; j < Sys.Recon.Ny; j++) {
+			int y = j;
+			if (constants.flip) y = Sys.Recon.Ny - 1 - j;
 			for (int k = 0; k < Sys.Recon.Nx; k++) {
 				float data = RawData[reconPitch / sizeof(float) * j + k];
 				if (data != 0.0) {
 					if (constants.log)
-						data = (logf(USHRT_MAX) - logf(data + 1)) / logf(USHRT_MAX) * USHRT_MAX;
-					data = (data - constants.minVal) / (constants.maxVal - constants.minVal) * SHRT_MAX;
+						data = (logf(USHRT_MAX) - logf(data + 1)) / logf(USHRT_MAX) * 255;// *USHRT_MAX;
+					//data = (data - constants.minVal) / (constants.maxVal - constants.minVal) * SHRT_MAX;
+
 					if (data > SHRT_MAX) data = SHRT_MAX;
 					if (data < 0.0f) data = 0.0f;
 				}
-				exportData[Sys.Recon.Nx * (j + Sys.Recon.Ny * i) + k] = (unsigned short)data;
+				int x = k;
+				if (constants.orientation) x = Sys.Recon.Nx - 1 - k;
+				exportData[Sys.Recon.Nx * (y + Sys.Recon.Ny * i) + x] = (unsigned short)data;
 			}
 		}
 	}

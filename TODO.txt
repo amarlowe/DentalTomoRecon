@@ -31,6 +31,9 @@ Ideal cap conditions: 25 iterations, 1 learning rate
 - Open reconstruction and other DICOMs as if the program were just a reader
 - Compress save files and reconstructions
 
+Fix Lighitng not taking into account the entire recon
+create the architecture from the plans
+
 - Clean up code (iterative)
 - Comment code for review (iterative)
 
@@ -41,6 +44,7 @@ Ideal cap conditions: 25 iterations, 1 learning rate
 
 -------------Completed------------------
 -------------Features------------------
+
 --(11/2 - 11/9)
 Reconstruction breaks when run in horizontal flip mode (bug)
 Found new method for reconstruction that greatly reduces metal artifacts and increases resolution
