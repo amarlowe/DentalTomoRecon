@@ -41,6 +41,7 @@ union pxl_rgbx_24{
 
 surface<void, cudaSurfaceType2D> displaySurface;
 texture<float, cudaTextureType3D, cudaReadModeElementType> textRecon;
+texture<float, cudaTextureType3D, cudaReadModeElementType> textDelta;
 texture<float, cudaTextureType2D, cudaReadModeElementType> textImage;
 texture<float, cudaTextureType2D, cudaReadModeElementType> textError;
 texture<float, cudaTextureType2D, cudaReadModeElementType> textSino;
@@ -531,7 +532,7 @@ __global__ void projectSlice(float * IM, float distance, params consts) {
 #ifdef SHOWERROR
 __global__ void projectIter(float * oldRecon, int slice, float iteration, bool skipTV, params consts, cudaSurfaceObject_t surfRecon, cudaSurfaceObject_t errorRecon) {
 #else
-__global__ void projectIter(float * oldRecon, int slice, float iteration, bool skipTV, params consts, cudaSurfaceObject_t surfRecon, bool firstRun = false) {
+__global__ void projectIter(float * proj, float * oldRecon, int slice, float iteration, bool skipTV, params consts, cudaSurfaceObject_t surfRecon, cudaSurfaceObject_t surfDelta, bool firstRun = false) {
 #endif
 	//Define pixel location in x, y, and z
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -540,6 +541,7 @@ __global__ void projectIter(float * oldRecon, int slice, float iteration, bool s
 	//Set a normalization and pixel value to 0
 	float count = 0;
 	float error = 0;
+	float minimum = USHRT_MAX;
 
 	//Check image boundaries
 	if ((i >= consts.Rx) || (j >= consts.Ry)) return;
@@ -556,6 +558,8 @@ __global__ void projectIter(float * oldRecon, int slice, float iteration, bool s
 				error += value;
 				count++;
 			}
+			float minTest = proj[(view * consts.Py + j)*consts.ProjPitchNum + i];
+			if (minTest < minimum) minimum = minTest;
 		}
 	}
 
@@ -563,26 +567,37 @@ __global__ void projectIter(float * oldRecon, int slice, float iteration, bool s
 		error /= ((float)count * (float)consts.slices);
 	else error = 0.0f;
 
-	float returnVal;
+	float returnVal, delta;
 	surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice);
-
+	surf3Dread(&delta, surfDelta, i * sizeof(float), j, slice);
+	
 	if (!skipTV) {
 		float AX = 0, BX = 0;
 		if (i > 0) { BX += oldRecon[i - 1 + j*consts.ReconPitchNum] * TVX;  AX += TVX; }
 		if (i < consts.Rx - 1) { BX += oldRecon[i + 1 + j*consts.ReconPitchNum] * TVX; AX += TVX; }
 		if (j > 0) { BX += oldRecon[i + (j - 1)*consts.ReconPitchNum] * TVY; AX += TVY; }
 		if (j < consts.Ry - 1) { BX += oldRecon[i + (j + 1)*consts.ReconPitchNum] * TVY; AX += TVY; }
-		if (slice > 0) { surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice - 1); BX += returnVal * TVZ; AX += TVZ; }
-		if (slice < consts.slices - 1) { surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice + 1); BX += returnVal * TVZ; AX += TVZ; }
-		surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice);
-		error += BX - AX*returnVal;
+		//if (slice > 0) { surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice - 1); BX += returnVal * TVZ; AX += TVZ; }
+		//if (slice < consts.slices - 1) { surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice + 1); BX += returnVal * TVZ; AX += TVZ; }
+		//surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice);
+		error += (BX - AX*returnVal) * pow(delta, 2.0f);
 	}
 
-	returnVal += error;// *0.5;
-	//returnVal -= 0.00001 * pow(returnVal, 2.0f);
-	//returnVal *= 0.99;
+	bool sign = error < 0;
+	if (error * delta > 0) {
+		delta = min(abs(delta) * DELTAGROWTH, MAXDELTA);
+		//if (sign) delta = -delta;
+	}
+	else {
+		returnVal -= delta;
+		delta = max(abs(delta) * DELTADECAY, MINDELTA);
+		//if (sign) delta = -delta;
+	}
+	returnVal += delta;
+
+	//returnVal += error;
 	//if (returnVal < 0.1f) returnVal = 0.1f;
-	//if (firstRun) returnVal /= ITERATIONS;
+	//if (returnVal > minimum) returnVal = minimum;
 #ifdef SHOWERROR
 	surf3Dwrite(error, errorRecon, i * sizeof(float), j, slice);
 #endif
@@ -591,7 +606,7 @@ __global__ void projectIter(float * oldRecon, int slice, float iteration, bool s
 	if (count == 0 || returnVal < 0.0f) surf3Dwrite(0.0f, surfRecon, i * sizeof(float), j, slice);
 	else surf3Dwrite(returnVal, surfRecon, i * sizeof(float), j, slice);
 #else
-	//if (count == 0) surf3Dwrite(0.0f, surfRecon, i * sizeof(float), j, slice);// || returnVal < 0.0f
+	surf3Dwrite(delta, surfDelta, i * sizeof(float), j, slice);
 	surf3Dwrite(returnVal, surfRecon, i * sizeof(float), j, slice);
 #endif // RECONDERIVATIVE
 }
@@ -615,7 +630,6 @@ __global__ void backProject(float * proj, float * error, int view, float iterati
 		//Update the value based on the error scaled and save the scale
 		if (y >= 0 && y < consts.Ry && x >= 0 && x < consts.Rx) {
 			//value += tex2D(textSino, x, y + slice*consts.Ry);
-			//value += recon[(int)((slice * consts.Ry + y)*consts.ReconPitchNum + x)];
 			float returnVal;
 			//surf3Dread(&returnVal, surfRecon, x * sizeof(float), y, slice);
 			returnVal = tex3D(textRecon, x + 0.5f, y + 0.5f, slice);
@@ -630,7 +644,7 @@ __global__ void backProject(float * proj, float * error, int view, float iterati
 		error[j*consts.ProjPitchNum + i] = projVal - (value * (float)consts.Views / (float)count);
 	}
 #else
-	if (projVal > 0.0f && count > 0) {//projVal > 0.0f && projVal <= USHRT_MAX && 
+	if (count > 0) {//projVal > 0.0f && projVal <= USHRT_MAX && 
 #ifdef USELOGITER
 		float correctedMax = logf(USHRT_MAX);
 		projVal = (correctedMax - logf(projVal + 1)) / correctedMax * USHRT_MAX;
@@ -639,12 +653,7 @@ __global__ void backProject(float * proj, float * error, int view, float iterati
 		projVal = USHRT_MAX - projVal;
 #endif
 #endif
-		error[j*consts.ProjPitchNum + i] = (projVal - (value * (float)consts.Views / (float)count)) * pow(0.99f, iteration);
-
-		//this block does something very interesting... but not quite right
-		/*float test = projVal - (value * (float)consts.Views / (float)count);// *totalIterations / iteration);
-		if (test > 0.1f) error[j*consts.ProjPitchNum + i] = test;// / totalIterations;
-		else error[j*consts.ProjPitchNum + i] = 0.1f;//Change to 0.0 to give a max style effect*/
+		error[j*consts.ProjPitchNum + i] = (projVal - (value * (float)consts.Views / (float)count));// *pow(0.99f, iteration);
 	}
 #endif // RECONDERIVATIVE
 	else error[j*consts.ProjPitchNum + i] = 0.0f;
@@ -702,7 +711,7 @@ __global__ void scaleRecon(int slice, unsigned int minVal, unsigned int maxVal, 
 	else surf3Dwrite(1.0f, surfRecon, i * sizeof(float), j, slice);
 }
 
-__global__ void zeroArray(int slice, params consts, cudaSurfaceObject_t surfRecon) {
+__global__ void initArray(int slice, float value, params consts, cudaSurfaceObject_t surfRecon) {
 	//Define pixel location in x, y, and z
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
@@ -710,7 +719,7 @@ __global__ void zeroArray(int slice, params consts, cudaSurfaceObject_t surfReco
 	//Check image boundaries
 	if ((i >= consts.Rx) || (j >= consts.Ry)) return;
 
-	surf3Dwrite(0.0f, surfRecon, i * sizeof(float), j, slice);
+	surf3Dwrite(value, surfRecon, i * sizeof(float), j, slice);
 }
 
 //Ruduction and histogram functions
@@ -1370,8 +1379,8 @@ TomoError TomoRecon::exportRecon(unsigned short * exportData) {
 					}
 					//data = (data - constants.minVal) / (constants.maxVal - constants.minVal) * SHRT_MAX;
 
-					//if (data > USHRT_MAX) data = USHRT_MAX;
-					//if (data < 0.0f) data = 0.0f;
+					if (data > USHRT_MAX) data = USHRT_MAX;
+					if (data < 0.0f) data = 0.0f;
 				}
 				int x = k;
 				if (constants.orientation) x = Sys.Recon.Nx - 1 - k;
@@ -1609,6 +1618,7 @@ TomoError TomoRecon::singleFrame(bool outputFrame, float** output, unsigned int 
 #ifdef SHOWERROR
 		KERNELCALL2(copySlice, contBlocks, contThreads, d_Image, sliceIndex, constants, surfErrorObj, constants.isReconstructing);
 #else
+		//KERNELCALL2(copySlice, contBlocks, contThreads, d_Image, sliceIndex, constants, surfDeltaObj, constants.isReconstructing);
 		KERNELCALL2(copySlice, contBlocks, contThreads, d_Image, sliceIndex, constants, surfReconObj, constants.isReconstructing);
 #endif
 		break;
@@ -2270,6 +2280,7 @@ TomoError TomoRecon::initIterative() {
 	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
 	cudaExtent vol = { Sys.Recon.Nx, Sys.Recon.Ny, Sys.Recon.Nz };
 	cuda(Malloc3DArray(&d_Recon2, &channelDesc, vol, cudaArraySurfaceLoadStore));
+	cuda(Malloc3DArray(&d_ReconDelta, &channelDesc, vol, cudaArraySurfaceLoadStore));
 #ifdef SHOWERROR
 	cuda(Malloc3DArray(&d_ReconError, &channelDesc, vol, cudaArraySurfaceLoadStore));
 #endif
@@ -2283,6 +2294,8 @@ TomoError TomoRecon::initIterative() {
 	resDesc.resType = cudaResourceTypeArray;
 	resDesc.res.array.array = d_Recon2;
 	cuda(CreateSurfaceObject(&surfReconObj, &resDesc));
+	resDesc.res.array.array = d_ReconDelta;
+	cuda(CreateSurfaceObject(&surfDeltaObj, &resDesc));
 #ifdef SHOWERROR
 	resDesc.res.array.array = d_ReconError;
 	cuda(CreateSurfaceObject(&surfErrorObj, &resDesc));
@@ -2302,14 +2315,14 @@ TomoError TomoRecon::initIterative() {
 #endif // RECONDERIVATIVE
 	
 	cuda(BindTexture2D(NULL, textError, d_Error, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
-	//cuda(BindSurfaceToArray(surfRecon, d_Recon2));
 	for (int slice = 0; slice < Sys.Recon.Nz; slice++) {
-		KERNELCALL2(zeroArray, contBlocks, contThreads, slice, constants, surfReconObj);
+		KERNELCALL2(initArray, contBlocks, contThreads, slice, 0.0f, constants, surfReconObj);
+		KERNELCALL2(initArray, contBlocks, contThreads, slice, DELTA0, constants, surfDeltaObj);
 		KERNELCALL2(copySlice, contBlocks, contThreads, d_ReconOld, slice, constants, surfReconObj);
 #ifdef SHOWERROR
 		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, 1.0f, true, constants, surfReconObj, surfErrorObj);
 #else 
-		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, 1.0f, true, constants, surfReconObj, true);
+		KERNELCALL2(projectIter, contBlocks, contThreads, d_Sino, d_ReconOld, slice, 1.0f, true, constants, surfReconObj, surfDeltaObj, true);
 #endif
 	}
 	cuda(UnbindTexture(textError));
@@ -2351,7 +2364,7 @@ TomoError TomoRecon::iterStep() {
 #ifdef SHOWERROR
 		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, iteration, false, constants, surfReconObj, surfErrorObj);
 #else 
-		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, iteration, false, constants, surfReconObj);
+		KERNELCALL2(projectIter, contBlocks, contThreads, d_Sino, d_ReconOld, slice, iteration, false, constants, surfReconObj, surfDeltaObj);
 #endif
 		/*for (int i = 0; i < TVITERATIONS; i++) {
 			KERNELCALL2(copySlice, contBlocks, contThreads, d_ReconOld, slice, constants);
@@ -2366,6 +2379,9 @@ TomoError TomoRecon::iterStep() {
 }
 
 TomoError TomoRecon::finalizeIter() {
+	//no longer need gradient records
+	cuda(FreeArray(d_ReconDelta));
+
 	constants.isReconstructing = false;
 
 #ifdef INVERSEITER
@@ -2386,9 +2402,6 @@ TomoError TomoRecon::finalizeIter() {
 	//cuda(BindSurfaceToArray(surfRecon, d_Recon2));
 	for (int slice = 0; slice < Sys.Recon.Nz; slice++)
 		KERNELCALL2(scaleRecon, contBlocks, contThreads, slice, minVal, maxVal, constants, surfReconObj);
-
-	tomo_err_throw(getHistogramRecon(histogram, true, false));
-	tomo_err_throw(autoLight(histogram, 20, &minVal, &maxVal));
 
 	constants.baseXr = -1;
 	constants.baseYr = -1;

@@ -99,8 +99,15 @@
 #define RECONSLICES 30
 #define RECONDIS 6.0f
 
-#define TVX 0.005f
-#define TVY 0.005f
+//RPROP parameters
+#define DELTA0 1000.0f
+#define MINDELTA 0.01f
+#define MAXDELTA 1000.0f
+#define DELTAGROWTH 1.0f
+#define DELTADECAY 0.1f
+
+#define TVX 0.00f
+#define TVY 0.00f
 #define TVZ 0.00f
 #define TVITERATIONS 0
 //#define USELOGITER
@@ -1011,6 +1018,7 @@ private:
 	float * d_Error;
 	float * d_Sino;
 	cudaArray_t d_Recon2 = NULL;
+	cudaArray_t d_ReconDelta = NULL;
 	cudaArray_t d_ReconError = NULL;
 	float * d_ReconOld = NULL;
 
@@ -1066,6 +1074,7 @@ private:
 	bool iterativeInitialized = false;
 	cudaSurfaceObject_t surfReconObj = 0;
 	cudaSurfaceObject_t surfErrorObj = 0;
+	cudaSurfaceObject_t surfDeltaObj = 0;
 };
 
 /********************************************************************************************/
