@@ -580,24 +580,26 @@ __global__ void projectIter(float * proj, float * oldRecon, int slice, float ite
 		//if (slice > 0) { surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice - 1); BX += returnVal * TVZ; AX += TVZ; }
 		//if (slice < consts.slices - 1) { surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice + 1); BX += returnVal * TVZ; AX += TVZ; }
 		//surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice);
-		error += (BX - AX*returnVal) * pow(delta, 2.0f);
+		error += BX - AX*returnVal;
 	}
 
-	bool sign = error < 0;
+	/*bool sign = error < 0;
 	if (error * delta > 0) {
 		delta = min(abs(delta) * DELTAGROWTH, MAXDELTA);
-		//if (sign) delta = -delta;
+		if (sign) delta = -delta;
 	}
 	else {
 		returnVal -= delta;
 		delta = max(abs(delta) * DELTADECAY, MINDELTA);
-		//if (sign) delta = -delta;
+		if (sign) delta = -delta;
 	}
-	returnVal += delta;
+	returnVal += delta;*/
 
-	//returnVal += error;
-	//if (returnVal < 0.1f) returnVal = 0.1f;
-	//if (returnVal > minimum) returnVal = minimum;
+	error *= pow(0.999f, iteration);
+	error += 0.7f*delta;
+	returnVal += error;
+	if (returnVal < 0.1f) returnVal = 0.1f;
+	if (returnVal > minimum) returnVal = minimum;
 #ifdef SHOWERROR
 	surf3Dwrite(error, errorRecon, i * sizeof(float), j, slice);
 #endif
@@ -606,7 +608,7 @@ __global__ void projectIter(float * proj, float * oldRecon, int slice, float ite
 	if (count == 0 || returnVal < 0.0f) surf3Dwrite(0.0f, surfRecon, i * sizeof(float), j, slice);
 	else surf3Dwrite(returnVal, surfRecon, i * sizeof(float), j, slice);
 #else
-	surf3Dwrite(delta, surfDelta, i * sizeof(float), j, slice);
+	surf3Dwrite(error, surfDelta, i * sizeof(float), j, slice);
 	surf3Dwrite(returnVal, surfRecon, i * sizeof(float), j, slice);
 #endif // RECONDERIVATIVE
 }
@@ -2144,11 +2146,19 @@ TomoError TomoRecon::readPhantom(float * resolution) {
 }
 
 TomoError TomoRecon::initTolerances(std::vector<toleranceData> &data, int numTests, std::vector<float> offsets) {
+	//start with a control, but make sure
+	toleranceData control;
+	control.name += " none";
+	control.numViewsChanged = 0;
+	control.viewsChanged = 0;
+	control.offset = 0;
+	data.push_back(control);
+
 	//start set as just the combinations
 	for (int i = 0; i < NUMVIEWS; i++) {
 		int resultsLen = (int)data.size();//size will change every iteration, pre-record it
 		int binRep = 1 << i;
-		for (int j = 0; j < resultsLen; j++) {
+		for (int j = 1; j < resultsLen; j++) {
 			toleranceData newData = data[j];
 			newData.name += "+";
 			newData.name += std::to_string(i);
@@ -2167,7 +2177,7 @@ TomoError TomoRecon::initTolerances(std::vector<toleranceData> &data, int numTes
 
 	//blow up with the diffent directions
 	int combinations = (int)data.size();//again, changing sizes later on
-	for (int i = 0; i < combinations; i++) {
+	for (int i = 1; i < combinations; i++) {
 		toleranceData baseline = data[i];
 
 		baseline.thisDir = dir_y;
@@ -2179,7 +2189,7 @@ TomoError TomoRecon::initTolerances(std::vector<toleranceData> &data, int numTes
 
 	//then fill in the set with all the view changes
 	combinations = (int)data.size();//again, changing sizes later on
-	for (int i = 0; i < combinations; i++) {
+	for (int i = 1; i < combinations; i++) {
 		toleranceData baseline = data[i];
 		for (int j = 0; j < offsets.size() - 1; j++) {//skip the last
 			toleranceData newData = baseline;
@@ -2190,14 +2200,6 @@ TomoError TomoRecon::initTolerances(std::vector<toleranceData> &data, int numTes
 		//the last one is done in place
 		data[i].offset = offsets[offsets.size() - 1];
 	}
-
-	//finally, put in a control
-	toleranceData control;
-	control.name += " none";
-	control.numViewsChanged = 0;
-	control.viewsChanged = 0;
-	control.offset = 0;
-	data.push_back(control);
 
 	return Tomo_OK;
 }
@@ -2380,7 +2382,8 @@ TomoError TomoRecon::iterStep() {
 
 TomoError TomoRecon::finalizeIter() {
 	//no longer need gradient records
-	cuda(FreeArray(d_ReconDelta));
+	cuda(FreeArray(d_ReconDelta)); 
+	cuda(DestroySurfaceObject(surfDeltaObj));
 
 	constants.isReconstructing = false;
 

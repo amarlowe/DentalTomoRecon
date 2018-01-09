@@ -987,6 +987,8 @@ void DTRMainWindow::onAutoGeo(wxCommandEvent& event) {
 
 	recon->enableScanVert(false);
 	recon->enableScanHor(false);
+	recon->enableTV(false);
+	recon->enableNoiseMaxFilter(false);
 
 	wxFileName file(filename);
 	wxArrayString dirs = file.GetDirs();
@@ -1014,8 +1016,11 @@ void DTRMainWindow::onAutoGeo(wxCommandEvent& event) {
 
 	int length, width;
 	recon->getProjectionDimensions(&width, &length);
-	float X, Y;
-	for (int view = 0; view < NumViews; view++) {
+
+	//Get baseline points from center beam
+	std::vector<std::vector<float> > baseline;
+	{
+		int view = 3;
 		int max = 0, maxVal = 0;
 		currentFrame->showScrollBar(NUMVIEWS, view);
 		recon->setActiveProjection(view);
@@ -1024,6 +1029,30 @@ void DTRMainWindow::onAutoGeo(wxCommandEvent& event) {
 		currentFrame->m_canvas->paint();
 
 		for (int i = 1; i < HIST_BIN_COUNT; i++) {
+			if (histogram[i] > 0) {
+				max = i;
+			}
+		}
+		max *= HIST_BIN_COUNT;
+		getCenterPoints(image, baseline, length, width, max);
+
+		pConfig->Write(wxString::Format(wxT("/beamLoc%d-%d"), view, 0), 0.0f);
+		pConfig->Write(wxString::Format(wxT("/beamLoc%d-%d"), view, 1), 0.0f);
+
+		(*m_textCtrl8) << "beam " << view << ": x: " << 0.0f << " mm, y: " << 0.0f << " mm\n";
+	}
+
+	float X, Y;
+	for (int view = 0; view < NumViews; view++) {
+		if (view == 3) continue;
+		int max = 0, maxVal = 0;
+		currentFrame->showScrollBar(NUMVIEWS, view);
+		recon->setActiveProjection(view);
+		recon->singleFrame(true, &image, histogram);
+		recon->resetLight();
+		currentFrame->m_canvas->paint();
+		/*
+		for (int i = 1; i < HIST_BIN_COUNT; i++) {
 			if (histogram[i] > maxVal * 0.8) {
 				if(histogram[i] > maxVal) maxVal = histogram[i];
 				max = i;
@@ -1031,14 +1060,26 @@ void DTRMainWindow::onAutoGeo(wxCommandEvent& event) {
 		}
 		max -= 35;
 		max *= HIST_BIN_COUNT;
-		findGeometry(image, length, width, max, &X, &Y);
+		findGeometry(image, length, width, max, &X, &Y);*/
+		for (int i = 1; i < HIST_BIN_COUNT; i++) {
+			if (histogram[i] > 0) {
+				max = i;
+			}
+		}
+		max *= HIST_BIN_COUNT;
+		std::vector<float> h1, h2;
+		findGeometryCircle(image, h1, h2, baseline, length, width, max);
+		X = h2[2] - h1[2];
+		Y = h2[5] - h1[5];
 		X *= pitchWidth;
 		Y *= pitchHeight;
+		X *= 400.0f / 15.6508f;
+		Y *= 400.0f / 15.6508f;
 
 		pConfig->Write(wxString::Format(wxT("/beamLoc%d-%d"), view, 0), X);
 		pConfig->Write(wxString::Format(wxT("/beamLoc%d-%d"), view, 1), Y);
 
-		(*m_textCtrl8) << "beam " << view << ": x: " << X << " mm, y: " << Y << " mm\n";
+		(*m_textCtrl8) << "beam " << view << ": x: " <<  X << " mm, y: " << Y << " mm\n";
 	}
 	activateMenus(recon);
 	m_auinotebook6->DeletePage(m_auinotebook6->GetPageIndex(currentFrame));

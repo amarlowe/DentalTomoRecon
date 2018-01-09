@@ -100,14 +100,14 @@
 #define RECONDIS 6.0f
 
 //RPROP parameters
-#define DELTA0 1000.0f
+#define DELTA0 0.0f
 #define MINDELTA 0.01f
 #define MAXDELTA 1000.0f
 #define DELTAGROWTH 1.0f
-#define DELTADECAY 0.1f
+#define DELTADECAY 0.99f
 
-#define TVX 0.00f
-#define TVY 0.00f
+#define TVX 0.01f
+#define TVY 0.01f
 #define TVZ 0.00f
 #define TVITERATIONS 0
 //#define USELOGITER
