@@ -5,6 +5,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2\highgui.hpp>
 #include "opencv2\imgproc.hpp"
+#include <opencv2\opencv.hpp>
 #include <opencv\cv.h>
 
 using namespace cv;
@@ -284,4 +285,167 @@ void findGeometry(float* input, int length, int width, int threshold, float * le
 	resize(img, img, size);
 	imshow("output", img);
 	waitKey(0);*/
+}
+
+void findGeometryCircle(float* input, std::vector<float> &h1, std::vector<float> &h2, std::vector<std::vector<float> > baseline, int length, int width, int threshold) {
+	for (int i = 0; i < length; i++)
+		for (int j = 0; j < width; j++) {
+			input[i*width + j] /= (float)threshold;
+		}
+
+	Mat img(length, width, CV_32FC1, input);
+
+	Mat blurImage(length, width, CV_8U);
+	img.convertTo(blurImage, CV_8U, 255.0);
+
+	//Find centers of beads
+	Mat cimg;
+	//medianBlur(blurImage, blurImage, 5);
+	GaussianBlur(blurImage, blurImage, Size(9, 9), 2, 2);
+	cvtColor(blurImage, cimg, COLOR_GRAY2BGR);
+	//imshow("test", cimg);
+	//waitKey();
+	std::vector<Vec3f> circles;
+	HoughCircles(blurImage, circles, CV_HOUGH_GRADIENT, 1, 100.0f, 100, 30);
+	std::vector<Point2f> sortedPairs(circles.size());
+	std::vector<Point2f> basePairs(circles.size());
+
+	//visualization
+	for (size_t i = 0; i < circles.size(); i++)
+	{
+		Vec3i c = circles[i];
+		circle(cimg, Point(c[0], c[1]), c[2], Scalar(0, 0, 255), 3, LINE_AA);
+		circle(cimg, Point(c[0], c[1]), 2, Scalar(0, 255, 0), 3, LINE_AA);
+	}
+	resize(cimg, cimg, Size(), 0.5, 0.5);
+	imshow("detected circles", cimg);
+	waitKey();
+
+	//Implicit ordering for the x direction because of the order the HoughCircles program outputs
+	for (int i = 0; i < circles.size(); i++) {
+		//find the next smallest y coordinate and place into output vector
+		int minVal = USHRT_MAX, minIndex = 0;
+		for (int j = 0; j < circles.size(); j++) {
+			if (circles[j][1] < minVal) {
+				minVal = circles[j][1];
+				minIndex = j;
+			}
+		}
+		sortedPairs[i].x = circles[minIndex][0];
+		sortedPairs[i].y = circles[minIndex][1];
+		circles[minIndex][1] = USHRT_MAX;
+
+		basePairs[i].x = baseline[i][0];
+		basePairs[i].y = baseline[i][1];
+	}
+
+	std::vector<Point2f> centerBase, sortedBase;
+	std::vector<Point2f> centerLow, sortedLow;
+	for (int iter = 0; iter < basePairs.size(); iter++) {
+		if (iter > 4 && iter < 15) {
+			centerBase.push_back(basePairs[iter]);
+			sortedBase.push_back(sortedPairs[iter]);
+		}
+		else {
+			centerLow.push_back(basePairs[iter]);
+			sortedLow.push_back(sortedPairs[iter]);
+		}
+	}
+
+	//Compute homography
+	//std::vector<Point2f> pts_src;
+	//std::vector<Point2f> pts_dst;
+	Mat h = findHomography(centerBase, sortedBase);
+	h1.push_back(h.at<double>(0, 0));
+	h1.push_back(h.at<double>(0, 1));
+	h1.push_back(h.at<double>(0, 2));
+	h1.push_back(h.at<double>(1, 0));
+	h1.push_back(h.at<double>(1, 1));
+	h1.push_back(h.at<double>(1, 2));
+	h1.push_back(h.at<double>(2, 0));
+	h1.push_back(h.at<double>(2, 1));
+	h1.push_back(h.at<double>(2, 2));
+
+	float averageX = 0.0f;
+	float averageY = 0.0f;
+	for (int i = 0; i < centerBase.size(); i++) {
+		averageX -= centerBase[i].x - sortedBase[i].x;
+		averageY -= centerBase[i].y - sortedBase[i].y;
+	}
+	averageX /= centerBase.size();
+	averageY /= centerBase.size();
+	h1[2] = averageX;
+	h1[5] = averageY;
+
+	h = findHomography(centerLow, sortedLow);
+	h2.push_back(h.at<double>(0, 0));
+	h2.push_back(h.at<double>(0, 1));
+	h2.push_back(h.at<double>(0, 2));
+	h2.push_back(h.at<double>(1, 0));
+	h2.push_back(h.at<double>(1, 1));
+	h2.push_back(h.at<double>(1, 2));
+	h2.push_back(h.at<double>(2, 0));
+	h2.push_back(h.at<double>(2, 1));
+	h2.push_back(h.at<double>(2, 2));
+
+	averageX = 0.0f;
+	averageY = 0.0f;
+	for (int i = 0; i < centerLow.size(); i++) {
+		averageX -= centerLow[i].x - sortedLow[i].x;
+		averageY -= centerLow[i].y - sortedLow[i].y;
+	}
+	averageX /= centerLow.size();
+	averageY /= centerLow.size();
+	h2[2] = averageX;
+	h2[5] = averageY;
+}
+
+void getCenterPoints(float* input, std::vector<std::vector<float> > &sortedPairs, int length, int width, int threshold) {
+	for (int i = 0; i < length; i++)
+		for (int j = 0; j < width; j++) {
+			input[i*width + j] /= (float)threshold;
+		}
+
+	Mat img(length, width, CV_32FC1, input);
+
+	Mat blurImage(length, width, CV_8U);
+	img.convertTo(blurImage, CV_8U, 255.0f);
+
+	//Find centers of beads
+	Mat cimg;
+	//medianBlur(blurImage, blurImage, 5);
+	GaussianBlur(blurImage, blurImage, Size(9, 9), 2, 2);
+	cvtColor(blurImage, cimg, COLOR_GRAY2BGR);
+	//imshow("test", cimg);
+	//waitKey();
+	std::vector<Vec3f> circles;
+	HoughCircles(blurImage, circles, CV_HOUGH_GRADIENT, 1, 100.0f, 100, 30);
+
+	//visualization
+	/*for (size_t i = 0; i < circles.size(); i++)
+	{
+	Vec3i c = circles[i];
+	circle(cimg, Point(c[0], c[1]), c[2], Scalar(0, 0, 255), 3, LINE_AA);
+	circle(cimg, Point(c[0], c[1]), 2, Scalar(0, 255, 0), 3, LINE_AA);
+	}
+	resize(cimg, cimg, Size(), 0.5, 0.5);
+	imshow("detected circles", cimg);
+	waitKey();*/
+
+	//Implicit ordering for the x direction because of the order the HoughCircles program outputs
+	for (int i = 0; i < circles.size(); i++) {
+		//find the next smallest y coordinate and place into output vector
+		int minVal = USHRT_MAX, minIndex = 0;
+		for (int j = 0; j < circles.size(); j++) {
+			if (circles[j][1] < minVal) {
+				minVal = circles[j][1];
+				minIndex = j;
+			}
+		}
+		std::vector<float> temp;
+		temp.push_back(circles[minIndex][0]);
+		temp.push_back(circles[minIndex][1]);
+		sortedPairs.push_back(temp);
+		circles[minIndex][1] = USHRT_MAX;
+	}
 }

@@ -16,6 +16,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <iomanip>
 #include <stdbool.h>
 
 #include "../fileIO/cJSON.h"
