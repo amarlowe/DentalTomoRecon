@@ -38,14 +38,15 @@
 #define BARHEIGHT 40
 
 //Projection correction parameters
-#define LOWTHRESH 80.0f
-#define HIGHTHRESH 0.99f
+#define LOWTHRESH 16000.0f
+#define ABSHIGHTHRESH 55000.0f
+#define HIGHTHRESH 0.95f
 
 //Autofocus parameters
 #define STARTSTEP 1.0f
 #define LASTSTEP 0.05f
-#define GEOSTART 5.0f
-#define GEOLAST 0.01f
+#define GEOSTART 1.0f
+#define GEOLAST 0.001f
 #define MINDIS 0
 #define MAXDIS 40
 
@@ -64,7 +65,7 @@
 #define UMUL(a, b) ( (a) * (b) )
 
 //Autoscale parameters
-#define AUTOTHRESHOLD 5000
+#define AUTOTHRESHOLD 500000
 #define HISTLIMIT 10
 #define HIST_BIN_COUNT 256
 
@@ -106,6 +107,7 @@
 #define DELTAGROWTH 1.0f
 #define DELTADECAY 0.99f
 
+#define SKIPITERTV true
 #define TVX 0.01f
 #define TVY 0.01f
 #define TVZ 0.00f
@@ -113,6 +115,7 @@
 //#define USELOGITER
 //#define INVERSEITER
 #define MEDIANFAC 0.0f
+#define TAPERSIZE 200.0f
 
 //#define RECONDERIVATIVE
 //#define SQUAREMAGINX

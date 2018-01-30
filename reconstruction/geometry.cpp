@@ -295,8 +295,8 @@ void findGeometryCircle(float* input, std::vector<float> &h1, std::vector<float>
 
 	Mat img(length, width, CV_32FC1, input);
 
-	Mat blurImage(1920, 1080, CV_8U);
-	img.convertTo(blurImage, CV_8U, 255.0f);
+	Mat blurImage(length, width, CV_8U);
+	img.convertTo(blurImage, CV_8U, 255.0);
 
 	//Find centers of beads
 	Mat cimg;
@@ -311,15 +311,15 @@ void findGeometryCircle(float* input, std::vector<float> &h1, std::vector<float>
 	std::vector<Point2f> basePairs(circles.size());
 
 	//visualization
-	/*for (size_t i = 0; i < circles.size(); i++)
+	for (size_t i = 0; i < circles.size(); i++)
 	{
-	Vec3i c = circles[i];
-	circle(cimg, Point(c[0], c[1]), c[2], Scalar(0, 0, 255), 3, LINE_AA);
-	circle(cimg, Point(c[0], c[1]), 2, Scalar(0, 255, 0), 3, LINE_AA);
+		Vec3i c = circles[i];
+		circle(cimg, Point(c[0], c[1]), c[2], Scalar(0, 0, 255), 3, LINE_AA);
+		circle(cimg, Point(c[0], c[1]), 2, Scalar(0, 255, 0), 3, LINE_AA);
 	}
 	resize(cimg, cimg, Size(), 0.5, 0.5);
 	imshow("detected circles", cimg);
-	waitKey();*/
+	waitKey();
 
 	//Implicit ordering for the x direction because of the order the HoughCircles program outputs
 	for (int i = 0; i < circles.size(); i++) {
@@ -408,7 +408,7 @@ void getCenterPoints(float* input, std::vector<std::vector<float> > &sortedPairs
 
 	Mat img(length, width, CV_32FC1, input);
 
-	Mat blurImage(1920, 1080, CV_8U);
+	Mat blurImage(length, width, CV_8U);
 	img.convertTo(blurImage, CV_8U, 255.0f);
 
 	//Find centers of beads
