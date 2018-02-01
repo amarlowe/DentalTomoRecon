@@ -407,7 +407,7 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	wxBoxSizer* bSizer5;
 	bSizer5 = new wxBoxSizer( wxHORIZONTAL );
 	
-	wxString optionBoxChoices[] = { wxT("Distance Selection"), wxT("Scan Line Removal"), wxT("Denoising") };
+	wxString optionBoxChoices[] = { wxT("Distance Selection"), wxT("Exposure"), wxT("Scan Line Removal"), wxT("Denoising") };
 	int optionBoxNChoices = sizeof( optionBoxChoices ) / sizeof( wxString );
 	optionBox = new wxChoice( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, optionBoxNChoices, optionBoxChoices, 0 );
 	optionBox->SetSelection( 0 );
@@ -457,9 +457,6 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	distanceToolbar->AddControl( stepUnits );
 	stepSlider = new wxSlider( distanceToolbar, wxID_ANY, 5, 1, 10, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
 	distanceToolbar->AddControl( stepSlider );
-	useGain = new wxCheckBox( distanceToolbar, wxID_ANY, wxT("Use Gain Correction"), wxDefaultPosition, wxDefaultSize, 0 );
-	useGain->SetValue(true); 
-	distanceToolbar->AddControl( useGain );
 	distanceToolbar->Realize(); 
 	
 	bSizer5->Add( distanceToolbar, 1, wxALIGN_CENTER_VERTICAL, 5 );
@@ -503,6 +500,50 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	scanToolbar->Realize(); 
 	
 	bSizer5->Add( scanToolbar, 1, wxALIGN_CENTER_VERTICAL, 5 );
+	
+	gainToolbar = new wxToolBar( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_HORIZONTAL|wxTB_NODIVIDER|wxNO_BORDER ); 
+	gainToolbar->SetForegroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_CAPTIONTEXT ) );
+	gainToolbar->SetBackgroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_MENU ) );
+	gainToolbar->Hide();
+	
+	useGain = new wxCheckBox( gainToolbar, wxID_ANY, wxT("Use Gain Correction"), wxDefaultPosition, wxDefaultSize, 0 );
+	useGain->SetValue(true); 
+	gainToolbar->AddControl( useGain );
+	exposureValue = new wxStaticText( gainToolbar, wxID_ANY, wxT("50"), wxDefaultPosition, wxDefaultSize, 0 );
+	exposureValue->Wrap( -1 );
+	exposureValue->Hide();
+	
+	gainToolbar->AddControl( exposureValue );
+	exposureLabel = new wxStaticText( gainToolbar, wxID_ANY, wxT(" ms"), wxDefaultPosition, wxDefaultSize, 0 );
+	exposureLabel->Wrap( -1 );
+	exposureLabel->Hide();
+	
+	gainToolbar->AddControl( exposureLabel );
+	resetExposure = new wxButton( gainToolbar, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxSize( 50,20 ), 0 );
+	gainToolbar->AddControl( resetExposure );
+	exposureSlider = new wxSlider( gainToolbar, wxID_ANY, 10, 5, 25, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	exposureSlider->Hide();
+	
+	gainToolbar->AddControl( exposureSlider );
+	voltageValue = new wxStaticText( gainToolbar, wxID_ANY, wxT("70"), wxDefaultPosition, wxDefaultSize, 0 );
+	voltageValue->Wrap( -1 );
+	voltageValue->Hide();
+	
+	gainToolbar->AddControl( voltageValue );
+	voltageLabel = new wxStaticText( gainToolbar, wxID_ANY, wxT("kV"), wxDefaultPosition, wxDefaultSize, 0 );
+	voltageLabel->Wrap( -1 );
+	voltageLabel->Hide();
+	
+	gainToolbar->AddControl( voltageLabel );
+	resetVoltage = new wxButton( gainToolbar, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxSize( 50,20 ), 0 );
+	gainToolbar->AddControl( resetVoltage );
+	voltageSlider = new wxSlider( gainToolbar, wxID_ANY, 14, 10, 14, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	voltageSlider->Hide();
+	
+	gainToolbar->AddControl( voltageSlider );
+	gainToolbar->Realize(); 
+	
+	bSizer5->Add( gainToolbar, 0, wxEXPAND, 5 );
 	
 	noiseToolbar = new wxToolBar( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_HORIZONTAL|wxTB_NODIVIDER ); 
 	noiseToolbar->SetForegroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_CAPTIONTEXT ) );
@@ -586,7 +627,6 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	stepSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onStepSlider ), NULL, this );
 	stepSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onStepSlider ), NULL, this );
 	stepSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onStepSlider ), NULL, this );
-	useGain->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onEnableGain ), NULL, this );
 	scanVertEnable->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onScanVertEnable ), NULL, this );
 	resetScanVert->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetScanVert ), NULL, this );
 	scanVertSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
@@ -609,6 +649,27 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	scanHorSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
 	scanHorSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
 	scanHorSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	useGain->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onEnableGain ), NULL, this );
+	resetExposure->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetExposure ), NULL, this );
+	exposureSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onExposure ), NULL, this );
+	exposureSlider->Connect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( reconConfig::onExposure ), NULL, this );
+	exposureSlider->Connect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( reconConfig::onExposure ), NULL, this );
+	exposureSlider->Connect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( reconConfig::onExposure ), NULL, this );
+	exposureSlider->Connect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( reconConfig::onExposure ), NULL, this );
+	exposureSlider->Connect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( reconConfig::onExposure ), NULL, this );
+	exposureSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onExposure ), NULL, this );
+	exposureSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onExposure ), NULL, this );
+	exposureSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onExposure ), NULL, this );
+	resetVoltage->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetVoltage ), NULL, this );
+	voltageSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
+	voltageSlider->Connect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
+	voltageSlider->Connect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
+	voltageSlider->Connect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
+	voltageSlider->Connect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
+	voltageSlider->Connect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
+	voltageSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
+	voltageSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
+	voltageSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
 	outlierEnable->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onNoiseMaxEnable ), NULL, this );
 	resetNoiseMax->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetNoiseMax ), NULL, this );
 	noiseMaxSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
@@ -662,7 +723,6 @@ reconConfig::~reconConfig()
 	stepSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onStepSlider ), NULL, this );
 	stepSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onStepSlider ), NULL, this );
 	stepSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onStepSlider ), NULL, this );
-	useGain->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onEnableGain ), NULL, this );
 	scanVertEnable->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onScanVertEnable ), NULL, this );
 	resetScanVert->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetScanVert ), NULL, this );
 	scanVertSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onScanVert ), NULL, this );
@@ -685,6 +745,27 @@ reconConfig::~reconConfig()
 	scanHorSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
 	scanHorSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
 	scanHorSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onScanHor ), NULL, this );
+	useGain->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onEnableGain ), NULL, this );
+	resetExposure->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetExposure ), NULL, this );
+	exposureSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onExposure ), NULL, this );
+	exposureSlider->Disconnect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( reconConfig::onExposure ), NULL, this );
+	exposureSlider->Disconnect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( reconConfig::onExposure ), NULL, this );
+	exposureSlider->Disconnect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( reconConfig::onExposure ), NULL, this );
+	exposureSlider->Disconnect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( reconConfig::onExposure ), NULL, this );
+	exposureSlider->Disconnect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( reconConfig::onExposure ), NULL, this );
+	exposureSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onExposure ), NULL, this );
+	exposureSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onExposure ), NULL, this );
+	exposureSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onExposure ), NULL, this );
+	resetVoltage->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetVoltage ), NULL, this );
+	voltageSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
+	voltageSlider->Disconnect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
+	voltageSlider->Disconnect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
+	voltageSlider->Disconnect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
+	voltageSlider->Disconnect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
+	voltageSlider->Disconnect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
+	voltageSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
+	voltageSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
+	voltageSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
 	outlierEnable->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onNoiseMaxEnable ), NULL, this );
 	resetNoiseMax->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetNoiseMax ), NULL, this );
 	noiseMaxSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );

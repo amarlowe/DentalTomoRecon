@@ -182,7 +182,6 @@ class reconConfig : public wxDialog
 		wxStaticText* stepVal;
 		wxStaticText* stepUnits;
 		wxSlider* stepSlider;
-		wxCheckBox* useGain;
 		wxToolBar* scanToolbar;
 		wxCheckBox* scanVertEnable;
 		wxStaticText* scanVertValue;
@@ -192,6 +191,16 @@ class reconConfig : public wxDialog
 		wxStaticText* scanHorValue;
 		wxButton* resetScanHor;
 		wxSlider* scanHorSlider;
+		wxToolBar* gainToolbar;
+		wxCheckBox* useGain;
+		wxStaticText* exposureValue;
+		wxStaticText* exposureLabel;
+		wxButton* resetExposure;
+		wxSlider* exposureSlider;
+		wxStaticText* voltageValue;
+		wxStaticText* voltageLabel;
+		wxButton* resetVoltage;
+		wxSlider* voltageSlider;
 		wxToolBar* noiseToolbar;
 		wxCheckBox* outlierEnable;
 		wxStaticText* noiseMaxVal;
@@ -216,13 +225,17 @@ class reconConfig : public wxDialog
 		virtual void onSetStartDis( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onSetEndDis( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onStepSlider( wxScrollEvent& event ) { event.Skip(); }
-		virtual void onEnableGain( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onScanVertEnable( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onResetScanVert( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onScanVert( wxScrollEvent& event ) { event.Skip(); }
 		virtual void onScanHorEnable( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onResetScanHor( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onScanHor( wxScrollEvent& event ) { event.Skip(); }
+		virtual void onEnableGain( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onResetExposure( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onExposure( wxScrollEvent& event ) { event.Skip(); }
+		virtual void onResetVoltage( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onVoltage( wxScrollEvent& event ) { event.Skip(); }
 		virtual void onNoiseMaxEnable( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onResetNoiseMax( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onNoiseMax( wxScrollEvent& event ) { event.Skip(); }

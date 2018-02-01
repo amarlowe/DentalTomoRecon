@@ -38,7 +38,7 @@
 #define BARHEIGHT 40
 
 //Projection correction parameters
-#define LOWTHRESH 16000.0f
+#define LOWTHRESH 0.0f
 #define ABSHIGHTHRESH 55000.0f
 #define HIGHTHRESH 0.95f
 
@@ -65,7 +65,7 @@
 #define UMUL(a, b) ( (a) * (b) )
 
 //Autoscale parameters
-#define AUTOTHRESHOLD 500000
+#define AUTOTHRESHOLD 5000
 #define HISTLIMIT 10
 #define HIST_BIN_COUNT 256
 
@@ -90,6 +90,9 @@
 #endif
 
 //Defaults
+#define EXPOSUREDEFAULT 75
+#define VOLTAGEDEFAULT 70
+#define EXPOSUREBASE 50
 #define ENHANCEDEFAULT 1.0f
 #define SCANVERTDEFAULT 0.25f
 #define SCANHORDEFAULT 0.1f
@@ -281,6 +284,8 @@ struct params {
 	sourceData dataDisplay = reconstruction;
 
 	bool useGain = true;
+	int exposure = EXPOSUREDEFAULT;
+	int voltage = VOLTAGEDEFAULT;
 
 	float startDis = RECONDIS;
 	int slices = RECONSLICES;
@@ -893,6 +898,11 @@ public:
 
 	///Returns whether or not the gain correction is currently in use.
 	bool gainIsEnabled();
+
+	TomoError setExposure(int exposure);
+	int getExposure();
+	TomoError setVoltage(int voltage);
+	int getVoltage();
 
 	///Special use case for getting the histogram for the iterative reconstruction data for the current slice.
 

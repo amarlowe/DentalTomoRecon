@@ -306,6 +306,9 @@ derivative_t DTRMainWindow::getEnhance() {
 TomoError DTRMainWindow::launchReconConfig(TomoRecon * recon, wxString filename) {
 	ReconCon* rc = new ReconCon(this, filename, gainFilepath);
 	//set values
+	//exposure
+	rc->exposure = recon->getExposure();
+	rc->voltage = recon->getVoltage();
 
 	//Scan line removal
 	rc->scanVertIsEnabled = recon->scanVertIsEnabled();
@@ -335,6 +338,10 @@ TomoError DTRMainWindow::launchReconConfig(TomoRecon * recon, wxString filename)
 	recon->setStep(rc->stepSize);
 	recon->setBoundaries(rc->startDis, rc->endDis);
 	recon->enableGain(rc->gainIsEnabled);
+
+	//exposure control
+	recon->setVoltage(rc->voltage);
+	recon->setExposure(rc->exposure);
 
 	//Scan line removal
 	recon->enableScanVert(rc->scanVertIsEnabled);
@@ -1558,6 +1565,10 @@ ReconCon::ReconCon(wxWindow* parent, wxString filename, wxString gainFile) : rec
 void ReconCon::setValues() {
 	TomoRecon* recon = ((GLFrame*)drawPanel)->m_canvas->recon;
 
+	//exposure control
+	recon->setVoltage(voltage);
+	recon->setExposure(exposure);
+
 	//Scan line removal
 	recon->enableScanVert(scanVertIsEnabled);
 	recon->enableScanHor(scanHorIsEnabled);
@@ -1584,6 +1595,12 @@ void ReconCon::setValues() {
 	//Step size
 	stepVal->SetLabelText(wxString::Format(wxT("%1.1f"), stepSize));
 	stepSlider->SetValue((int)(stepSize * STEPFACTOR));
+
+	//exposure
+	voltageValue->SetLabelText(wxString::Format(wxT("%d"), recon->getVoltage()));
+	voltageSlider->SetValue(recon->getVoltage() / VOLTAGEFACTOR);
+	exposureValue->SetLabelText(wxString::Format(wxT("%d"), recon->getExposure()));
+	exposureSlider->SetValue(recon->getExposure() / EXPOSUREFACTOR);
 
 	//Scan line removal
 	if (recon->scanVertIsEnabled()) {
@@ -1664,16 +1681,6 @@ void ReconCon::setValues() {
 	currentFrame->m_canvas->paint();
 }
 
-void ReconCon::onEnableGain(wxCommandEvent& WXUNUSED(event)) {
-	GLFrame* currentFrame = (GLFrame*)drawPanel;
-	TomoRecon* recon = currentFrame->m_canvas->recon;
-
-	recon->enableGain(useGain->IsChecked());
-	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
-	recon->singleFrame();
-	currentFrame->m_canvas->paint();
-}
-
 void ReconCon::onToolbarChoice(wxCommandEvent& WXUNUSED(event)) {
 	GLFrame * currentFrame = (GLFrame*)drawPanel;
 	TomoRecon* recon = ((GLFrame*)drawPanel)->m_canvas->recon;
@@ -1681,6 +1688,7 @@ void ReconCon::onToolbarChoice(wxCommandEvent& WXUNUSED(event)) {
 
 	//Disable all toolbars
 	scanToolbar->Show(false);
+	gainToolbar->Show(false);
 	noiseToolbar->Show(false);
 	distanceToolbar->Show(false);
 
@@ -1698,12 +1706,18 @@ void ReconCon::onToolbarChoice(wxCommandEvent& WXUNUSED(event)) {
 		currentFrame->hideScrollBar();
 		break;
 	case 1:
+		gainToolbar->Show(true);
+		gainToolbar->Realize();
+		recon->setDataDisplay(projections);
+		currentFrame->showScrollBar(NUMVIEWS, recon->getActiveProjection());
+		break;
+	case 2:
 		scanToolbar->Show(true);
 		scanToolbar->Realize();
 		recon->setDataDisplay(projections);
 		currentFrame->showScrollBar(NUMVIEWS, recon->getActiveProjection());
 		break;
-	case 2:
+	case 3:
 		noiseToolbar->Show(true);
 		noiseToolbar->Realize();
 		recon->setDataDisplay(projections);
@@ -1741,6 +1755,8 @@ void ReconCon::onOk(wxCommandEvent& event) {
 	TVLambdaVal = recon->getTVLambda();
 	TVIterVal = recon->getTVIter();
 	gainIsEnabled = recon->gainIsEnabled();
+	voltage = recon->getVoltage();
+	exposure = recon->getExposure();
 	canceled = false;
 	Close();
 }
@@ -1775,7 +1791,7 @@ void ReconCon::onClose(wxCloseEvent& event) {
 	event.Skip();
 }
 
-//Scanline correcction
+//Scanline correction
 void ReconCon::onScanVertEnable(wxCommandEvent& event) {
 	if (scanVertEnable->IsChecked()) {
 		scanVertValue->Enable(true);
@@ -1865,6 +1881,90 @@ void ReconCon::onResetScanHor(wxCommandEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setScanHorVal(SCANHORDEFAULT);
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+//Gain correction
+void ReconCon::onEnableGain(wxCommandEvent& WXUNUSED(event)) {
+	if (useGain->IsChecked()) {
+		exposureValue->Enable(true);
+		exposureLabel->Enable(true);
+		resetExposure->Enable(true);
+		exposureSlider->Enable(true);
+		voltageValue->Enable(true);
+		voltageLabel->Enable(true);
+		resetVoltage->Enable(true);
+		voltageSlider->Enable(true);
+	}
+	else {
+		exposureValue->Enable(false);
+		exposureLabel->Enable(false);
+		resetExposure->Enable(false);
+		exposureSlider->Enable(false);
+		voltageValue->Enable(false);
+		voltageLabel->Enable(false);
+		resetVoltage->Enable(false);
+		voltageSlider->Enable(false);
+	}
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->enableGain(useGain->IsChecked());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void ReconCon::onResetExposure(wxCommandEvent& event) {
+	exposureValue->SetLabelText(wxString::Format(wxT("%d"), EXPOSUREDEFAULT));
+	exposureSlider->SetValue(EXPOSUREDEFAULT / EXPOSUREFACTOR);
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setExposure(EXPOSUREDEFAULT);
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void ReconCon::onExposure(wxScrollEvent& event) {
+	int value = event.GetPosition();
+	exposureValue->SetLabelText(wxString::Format(wxT("%d"), value * EXPOSUREFACTOR));
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setExposure(value * EXPOSUREFACTOR);
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void ReconCon::onResetVoltage(wxCommandEvent& event) {
+	voltageValue->SetLabelText(wxString::Format(wxT("%d"), VOLTAGEDEFAULT));
+	voltageSlider->SetValue(VOLTAGEDEFAULT / VOLTAGEFACTOR);
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setVoltage(VOLTAGEDEFAULT);
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void ReconCon::onVoltage(wxScrollEvent& event) {
+	int value = event.GetPosition();
+	voltageValue->SetLabelText(wxString::Format(wxT("%d"), value * VOLTAGEFACTOR));
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setVoltage(value * VOLTAGEFACTOR);
 	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();

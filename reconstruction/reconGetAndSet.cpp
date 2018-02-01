@@ -483,6 +483,24 @@ bool TomoRecon::gainIsEnabled() {
 	return constants.useGain;
 }
 
+TomoError TomoRecon::setExposure(int exposure) {
+	constants.exposure = exposure;
+	return Tomo_OK;
+}
+
+int TomoRecon::getExposure() {
+	return constants.exposure;
+}
+
+TomoError TomoRecon::setVoltage(int voltage) {
+	constants.voltage = voltage;
+	return Tomo_OK;
+}
+
+int TomoRecon::getVoltage() {
+	return constants.voltage;
+}
+
 int TomoRecon::getNumViews() {
 	return NumViews;
 }

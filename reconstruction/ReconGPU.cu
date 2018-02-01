@@ -444,7 +444,7 @@ __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, uns
 		float val = Proj[j*consts.Px + i];
 
 		if (consts.useGain) {
-			val /= Gain[j*consts.Px + i];
+			val /= (float)Gain[j*consts.Px + i] * (float)consts.exposure / (float)EXPOSUREBASE;
 			if (val > HIGHTHRESH) val = 0.0f;
 			val *= USHRT_MAX;
 		}
@@ -543,9 +543,9 @@ __global__ void projectIter(float * proj, float * oldRecon, int slice, float ite
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
 
 	//Set a normalization and pixel value to 0
-	float count = 0;
-	float error = 0;
-	//float minimum = USHRT_MAX;
+	float count = 0.0f;
+	float error = 0.0f;
+	float singleVal = 0.0f;
 
 	//Check image boundaries
 	if ((i >= consts.Rx) || (j >= consts.Ry)) return;
@@ -564,17 +564,24 @@ __global__ void projectIter(float * proj, float * oldRecon, int slice, float ite
 			if (x < TAPERSIZE) increment *= x / TAPERSIZE;
 			if (x > consts.Px - TAPERSIZE) increment *= (consts.Px - x) / TAPERSIZE;
 			if (abs(value) > 0.1f) {
+				float singleTemp = tex2D(textSino, x, y + view*consts.Py);
 				error += value * increment;
 				count += increment;
+				singleVal += singleTemp * increment;
 			}
 			//float minTest = proj[(view * consts.Py + j)*consts.ProjPitchNum + i];
 			//if (minTest < minimum) minimum = minTest;
 		}
 	}
 
-	if (count > 0)
+	if (count > 0) {
 		error /= ((float)count * (float)consts.slices);
-	else error = 0.0f;
+		singleVal /= ((float)count * (float)consts.slices);
+	}
+	else {
+		error = 0.0f;
+		singleVal = 0.0f;
+	}
 
 	float returnVal, delta;
 	surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice);
@@ -604,10 +611,13 @@ __global__ void projectIter(float * proj, float * oldRecon, int slice, float ite
 		if(AX > 0.0f) error += BX - AX*returnVal;
 	}
 
-	//error *= pow(0.999f, iteration);
-	error += 0.5f*delta;
+	error += 0.3f*delta;
 	returnVal += error;
-	//if (abs(error) > 0.0f && returnVal < 0.1f) returnVal = 0.1f;
+	//returnVal = diffWeight * singleVal + (1 - diffWeight) * returnVal;
+	returnVal += singleVal - returnVal * 0.1;
+	//returnVal = singleVal;
+	//if (returnVal > 10000) returnVal = 10000;
+	//if (returnVal < 0.1f) returnVal = 0.1f;
 #ifdef SHOWERROR
 	surf3Dwrite(error, errorRecon, i * sizeof(float), j, slice);
 #endif
@@ -654,7 +664,7 @@ __global__ void backProject(float * proj, float * error, int view, float iterati
 		error[j*consts.ProjPitchNum + i] = projVal - (value * (float)consts.Views / (float)count);
 	}
 #else
-	if (projVal > 0.0f && count > 0 && projVal < USHRT_MAX) {
+	if (projVal > 0.0f && count > 0) {
 #ifdef USELOGITER
 		float correctedMax = logf(USHRT_MAX);
 		projVal = (correctedMax - logf(projVal + 1)) / correctedMax * USHRT_MAX;
@@ -712,7 +722,7 @@ __global__ void scaleRecon(int slice, unsigned int minVal, unsigned int maxVal, 
 	float test;
 	surf3Dread(&test, surfRecon, i * sizeof(float), j, slice);
 	if (test == 0.0f) return;
-	test -=  minVal;
+	test -= minVal;
 	float maxV = maxVal - minVal;
 	if (test > maxV) test = maxV;
 	if (test > 1.0f) {
@@ -858,6 +868,7 @@ __global__ void histogram256Kernel(unsigned int *d_Histogram, T *d_Data, unsigne
 	//if (consts.flip) j = consts.Py - 1 - j;
 
 	float data = abs(d_Data[MUL_ADD(j, consts.ReconPitchNum, i)]);//whatever it currently is, cast it to ushort
+	//if (data <= 0.0f) return;
 	if (consts.log) {
 		if (data > 0) {
 			float correctedMax = logf(USHRT_MAX);
@@ -865,7 +876,7 @@ __global__ void histogram256Kernel(unsigned int *d_Histogram, T *d_Data, unsigne
 		}
 	}
 	if (data > USHRT_MAX) data = USHRT_MAX;
-	if (data < 0.0f) return;// data = 0.0f;
+	if (data <= 0.0f) return;// data = 0.0f;
 	atomicAdd(d_Histogram + ((unsigned short)data >> 8), 1);//bin by the upper 256 bits
 }
 
@@ -899,7 +910,7 @@ __global__ void histogramReconKernel(unsigned int *d_Histogram, int slice, bool 
 		}
 	}
 	if (data > USHRT_MAX) data = USHRT_MAX;
-	if (data < 0.0f) return;// data = 0.0f;
+	if (data <= 0.0f) return;// data = 0.0f;
 	atomicAdd(d_Histogram + ((unsigned short)data >> 8), 1);//bin by the upper 8 bits
 }
 
@@ -1193,7 +1204,17 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 	float maxVal, minVal;
 	unsigned int histogram[HIST_BIN_COUNT];
 	tomo_err_throw(getHistogram(d_Sino + (NumViews / 2)*projPitch / sizeof(float)*Sys.Proj.Ny, projPitch*Sys.Proj.Ny, histogram));
-	tomo_err_throw(autoLight(histogram, 80, &minVal, &maxVal));
+	tomo_err_throw(autoLight(histogram, 1, &minVal, &maxVal));
+
+	for (int view = 0; view < NumViews; view++) {
+		if (view == (NumViews / 2)) continue;
+		float thisMax, thisMin;
+		unsigned int histogram[HIST_BIN_COUNT];
+		tomo_err_throw(getHistogram(d_Sino + view*projPitch / sizeof(float)*Sys.Proj.Ny, projPitch*Sys.Proj.Ny, histogram));
+		tomo_err_throw(autoLight(histogram, 1, &thisMin, &thisMax));
+		if (thisMax > maxVal) maxVal = thisMax;
+		if (thisMin < minVal) minVal = thisMin;
+	}
 	cuda(Memcpy(d_MinVal, &minVal, sizeof(float), cudaMemcpyHostToDevice));
 
 	float *g, *z1, *z2;
@@ -1215,16 +1236,16 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 		(ny + block_size.y - 1) / block_size.y);
 
 	for (int view = 0; view < NumViews; view++) {
+		float bestScale = 1.0f;
 		unsigned int histogram2[HIST_BIN_COUNT];
 		tomo_err_throw(getHistogram(d_Sino + view*projPitch / sizeof(float)*Sys.Proj.Ny, projPitch*Sys.Proj.Ny, histogram2));
 
 		//manually check range of offset values
 		float error = FLT_MAX;
 		int bestOffset = -100;
-		float bestScale = 1.0f;
 		if (view != NumViews / 2) {
-			for (float scale = 0.96f; scale < 1.06f; scale += 0.001f) {
-				for (int offset = -20; offset < 5; offset++) {
+			for (float scale = 0.90f; scale < 1.20f; scale += 0.001f) {
+				for (int offset = -20; offset < 10; offset++) {
 					//find average error
 					float avgError = 0.0f;
 					int count = 0;
@@ -1234,8 +1255,8 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 							int lower = floor(index2);
 							int upper = ceil(index2);
 							float intopVal = ((float)upper - index2) * histogram2[lower] + (index2 - (float)lower) * histogram2[upper];
-							avgError += pow((float)histogram[test] - intopVal, 2.0f);
-							//avgError += abs((float)histogram[test] - intopVal);
+							//avgError += pow((float)histogram[test] - intopVal, 2.0f);
+							avgError += abs((float)histogram[test] - intopVal);
 							count++;
 						}
 					}
@@ -2051,6 +2072,13 @@ TomoError TomoRecon::autoLight(unsigned int histogram[HIST_BIN_COUNT], int thres
 		maxVal = &constants.maxVal;
 	}
 
+	/*std::ofstream outputFile;
+	char outFilename[250];
+	sprintf(outFilename, "./histogramOutRecon.txt");
+	outputFile.open(outFilename);
+	for (int test = 1; test < 255; test++) outputFile << histogram[test] << "\n";
+	outputFile.close();*/
+
 	int i;
 	for (i = 0; i < HIST_BIN_COUNT; i++) {
 		unsigned int count = histogram[i];
@@ -2389,6 +2417,7 @@ TomoError TomoRecon::iterStep() {
 #endif // RECONDERIVATIVE
 	cuda(UnbindTexture(textRecon));
 
+	cuda(BindTexture2D(NULL, textSino, d_Sino, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
 	cuda(BindTexture2D(NULL, textError, d_Error, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch))
 	for (int slice = 0; slice < Sys.Recon.Nz; slice++) {
 		KERNELCALL2(copySlice, contBlocks, contThreads, d_ReconOld, slice, constants, surfReconObj);
@@ -2434,6 +2463,14 @@ TomoError TomoRecon::finalizeIter() {
 	//cuda(BindSurfaceToArray(surfRecon, d_Recon2));
 	for (int slice = 0; slice < Sys.Recon.Nz; slice++)
 		KERNELCALL2(scaleRecon, contBlocks, contThreads, slice, minVal, maxVal, constants, surfReconObj);
+
+	tomo_err_throw(getHistogramRecon(histogram, true, false));
+	std::ofstream outputFile;
+	char outFilename[250];
+	sprintf(outFilename, "./histogramOutRecon.txt");
+	outputFile.open(outFilename);
+	for (int test = 1; test < 255; test++) outputFile << histogram[test] / Sys.Recon.Nz << "\n";
+	outputFile.close();
 
 	constants.baseXr = -1;
 	constants.baseYr = -1;

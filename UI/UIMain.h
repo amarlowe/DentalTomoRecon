@@ -46,6 +46,8 @@
 #define SCROLLFACTOR 10
 #define ENHANCEFACTOR 100.0f
 #define WINLVLFACTOR 255
+#define EXPOSUREFACTOR 5
+#define VOLTAGEFACTOR 5
 #define STEPFACTOR	10.0f
 #define SCANFACTOR 100.0f
 #define MAXSLICE 150
@@ -131,9 +133,15 @@ protected:
 	void onSetEndDis(wxCommandEvent& event);
 	void onStepSlider(wxScrollEvent& event);
 	void onClose(wxCloseEvent& event);
-	void onEnableGain(wxCommandEvent& event);
 
 	void onToolbarChoice(wxCommandEvent& event);
+
+	//Gain correction
+	void onEnableGain(wxCommandEvent& event);
+	void onResetExposure(wxCommandEvent& event);
+	void onExposure(wxScrollEvent& event);
+	void onResetVoltage(wxCommandEvent& event);
+	void onVoltage(wxScrollEvent& event);
 
 	//Scanline correction
 	void onScanVertEnable(wxCommandEvent& event);
@@ -165,6 +173,8 @@ public:
 	wxString filename;
 	wxString gainFilepath;
 	float stepSize;
+	int voltage;
+	int exposure;
 	bool scanVertIsEnabled;
 	bool scanHorIsEnabled;
 	float scanVertVal;
