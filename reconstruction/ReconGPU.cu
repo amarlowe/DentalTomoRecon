@@ -728,7 +728,7 @@ __global__ void invertRecon(int slice, params consts, cudaSurfaceObject_t surfRe
 	surf3Dwrite(USHRT_MAX - test, surfRecon, i * sizeof(float), j, slice);
 }
 
-__global__ void scaleRecon(int slice, int minVal, unsigned int maxVal, params consts, cudaSurfaceObject_t surfRecon) {
+__global__ void scaleRecon(int slice, float * scales, float * offsets, params consts, cudaSurfaceObject_t surfRecon) {
 	//Define pixel location in x, y, and z
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
@@ -739,11 +739,10 @@ __global__ void scaleRecon(int slice, int minVal, unsigned int maxVal, params co
 	float test;
 	surf3Dread(&test, surfRecon, i * sizeof(float), j, slice);
 	if (test == 0.0f) return;
-	test -= minVal;
-	float maxV = maxVal - minVal;
-	if (test > maxV) test = maxV;
+	unsigned int index = (unsigned short)test >> 8;
+	test = test * scales[index] + offsets[index] * 256.0f;
 	if (test > 1.0f) {
-		surf3Dwrite(test / maxV * (float)USHRT_MAX, surfRecon, i * sizeof(float), j, slice);
+		surf3Dwrite(test, surfRecon, i * sizeof(float), j, slice);
 	}
 	else surf3Dwrite(1.0f, surfRecon, i * sizeof(float), j, slice);
 }
@@ -2500,9 +2499,15 @@ TomoError TomoRecon::finalizeIter() {
 		y1 = y2;
 	}
 
+	float * d_scales, * d_offsets;
+	cudaMalloc(&d_scales, HIST_BIN_COUNT * sizeof(float));
+	cudaMalloc(&d_offsets, HIST_BIN_COUNT * sizeof(float));
+	cudaMemcpy(d_scales, scales, HIST_BIN_COUNT * sizeof(float), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_offsets, offsets, HIST_BIN_COUNT * sizeof(float), cudaMemcpyHostToDevice);
+
 	//cuda(BindSurfaceToArray(surfRecon, d_Recon2));
 	for (int slice = 0; slice < Sys.Recon.Nz; slice++)
-		KERNELCALL2(scaleRecon, contBlocks, contThreads, slice, minVal, maxVal, constants, surfReconObj);
+		KERNELCALL2(scaleRecon, contBlocks, contThreads, slice, d_scales, d_offsets, constants, surfReconObj);
 
 	tomo_err_throw(getHistogramRecon(histogram, true, false));
 	std::ofstream outputFile;
