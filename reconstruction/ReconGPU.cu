@@ -2483,7 +2483,7 @@ TomoError TomoRecon::finalizeIter() {
 		while (h1 > h2) {
 			h1 -= h2;
 			if (++yIndex >= HIST_BIN_COUNT) break;
-			h2 = inputHistogram[yIndex];
+			h2 = inputHistogram[yIndex] / (float)NumViews;
 		}
 		if (yIndex >= HIST_BIN_COUNT) {
 			//Overflow logic
@@ -2491,7 +2491,7 @@ TomoError TomoRecon::finalizeIter() {
 		}
 		h2 -= h1;
 
-		float maxH2 = inputHistogram[yIndex];
+		float maxH2 = inputHistogram[yIndex] / (float)NumViews;
 		if(maxH2 > 0) y2 = yIndex + (maxH2 - h2) / maxH2;
 		else y2 = yIndex;
 		scales[i] = y2 - y1;//scale * (x2 - x1) = (y2 - y1)
