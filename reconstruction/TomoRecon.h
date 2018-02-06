@@ -1088,6 +1088,9 @@ private:
 	cudaSurfaceObject_t surfReconObj = 0;
 	cudaSurfaceObject_t surfErrorObj = 0;
 	cudaSurfaceObject_t surfDeltaObj = 0;
+
+	//Input histogram for end recon matching
+	unsigned int inputHistogram[HIST_BIN_COUNT];
 };
 
 /********************************************************************************************/
