@@ -407,7 +407,7 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	wxBoxSizer* bSizer5;
 	bSizer5 = new wxBoxSizer( wxHORIZONTAL );
 	
-	wxString optionBoxChoices[] = { wxT("Distance Selection"), wxT("Exposure"), wxT("Scan Line Removal"), wxT("Denoising") };
+	wxString optionBoxChoices[] = { wxT("Distance Selection"), wxT("Exposure"), wxT("Metal Threshold"), wxT("Scan Line Removal"), wxT("Denoising") };
 	int optionBoxNChoices = sizeof( optionBoxChoices ) / sizeof( wxString );
 	optionBox = new wxChoice( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, optionBoxNChoices, optionBoxChoices, 0 );
 	optionBox->SetSelection( 0 );
@@ -543,7 +543,33 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	gainToolbar->AddControl( voltageSlider );
 	gainToolbar->Realize(); 
 	
-	bSizer5->Add( gainToolbar, 0, wxEXPAND, 5 );
+	bSizer5->Add( gainToolbar, 1, wxALIGN_CENTER_VERTICAL, 5 );
+	
+	metalToolbar = new wxToolBar( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_HORIZONTAL|wxTB_NODIVIDER|wxNO_BORDER ); 
+	metalToolbar->SetForegroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_CAPTIONTEXT ) );
+	metalToolbar->SetBackgroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_MENU ) );
+	metalToolbar->Hide();
+	
+	useMetal = new wxCheckBox( metalToolbar, wxID_ANY, wxT("Metal Artifact Correction over value: "), wxDefaultPosition, wxDefaultSize, 0 );
+	metalToolbar->AddControl( useMetal );
+	metalValue = new wxStaticText( metalToolbar, wxID_ANY, wxT("8000"), wxDefaultPosition, wxDefaultSize, 0 );
+	metalValue->Wrap( -1 );
+	metalValue->Enable( false );
+	metalValue->Hide();
+	
+	metalToolbar->AddControl( metalValue );
+	resetMetal = new wxButton( metalToolbar, wxID_ANY, wxT("Reset"), wxDefaultPosition, wxSize( 50,20 ), 0 );
+	resetMetal->Enable( false );
+	
+	metalToolbar->AddControl( resetMetal );
+	metalSlider = new wxSlider( metalToolbar, wxID_ANY, 16, 1, 50, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
+	metalSlider->Enable( false );
+	metalSlider->Hide();
+	
+	metalToolbar->AddControl( metalSlider );
+	metalToolbar->Realize(); 
+	
+	bSizer5->Add( metalToolbar, 1, wxALIGN_CENTER_VERTICAL, 5 );
 	
 	noiseToolbar = new wxToolBar( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTB_HORIZONTAL|wxTB_NODIVIDER ); 
 	noiseToolbar->SetForegroundColour( wxSystemSettings::GetColour( wxSYS_COLOUR_CAPTIONTEXT ) );
@@ -670,6 +696,17 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	voltageSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
 	voltageSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
 	voltageSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
+	useMetal->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onEnableMetal ), NULL, this );
+	resetMetal->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetMetal ), NULL, this );
+	metalSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onMetal ), NULL, this );
+	metalSlider->Connect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( reconConfig::onMetal ), NULL, this );
+	metalSlider->Connect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( reconConfig::onMetal ), NULL, this );
+	metalSlider->Connect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( reconConfig::onMetal ), NULL, this );
+	metalSlider->Connect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( reconConfig::onMetal ), NULL, this );
+	metalSlider->Connect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( reconConfig::onMetal ), NULL, this );
+	metalSlider->Connect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onMetal ), NULL, this );
+	metalSlider->Connect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onMetal ), NULL, this );
+	metalSlider->Connect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onMetal ), NULL, this );
 	outlierEnable->Connect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onNoiseMaxEnable ), NULL, this );
 	resetNoiseMax->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetNoiseMax ), NULL, this );
 	noiseMaxSlider->Connect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );
@@ -766,6 +803,17 @@ reconConfig::~reconConfig()
 	voltageSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
 	voltageSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
 	voltageSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onVoltage ), NULL, this );
+	useMetal->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onEnableMetal ), NULL, this );
+	resetMetal->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetMetal ), NULL, this );
+	metalSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onMetal ), NULL, this );
+	metalSlider->Disconnect( wxEVT_SCROLL_BOTTOM, wxScrollEventHandler( reconConfig::onMetal ), NULL, this );
+	metalSlider->Disconnect( wxEVT_SCROLL_LINEUP, wxScrollEventHandler( reconConfig::onMetal ), NULL, this );
+	metalSlider->Disconnect( wxEVT_SCROLL_LINEDOWN, wxScrollEventHandler( reconConfig::onMetal ), NULL, this );
+	metalSlider->Disconnect( wxEVT_SCROLL_PAGEUP, wxScrollEventHandler( reconConfig::onMetal ), NULL, this );
+	metalSlider->Disconnect( wxEVT_SCROLL_PAGEDOWN, wxScrollEventHandler( reconConfig::onMetal ), NULL, this );
+	metalSlider->Disconnect( wxEVT_SCROLL_THUMBTRACK, wxScrollEventHandler( reconConfig::onMetal ), NULL, this );
+	metalSlider->Disconnect( wxEVT_SCROLL_THUMBRELEASE, wxScrollEventHandler( reconConfig::onMetal ), NULL, this );
+	metalSlider->Disconnect( wxEVT_SCROLL_CHANGED, wxScrollEventHandler( reconConfig::onMetal ), NULL, this );
 	outlierEnable->Disconnect( wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler( reconConfig::onNoiseMaxEnable ), NULL, this );
 	resetNoiseMax->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( reconConfig::onResetNoiseMax ), NULL, this );
 	noiseMaxSlider->Disconnect( wxEVT_SCROLL_TOP, wxScrollEventHandler( reconConfig::onNoiseMax ), NULL, this );

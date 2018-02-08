@@ -38,8 +38,6 @@
 #define BARHEIGHT 40
 
 //Projection correction parameters
-#define LOWTHRESH 0.0f
-#define ABSHIGHTHRESH 55000.0f
 #define HIGHTHRESH 0.95f
 
 //Autofocus parameters
@@ -93,6 +91,7 @@
 #define EXPOSUREDEFAULT 75
 #define VOLTAGEDEFAULT 70
 #define EXPOSUREBASE 50
+#define METALDEFAULT 8000
 #define ENHANCEDEFAULT 1.0f
 #define SCANVERTDEFAULT 0.25f
 #define SCANHORDEFAULT 0.1f
@@ -110,9 +109,9 @@
 #define DELTAGROWTH 1.0f
 #define DELTADECAY 0.99f
 
-#define SKIPITERTV true
-#define TVX 0.01f
-#define TVY 0.01f
+#define SKIPITERTV false
+#define TVX 0.02f
+#define TVY 0.02f
 #define TVZ 0.00f
 #define TVITERATIONS 0
 //#define USELOGITER
@@ -284,8 +283,10 @@ struct params {
 	sourceData dataDisplay = reconstruction;
 
 	bool useGain = true;
+	bool useMetal = false;
 	int exposure = EXPOSUREDEFAULT;
 	int voltage = VOLTAGEDEFAULT;
+	int metalThresh = METALDEFAULT;
 
 	float startDis = RECONDIS;
 	int slices = RECONSLICES;
@@ -904,6 +905,11 @@ public:
 	TomoError setVoltage(int voltage);
 	int getVoltage();
 
+	TomoError enableMetal(bool enable);
+	bool metalIsEnabled();
+	TomoError setMetalThreshold(int threshold);
+	int getMetalThreshold();
+
 	///Special use case for getting the histogram for the iterative reconstruction data for the current slice.
 
 	///Usually used to adjust window and level.
@@ -1030,6 +1036,7 @@ private:
 	float * d_Image;
 	float * d_Error;
 	float * d_Sino;
+	float * d_Raw;
 	cudaArray_t d_Recon2 = NULL;
 	cudaArray_t d_ReconDelta = NULL;
 	cudaArray_t d_ReconError = NULL;

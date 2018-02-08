@@ -201,6 +201,11 @@ class reconConfig : public wxDialog
 		wxStaticText* voltageLabel;
 		wxButton* resetVoltage;
 		wxSlider* voltageSlider;
+		wxToolBar* metalToolbar;
+		wxCheckBox* useMetal;
+		wxStaticText* metalValue;
+		wxButton* resetMetal;
+		wxSlider* metalSlider;
 		wxToolBar* noiseToolbar;
 		wxCheckBox* outlierEnable;
 		wxStaticText* noiseMaxVal;
@@ -236,6 +241,9 @@ class reconConfig : public wxDialog
 		virtual void onExposure( wxScrollEvent& event ) { event.Skip(); }
 		virtual void onResetVoltage( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onVoltage( wxScrollEvent& event ) { event.Skip(); }
+		virtual void onEnableMetal( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onResetMetal( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onMetal( wxScrollEvent& event ) { event.Skip(); }
 		virtual void onNoiseMaxEnable( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onResetNoiseMax( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onNoiseMax( wxScrollEvent& event ) { event.Skip(); }
