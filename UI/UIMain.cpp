@@ -42,6 +42,7 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 			}
 
 			if (firstRun) {
+				OFCondition outErr;
 				float tempFlt;
 				unsigned short tempShrt;
 				dset->findAndGetFloat32(PRV_StepSize, tempFlt);
@@ -82,6 +83,14 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 				recon->setBoundaries(tempFlt, tempFlt2);
 				dset->findAndGetUint16(PRV_UseGain, tempShrt);
 				recon->enableGain(tempShrt == 1);
+				outErr = dset->findAndGetUint16(PRV_Voltage, tempShrt);
+				if (outErr == EC_Normal) recon->setVoltage(tempShrt);
+				outErr = dset->findAndGetUint16(PRV_Exposure, tempShrt);
+				if (outErr == EC_Normal) recon->setExposure(tempShrt);
+				outErr = dset->findAndGetUint16(PRV_UseMetal, tempShrt);
+				if (outErr == EC_Normal) recon->enableMetal(tempShrt == 1);
+				outErr = dset->findAndGetFloat32(PRV_MetalThresh, tempFlt);
+				if (outErr == EC_Normal) recon->setMetalThreshold(tempFlt);
 			}
 
 			returnError = Tomo_proj_file;
@@ -306,9 +315,14 @@ derivative_t DTRMainWindow::getEnhance() {
 TomoError DTRMainWindow::launchReconConfig(TomoRecon * recon, wxString filename) {
 	ReconCon* rc = new ReconCon(this, filename, gainFilepath);
 	//set values
+
 	//exposure
 	rc->exposure = recon->getExposure();
 	rc->voltage = recon->getVoltage();
+
+	//metal
+	rc->metalIsEnabled = recon->metalIsEnabled();
+	rc->metalThresh = recon->getMetalThreshold();
 
 	//Scan line removal
 	rc->scanVertIsEnabled = recon->scanVertIsEnabled();
@@ -342,6 +356,10 @@ TomoError DTRMainWindow::launchReconConfig(TomoRecon * recon, wxString filename)
 	//exposure control
 	recon->setVoltage(rc->voltage);
 	recon->setExposure(rc->exposure);
+
+	//metal
+	recon->enableMetal(rc->metalIsEnabled);
+	recon->setMetalThreshold(rc->metalThresh);
 
 	//Scan line removal
 	recon->enableScanVert(rc->scanVertIsEnabled);
@@ -687,6 +705,10 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 	dict.addEntry(new DcmDictEntry(PRIVATE_DISSRT_TAG, EVR_FL, "Start distance of reconstruction", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
 	dict.addEntry(new DcmDictEntry(PRIVATE_DISEND_TAG, EVR_FL, "End distance of reconstruction", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
 	dict.addEntry(new DcmDictEntry(PRIVATE_USEGN_TAG, EVR_US, "Use gain correction", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_VOLTAGE_TAG, EVR_US, "Voltage of anode", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_EXPSR_TAG, EVR_US, "Exposure time", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_USEMTL_TAG, EVR_US, "Use metal artifact correction", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_MTLTHRS_TAG, EVR_FL, "Metal artifact threshold", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
 	dcmDataDict.unlock();
 
 	dataset->putAndInsertString(PRV_PrivateCreator, PRIVATE_CREATOR_NAME);
@@ -709,6 +731,10 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 	dataset->putAndInsertFloat32(PRV_DisStart, recon->getStartBoundary());
 	dataset->putAndInsertFloat32(PRV_DisEnd, recon->getEndBoundary());
 	dataset->putAndInsertUint16(PRV_UseGain, recon->gainIsEnabled() ? 1 : 0);
+	dataset->putAndInsertUint16(PRV_Voltage, recon->getVoltage());
+	dataset->putAndInsertUint16(PRV_Exposure, recon->getExposure());
+	dataset->putAndInsertUint16(PRV_UseMetal, recon->metalIsEnabled() ? 1 : 0);
+	dataset->putAndInsertFloat32(PRV_MetalThresh, recon->getMetalThreshold());
 
 	//Output just the tags for reference
 	fileformat.print(COUT);
@@ -1569,6 +1595,10 @@ void ReconCon::setValues() {
 	recon->setVoltage(voltage);
 	recon->setExposure(exposure);
 
+	//Metal reduction
+	recon->enableMetal(metalIsEnabled);
+	recon->setMetalThreshold(metalThresh);
+
 	//Scan line removal
 	recon->enableScanVert(scanVertIsEnabled);
 	recon->enableScanHor(scanHorIsEnabled);
@@ -1601,6 +1631,42 @@ void ReconCon::setValues() {
 	voltageSlider->SetValue(recon->getVoltage() / VOLTAGEFACTOR);
 	exposureValue->SetLabelText(wxString::Format(wxT("%d"), recon->getExposure()));
 	exposureSlider->SetValue(recon->getExposure() / EXPOSUREFACTOR);
+	useGain->SetValue(recon->gainIsEnabled());
+	if (useGain->IsChecked()) {
+		exposureValue->Enable(true);
+		exposureLabel->Enable(true);
+		resetExposure->Enable(true);
+		exposureSlider->Enable(true);
+		voltageValue->Enable(true);
+		voltageLabel->Enable(true);
+		resetVoltage->Enable(true);
+		voltageSlider->Enable(true);
+	}
+	else {
+		exposureValue->Enable(false);
+		exposureLabel->Enable(false);
+		resetExposure->Enable(false);
+		exposureSlider->Enable(false);
+		voltageValue->Enable(false);
+		voltageLabel->Enable(false);
+		resetVoltage->Enable(false);
+		voltageSlider->Enable(false);
+	}
+
+	//metal
+	metalValue->SetLabelText(wxString::Format(wxT("%d"), recon->getMetalThreshold()));
+	metalSlider->SetValue(recon->getMetalThreshold() / METALFACTOR);
+	useMetal->SetValue(recon->metalIsEnabled());
+	if (useMetal->IsChecked()) {
+		metalValue->Enable(true);
+		resetMetal->Enable(true);
+		metalSlider->Enable(true);
+	}
+	else {
+		metalValue->Enable(false);
+		resetMetal->Enable(false);
+		metalSlider->Enable(false);
+	}
 
 	//Scan line removal
 	if (recon->scanVertIsEnabled()) {
@@ -1689,6 +1755,7 @@ void ReconCon::onToolbarChoice(wxCommandEvent& WXUNUSED(event)) {
 	//Disable all toolbars
 	scanToolbar->Show(false);
 	gainToolbar->Show(false);
+	metalToolbar->Show(false);
 	noiseToolbar->Show(false);
 	distanceToolbar->Show(false);
 
@@ -1712,12 +1779,18 @@ void ReconCon::onToolbarChoice(wxCommandEvent& WXUNUSED(event)) {
 		currentFrame->showScrollBar(NUMVIEWS, recon->getActiveProjection());
 		break;
 	case 2:
+		metalToolbar->Show(true);
+		metalToolbar->Realize();
+		recon->setDataDisplay(projections);
+		currentFrame->showScrollBar(NUMVIEWS, recon->getActiveProjection());
+		break;
+	case 3:
 		scanToolbar->Show(true);
 		scanToolbar->Realize();
 		recon->setDataDisplay(projections);
 		currentFrame->showScrollBar(NUMVIEWS, recon->getActiveProjection());
 		break;
-	case 3:
+	case 4:
 		noiseToolbar->Show(true);
 		noiseToolbar->Realize();
 		recon->setDataDisplay(projections);
@@ -1757,6 +1830,8 @@ void ReconCon::onOk(wxCommandEvent& event) {
 	gainIsEnabled = recon->gainIsEnabled();
 	voltage = recon->getVoltage();
 	exposure = recon->getExposure();
+	metalIsEnabled = recon->metalIsEnabled();
+	metalThresh = recon->getMetalThreshold();
 	canceled = false;
 	Close();
 }
@@ -1965,6 +2040,54 @@ void ReconCon::onVoltage(wxScrollEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	recon->setVoltage(value * VOLTAGEFACTOR);
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+//Metal correction
+void ReconCon::onEnableMetal(wxCommandEvent& WXUNUSED(event)) {
+	if (useMetal->IsChecked()) {
+		metalValue->Enable(true);
+		resetMetal->Enable(true);
+		metalSlider->Enable(true);
+	}
+	else {
+		metalValue->Enable(false);
+		resetMetal->Enable(false);
+		metalSlider->Enable(false);
+	}
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->enableMetal(useMetal->IsChecked());
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void ReconCon::onResetMetal(wxCommandEvent& event) {
+	metalValue->SetLabelText(wxString::Format(wxT("%d"), METALDEFAULT));
+	metalSlider->SetValue(METALDEFAULT / METALFACTOR);
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setMetalThreshold(METALDEFAULT);
+	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+void ReconCon::onMetal(wxScrollEvent& event) {
+	int value = event.GetPosition();
+	metalValue->SetLabelText(wxString::Format(wxT("%d"), value * METALFACTOR));
+
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->setMetalThreshold(value * METALFACTOR);
 	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();

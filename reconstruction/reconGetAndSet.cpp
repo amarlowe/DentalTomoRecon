@@ -501,6 +501,24 @@ int TomoRecon::getVoltage() {
 	return constants.voltage;
 }
 
+TomoError TomoRecon::enableMetal(bool enable) {
+	constants.useMetal = enable;
+	return Tomo_OK;
+}
+
+bool TomoRecon::metalIsEnabled() {
+	return constants.useMetal;
+}
+
+TomoError TomoRecon::setMetalThreshold(int threshold) {
+	constants.metalThresh = threshold;
+	return Tomo_OK;
+}
+
+int TomoRecon::getMetalThreshold() {
+	return constants.metalThresh;
+}
+
 int TomoRecon::getNumViews() {
 	return NumViews;
 }

@@ -48,6 +48,7 @@
 #define WINLVLFACTOR 255
 #define EXPOSUREFACTOR 5
 #define VOLTAGEFACTOR 5
+#define METALFACTOR	500
 #define STEPFACTOR	10.0f
 #define SCANFACTOR 100.0f
 #define MAXSLICE 150
@@ -75,6 +76,10 @@
 #define PRIVATE_DISSRT_TAG		0x0029, 0x1010
 #define PRIVATE_DISEND_TAG		0x0029, 0x1011
 #define PRIVATE_USEGN_TAG		0x0029, 0x1012
+#define PRIVATE_VOLTAGE_TAG		0x0029, 0x1013
+#define PRIVATE_EXPSR_TAG		0x0029, 0x1014
+#define PRIVATE_USEMTL_TAG		0x0029, 0x1015
+#define PRIVATE_MTLTHRS_TAG		0x0029, 0x1016
 
 #define PRV_PrivateCreator  DcmTag(PRIVATE_CREATOR_TAG)
 #define PRV_StepSize		DcmTag(PRIVATE_STEP_TAG, PRIVATE_CREATOR_NAME)
@@ -96,6 +101,10 @@
 #define PRV_DisStart		DcmTag(PRIVATE_DISSRT_TAG, PRIVATE_CREATOR_NAME)
 #define PRV_DisEnd			DcmTag(PRIVATE_DISEND_TAG, PRIVATE_CREATOR_NAME)
 #define PRV_UseGain			DcmTag(PRIVATE_USEGN_TAG, PRIVATE_CREATOR_NAME)
+#define PRV_Voltage			DcmTag(PRIVATE_VOLTAGE_TAG, PRIVATE_CREATOR_NAME)
+#define PRV_Exposure		DcmTag(PRIVATE_EXPSR_TAG, PRIVATE_CREATOR_NAME)
+#define PRV_UseMetal		DcmTag(PRIVATE_USEMTL_TAG, PRIVATE_CREATOR_NAME)
+#define PRV_MetalThresh		DcmTag(PRIVATE_MTLTHRS_TAG, PRIVATE_CREATOR_NAME)
 
 typedef enum {
 	Status = 0,
@@ -143,6 +152,11 @@ protected:
 	void onResetVoltage(wxCommandEvent& event);
 	void onVoltage(wxScrollEvent& event);
 
+	//Metal correction
+	void onEnableMetal(wxCommandEvent& event);
+	void onResetMetal(wxCommandEvent& event);
+	void onMetal(wxScrollEvent& event);
+
 	//Scanline correction
 	void onScanVertEnable(wxCommandEvent& event);
 	void onScanVert(wxScrollEvent& event);
@@ -186,6 +200,8 @@ public:
 	int TVIterVal;
 	bool gainIsEnabled;
 	bool canceled = true;
+	bool metalIsEnabled;
+	int metalThresh;
 };
 
 class DTRConfigDialog : public configDialog {
