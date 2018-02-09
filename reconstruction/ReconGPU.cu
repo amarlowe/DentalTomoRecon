@@ -44,7 +44,7 @@ texture<float, cudaTextureType3D, cudaReadModeElementType> textRecon;
 texture<float, cudaTextureType3D, cudaReadModeElementType> textDelta;
 texture<float, cudaTextureType2D, cudaReadModeElementType> textImage;
 texture<float, cudaTextureType2D, cudaReadModeElementType> textError;
-texture<float, cudaTextureType2D, cudaReadModeElementType> textSino;
+texture<float, cudaTextureType2D, cudaReadModeElementType> textSino;texture<float, cudaTextureType2D, cudaReadModeElementType> textWeight;
 /********************************************************************************************/
 /* GPU Function specific functions															*/
 /********************************************************************************************/
@@ -540,7 +540,7 @@ __global__ void projectSlice(float * IM, float distance, params consts) {
 #ifdef SHOWERROR
 __global__ void projectIter(float * oldRecon, int slice, float iteration, bool skipTV, params consts, cudaSurfaceObject_t surfRecon, cudaSurfaceObject_t errorRecon) {
 #else
-__global__ void projectIter(float * proj, float * oldRecon, int slice, float iteration, bool skipTV, params consts, cudaSurfaceObject_t surfRecon, cudaSurfaceObject_t surfDelta, bool firstRun = false) {
+__global__ void projectIter(float * proj, float * oldRecon, float * weights, int slice, float iteration, bool skipTV, params consts, cudaSurfaceObject_t surfRecon, cudaSurfaceObject_t surfDelta, bool firstRun = false) {
 #endif
 	//Define pixel location in x, y, and z
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -549,6 +549,7 @@ __global__ void projectIter(float * proj, float * oldRecon, int slice, float ite
 	//Set a normalization and pixel value to 0
 	float count = 0.0f;
 	float error = 0.0f;
+	//firstRun = true;
 	//float maximum = 0.0f;
 	//float minimum = FLT_MAX;
 
@@ -570,8 +571,15 @@ __global__ void projectIter(float * proj, float * oldRecon, int slice, float ite
 			if (x > consts.Px - TAPERSIZE) increment *= (consts.Px - x) / TAPERSIZE;
 			if (abs(value) > 0.1f) {
 				//float singleTemp = tex2D(textSino, x, y + view*consts.Py);
-				error += value * increment;
 				count += increment;
+				if (!firstRun) {
+					//float weight = tex2D(textWeight, x, y + view*consts.Py);
+					//if(weight > 0)
+					//	error += value * increment / weight;
+					//else
+						error += value * increment;
+				}
+				else error += value * increment;
 				//if (singleTemp > maximum) maximum = singleTemp;
 				//if (singleTemp < minimum) minimum = singleTemp;
 				//singleVal += singleTemp * increment;
@@ -582,7 +590,9 @@ __global__ void projectIter(float * proj, float * oldRecon, int slice, float ite
 	}
 
 	if (count > 0) {
-		error /= ((float)count * (float)consts.slices);
+		//if(firstRun) 
+			error /= ((float)count * (float)consts.slices);
+		//else error /= count;
 	}
 	else
 		error = 0.0f;
@@ -615,27 +625,27 @@ __global__ void projectIter(float * proj, float * oldRecon, int slice, float ite
 		if (AX > 0.0f) error += BX - AX*returnVal;
 	}
 
-	error += 0.5f*delta;
-	/*
-	if (iteration < 2.0f) delta = 1;
+	//error -= 0.5 * delta;
+	
+	if (firstRun) delta = 1;
 	else {
-		if (error * delta > 0) delta *= 1.0;
+		if (error * delta > 0) delta *= 0.95f;
 		else {
-			delta *= 0.0f;
-			returnVal = 0.0f;
+			delta *= -0.95f;
+			//returnVal = 0.0f;
 		}
 	}
-	error *= abs(delta);*/
+	error *= abs(delta);
 
 	returnVal += error;
 	//maximum /= (float)count;
 	//minimum /= (float)count;
 	//if (returnVal > maximum) returnVal = maximum;
 	//if (returnVal < minimum) returnVal = minimum;
-	if (returnVal > 0) {
+	/*if (returnVal > 0) {
 		returnVal *= 0.97f;
 		returnVal += 100.0f;
-	}
+	}*/
 	//returnVal += (8000.0f - returnVal) * 0.1f;
 
 	//if (returnVal > 10000) returnVal = 10000;
@@ -666,8 +676,8 @@ __global__ void projectFinalIter(int slice, params consts, cudaSurfaceObject_t s
 	//Check image boundaries
 	if ((i >= consts.Rx) || (j >= consts.Ry)) return;
 
-	//for (int view = 0; view < NUMVIEWS; view++) {
-	int view = 3; {
+	for (int view = 0; view < NUMVIEWS; view++) {
+	//int view = 3; {
 		float dz = (consts.startDis + slice * consts.pitchZ) / consts.d_Beamz[view];
 		float x = xMM2P((xR2MM(i, consts.Rx, consts.PitchRx) + consts.d_Beamx[view] * dz), consts.Px, consts.PitchPx);// / (1 + dz)
 		float y = yMM2P((yR2MM(j, consts.Ry, consts.PitchRy) + consts.d_Beamy[view] * dz), consts.Py, consts.PitchPy);
@@ -698,12 +708,13 @@ __global__ void projectFinalIter(int slice, params consts, cudaSurfaceObject_t s
 		surf3Dwrite(error, surfRecon, i * sizeof(float), j, slice);
 }
 
-__global__ void backProject(float * proj, float * error, int view, float iteration, float totalIterations, params consts) {
+__global__ void backProject(float * proj, float * error, float * weights, int view, float iteration, float totalIterations, cudaSurfaceObject_t surfDelta, params consts) {
 	//Define pixel location in x, y, and z
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	int j = blockDim.y * blockIdx.y + threadIdx.y;
 
 	float value = 0;
+	float deltaSum = 0.0f;
 	int count = 0;
 
 	//Check image boundaries
@@ -717,9 +728,12 @@ __global__ void backProject(float * proj, float * error, int view, float iterati
 		//Update the value based on the error scaled and save the scale
 		if (y >= 0 && y < consts.Ry && x >= 0 && x < consts.Rx) {
 			//value += tex2D(textSino, x, y + slice*consts.Ry);
-			float returnVal;
+			float returnVal, delta;
 			//surf3Dread(&returnVal, surfRecon, x * sizeof(float), y, slice);
 			returnVal = tex3D(textRecon, x + 0.5f, y + 0.5f, slice);
+			//surf3Dread(&delta, surfDelta, i * sizeof(float), j, slice);
+			//deltaSum += abs(delta);
+			deltaSum++;
 			if (returnVal >= 0.1f) count++;
 			value += returnVal;
 		}
@@ -744,6 +758,7 @@ __global__ void backProject(float * proj, float * error, int view, float iterati
 	}
 #endif // RECONDERIVATIVE
 	else error[j*consts.ProjPitchNum + i] = 0.0f;
+	weights[j*consts.ProjPitchNum + i] = deltaSum;
 }
 
 __global__ void copySlice(float * image, int slice, params consts, cudaSurfaceObject_t surfRecon, bool invertLogCorrect = false) {
@@ -1105,6 +1120,7 @@ TomoError TomoRecon::initGPU(){
 	cuda(MallocPitch((void**)&d_Image, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny));
 	cuda(MallocPitch((void**)&d_Sino, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
 	cuda(MallocPitch((void**)&d_Raw, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
+	cuda(MallocPitch((void**)&d_Weights, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
 	cuda(MallocPitch((void**)&inXBuff, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
 	cuda(MallocPitch((void**)&inYBuff, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
 #ifdef USEITERATIVE
@@ -1141,6 +1157,10 @@ TomoError TomoRecon::initGPU(){
 	textError.filterMode = cudaFilterModeLinear;
 	textError.addressMode[0] = cudaAddressModeClamp;
 	textError.addressMode[1] = cudaAddressModeClamp;
+
+	textWeight.filterMode = cudaFilterModeLinear;
+	textWeight.addressMode[0] = cudaAddressModeClamp;
+	textWeight.addressMode[1] = cudaAddressModeClamp;
 
 	textSino.filterMode = cudaFilterModeLinear;
 	textSino.addressMode[0] = cudaAddressModeClamp;
@@ -1308,34 +1328,52 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 		tomo_err_throw(getHistogram(d_Sino + view*projPitch / sizeof(float)*Sys.Proj.Ny, projPitch*Sys.Proj.Ny, histogram2));
 
 		//manually check range of offset values
-		float error = FLT_MAX;
 		int bestOffset = -100;
 		if (view != NumViews / 2) {
-			for (float scale = 0.90f; scale < 1.20f; scale += 0.001f) {
-				for (int offset = -20; offset < 10; offset++) {
+			float step = 0.01f, scale = 1.0f, scaleError = FLT_MAX;
+			while(abs(step) > 0.0005f){
+				float innerError = FLT_MAX;
+				int innerOffset = -100;
+				float offset = 0.0f, innerStep = 10.0f;
+				while(abs(innerStep) > 0.5f){
+				//for (int offset = -20; offset < 10; offset++) {
 					//find average error
 					float avgError = 0.0f;
-					int count = 0;
 					for (int test = 0; test < 255; test++) {
 						float index2 = test*scale + offset;
 						if (index2 >= 0 && index2 < 255) {
 							int lower = floor(index2);
 							int upper = ceil(index2);
-							float intopVal = ((float)upper - index2) * histogram2[lower] + (index2 - (float)lower) * histogram2[upper];
+							float intopVal;
+							if (upper == lower) intopVal = histogram2[lower];
+							else intopVal = ((float)upper - index2) * histogram2[lower] + (index2 - (float)lower) * histogram2[upper];
 							//avgError += pow((float)histogram[test] - intopVal, 2.0f);
 							avgError += abs((float)histogram[test] - intopVal);
-							count++;
 						}
+						else avgError += histogram[test];
 					}
-					//avgError /= (float)count;
 
 					//MAX logic
-					if (avgError < error) {
-						error = avgError;
-						bestOffset = offset;
-						bestScale = scale;
+					if (avgError <= innerError) {
+						innerError = avgError;
+						innerOffset = offset;
 					}
+					else {
+						offset -= innerStep;
+						innerStep *= -0.5f;
+					}
+					offset += innerStep;
 				}
+				if (innerError <= scaleError) {
+					scaleError = innerError;
+					bestScale = scale;
+					bestOffset = innerOffset;
+				}
+				else {
+					scale -= step;
+					step *= -0.5f;
+				}
+				scale += step;
 			}
 
 			for (int j = 0; j < Sys.Proj.Nx; j++) {
@@ -2437,6 +2475,7 @@ TomoError TomoRecon::initIterative() {
 #endif // RECONDERIVATIVE
 	
 	cuda(BindTexture2D(NULL, textError, d_Error, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
+	cuda(BindTexture2D(NULL, textWeight, d_Weights, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
 	for (int slice = 0; slice < Sys.Recon.Nz; slice++) {
 		KERNELCALL2(initArray, contBlocks, contThreads, slice, 0.0f, constants, surfReconObj);
 		KERNELCALL2(initArray, contBlocks, contThreads, slice, DELTA0, constants, surfDeltaObj);
@@ -2444,10 +2483,11 @@ TomoError TomoRecon::initIterative() {
 #ifdef SHOWERROR
 		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, 1.0f, true, constants, surfReconObj, surfErrorObj);
 #else 
-		KERNELCALL2(projectIter, contBlocks, contThreads, d_Sino, d_ReconOld, slice, 1.0f, true, constants, surfReconObj, surfDeltaObj, true);
+		KERNELCALL2(projectIter, contBlocks, contThreads, d_Sino, d_ReconOld, d_Weights, slice, 1.0f, true, constants, surfReconObj, surfDeltaObj, true);
 #endif
 	}
 	cuda(UnbindTexture(textError));
+	cuda(UnbindTexture(textWeight));
 
 #ifdef PRINTMEMORYUSAGE
 	cudaMemGetInfo(&avail_mem, &total_mem);
@@ -2475,19 +2515,21 @@ TomoError TomoRecon::iterStep() {
 	}
 #else
 	for (int view = 0; view < NumViews; view++) {
-		KERNELCALL2(backProject, contBlocks, contThreads, d_Sino + view * projPitch / sizeof(float) * Sys.Proj.Ny, d_Error + view * projPitch / sizeof(float) * Sys.Proj.Ny, view, iteration, ITERATIONS, constants);
+		KERNELCALL2(backProject, contBlocks, contThreads, d_Sino + view * projPitch / sizeof(float) * Sys.Proj.Ny, d_Error + view * projPitch / sizeof(float) * Sys.Proj.Ny, d_Weights + view * projPitch / sizeof(float) * Sys.Proj.Ny,
+			view, iteration, ITERATIONS, surfDeltaObj, constants);
 	}
 #endif // RECONDERIVATIVE
 	cuda(UnbindTexture(textRecon));
 
 	cuda(BindTexture2D(NULL, textSino, d_Sino, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
-	cuda(BindTexture2D(NULL, textError, d_Error, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch))
+	cuda(BindTexture2D(NULL, textError, d_Error, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
+	cuda(BindTexture2D(NULL, textWeight, d_Weights, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
 	for (int slice = 0; slice < Sys.Recon.Nz; slice++) {
 		KERNELCALL2(copySlice, contBlocks, contThreads, d_ReconOld, slice, constants, surfReconObj);
 #ifdef SHOWERROR
 		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, iteration, SKIPITERTV, constants, surfReconObj, surfErrorObj);
 #else 
-		KERNELCALL2(projectIter, contBlocks, contThreads, d_Sino, d_ReconOld, slice, iteration, SKIPITERTV, constants, surfReconObj, surfDeltaObj);
+		KERNELCALL2(projectIter, contBlocks, contThreads, d_Sino, d_ReconOld, d_Weights, slice, iteration, SKIPITERTV, constants, surfReconObj, surfDeltaObj);
 #endif
 		/*for (int i = 0; i < TVITERATIONS; i++) {
 			KERNELCALL2(copySlice, contBlocks, contThreads, d_ReconOld, slice, constants);
@@ -2495,6 +2537,7 @@ TomoError TomoRecon::iterStep() {
 		}*/
 	}
 	cuda(UnbindTexture(textError));
+	cuda(UnbindTexture(textWeight));
 
 	iteration++;
 	
@@ -2522,7 +2565,6 @@ TomoError TomoRecon::finalizeIter() {
 	unsigned int histogram[HIST_BIN_COUNT];
 	tomo_err_throw(getHistogramRecon(histogram, true, false));
 	tomo_err_throw(autoLight(histogram, 20, &minVal, &maxVal));
-	//minVal = -1000;
 
 	//histogram equalization approximation by width and offset
 	float scales[HIST_BIN_COUNT];

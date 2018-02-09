@@ -1037,6 +1037,7 @@ private:
 	float * d_Error;
 	float * d_Sino;
 	float * d_Raw;
+	float * d_Weights;
 	cudaArray_t d_Recon2 = NULL;
 	cudaArray_t d_ReconDelta = NULL;
 	cudaArray_t d_ReconError = NULL;

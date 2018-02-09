@@ -1990,6 +1990,7 @@ void ReconCon::onEnableGain(wxCommandEvent& WXUNUSED(event)) {
 	recon->enableGain(useGain->IsChecked());
 	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
 	recon->singleFrame();
+	recon->resetLight();
 	currentFrame->m_canvas->paint();
 }
 
@@ -2003,6 +2004,7 @@ void ReconCon::onResetExposure(wxCommandEvent& event) {
 	recon->setExposure(EXPOSUREDEFAULT);
 	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
 	recon->singleFrame();
+	recon->resetLight();
 	currentFrame->m_canvas->paint();
 }
 
@@ -2016,6 +2018,7 @@ void ReconCon::onExposure(wxScrollEvent& event) {
 	recon->setExposure(value * EXPOSUREFACTOR);
 	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
 	recon->singleFrame();
+	recon->resetLight();
 	currentFrame->m_canvas->paint();
 }
 
@@ -2029,6 +2032,7 @@ void ReconCon::onResetVoltage(wxCommandEvent& event) {
 	recon->setVoltage(VOLTAGEDEFAULT);
 	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
 	recon->singleFrame();
+	recon->resetLight();
 	currentFrame->m_canvas->paint();
 }
 
@@ -2042,6 +2046,7 @@ void ReconCon::onVoltage(wxScrollEvent& event) {
 	recon->setVoltage(value * VOLTAGEFACTOR);
 	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
 	recon->singleFrame();
+	recon->resetLight();
 	currentFrame->m_canvas->paint();
 }
 
