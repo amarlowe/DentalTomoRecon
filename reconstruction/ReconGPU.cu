@@ -569,6 +569,13 @@ __global__ void projectIter(float * proj, float * oldRecon, float * weights, int
 			if (y > consts.Py - TAPERSIZE) increment *= (consts.Py - y) / TAPERSIZE;
 			if (x < TAPERSIZE) increment *= x / TAPERSIZE;
 			if (x > consts.Px - TAPERSIZE) increment *= (consts.Px - x) / TAPERSIZE;
+
+			//Corner correction
+			if (consts.Px - x + consts.Py - y < 150) increment = 0.0f;
+			else if (consts.Px - x + consts.Py - y < 150 + TAPERSIZE) increment *= (consts.Px - x + consts.Py - y - 150) / TAPERSIZE;
+			if (consts.Px - x + y < 150) increment = 0.0f;
+			else if (consts.Px - x + y < 150 + TAPERSIZE) increment *= (consts.Px - x + y - 150) / TAPERSIZE;
+
 			if (abs(value) > 0.1f) {
 				//float singleTemp = tex2D(textSino, x, y + view*consts.Py);
 				count += increment;
