@@ -118,6 +118,7 @@
 //#define INVERSEITER
 #define MEDIANFAC 0.0f
 #define TAPERSIZE 200.0f
+#define TRISIZE 155 
 
 //#define RECONDERIVATIVE
 //#define SQUAREMAGINX

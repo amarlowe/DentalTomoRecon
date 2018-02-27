@@ -31,12 +31,18 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 			 dset->findAndGetOFString(DCM_NumberOfFrames, frameString);
 		}
 
-		int frames = stoi(frameString);
+		int frames = 1;
+		if(!frameString.empty()) frames = stoi(frameString);
 
 		if (test.compare(PRIVATE_CREATOR_NAME) == 0) {
 			const Uint16 *pixelData = NULL;
 			dset->findAndGetUint16Array(DCM_PixelData, pixelData);
 			if (pixelData != NULL) {
+				/*int readWidth = dset->getWidth();
+				for (int view = 0; view < NumViews; view++)
+					for (int i = 0; i < width; i++)
+						for (int j = 0; j < height; j++)
+							RawData[view][j * width + i] = pixelData[(height * view + j) * readWidth + i + readWidth - width];*/
 				for(int view = 0; view < NumViews; view++)
 					memcpy(RawData[view], pixelData + width*height*view, width*height * sizeof(unsigned short));
 			}
@@ -51,8 +57,6 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 				recon->setDisplay((derivative_t)tempShrt);
 				dset->findAndGetFloat32(PRV_EdgeRatio, tempFlt);
 				recon->setEnhanceRatio(tempFlt);
-				//dset->findAndGetUint16(PRV_DataDisplay, tempShrt);
-				//recon->setDataDisplay((sourceData)tempShrt);
 				dset->findAndGetUint16(PRV_HorFlip, tempShrt);
 				recon->setHorFlip(tempShrt == 1);
 				dset->findAndGetUint16(PRV_VertFlip, tempShrt);
@@ -122,7 +126,11 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 				if (image->getStatus() == EIS_Normal) {
 					unsigned short *pixelData = (unsigned short *)(image->getOutputData(16));
 					if (pixelData != NULL) {
-						memcpy(RawData[view], pixelData, width*height * sizeof(unsigned short));
+						int readWidth = image->getWidth();
+						for (int i = 0; i < width; i++)
+							for (int j = 0; j < height; j++)
+								RawData[view][j * width + i] = pixelData[j * readWidth + i + readWidth - width];
+						//memcpy(RawData[view], pixelData, width*height * sizeof(unsigned short));
 					}
 					else {
 						std::cout << "Failed to load dicom image set, reverting to displaying as standard viewer." << endl;
@@ -652,14 +660,18 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 			for (int view = 0; view < NumViews; view++) {
 				//Read projections
 				ProjPath = ProjPath.substr(0, ProjPath.length() - 5);
-				ProjPath += std::to_string(view) + ".dcm";//+1
+				ProjPath += std::to_string(view + 1) + ".dcm";//+1
 
 				DicomImage *image = new DicomImage(ProjPath.c_str());
 
 				if (image->getStatus() == EIS_Normal) {
 					unsigned short *pixelData = (unsigned short *)(image->getOutputData(16));
 					if (pixelData != NULL) {
-						memcpy(RawData + view*width*height, pixelData, width*height * sizeof(unsigned short));
+						int readWidth = image->getWidth();
+						for (int i = 0; i < width; i++)
+							for (int j = 0; j < height; j++)
+								RawData[(view * height + j) * width + i] = pixelData[j * readWidth + i + readWidth - width];
+						//memcpy(RawData + view*width*height, pixelData, width*height * sizeof(unsigned short));
 					}
 					else
 						std::cout << "Error: cannot load DICOM image (" << DicomImage::getString(image->getStatus()) << ")" << endl;
