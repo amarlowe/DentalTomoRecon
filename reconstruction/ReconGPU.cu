@@ -519,7 +519,7 @@ __global__ void projectSlice(float * IM, float distance, params consts) {
 
 		//Update the value based on the error scaled and save the scale
 		if (y > 0 && y < consts.Py && x > 0 && x < consts.Px) {
-			value = tex2D(textError, x, y + view*consts.Py);
+			value = tex2D(textError, x + 0.5f, y + 0.5f + view*consts.Py);
 			float increment = 1.0f;
 			if (y < TAPERSIZE) increment *= y / TAPERSIZE;
 			if (y > consts.Py - TAPERSIZE) increment *= (consts.Py - y) / TAPERSIZE;
@@ -570,7 +570,7 @@ __global__ void projectIter(float * proj, float * oldRecon, float * weights, int
 
 		//Update the value based on the error scaled and save the scale
 		if (y > 0 && y < consts.Py && x > 0 && x < consts.Px) {
-			float value = tex2D(textError, x, y + view*consts.Py);
+			float value = tex2D(textError, x + 0.5f, y + 0.5f + view*consts.Py);
 			float increment = 1.0f;
 			if (y < TAPERSIZE) increment *= y / TAPERSIZE;
 			if (y > consts.Py - TAPERSIZE) increment *= (consts.Py - y) / TAPERSIZE;
@@ -698,7 +698,7 @@ __global__ void projectFinalIter(int slice, params consts, cudaSurfaceObject_t s
 
 		//Update the value based on the error scaled and save the scale
 		if (y > 0 && y < consts.Py && x > 0 && x < consts.Px) {
-			float value = tex2D(textSino, x, y + view*consts.Py);
+			float value = tex2D(textSino, x + 0.5f, y + 0.5f + view*consts.Py);
 			float increment = 1.0f;
 			if (y < TAPERSIZE) increment *= y / TAPERSIZE;
 			if (y > consts.Py - TAPERSIZE) increment *= (consts.Py - y) / TAPERSIZE;
@@ -900,6 +900,7 @@ __global__ void sumReduction(float * Image, int pitch, float * sum, int lowX, in
 __global__ void sumRowsOrCols(float * sum, bool cols, params consts) {
 	//Define shared memory to read all the threads
 	extern __shared__ float data[];
+	__shared__ int counts[1024];
 
 	//define the thread and block location
 	const int thread = threadIdx.x;
@@ -907,49 +908,72 @@ __global__ void sumRowsOrCols(float * sum, bool cols, params consts) {
 	const int y = MUL_ADD(blockDim.y, blockIdx.y, threadIdx.y);
 
 	float val = 0;
+	int count = 0;
 	int i = x;
 	int limit;
 	if (cols) limit = consts.Py;
 	else limit = consts.Px;
 
 	while(i < limit){
+		float temp;
 		if(cols)
-			val += tex2D(textSino, y, i);
+			temp = tex2D(textSino, y, i);
 		else
-			val += tex2D(textSino, i, y);
+			temp = tex2D(textSino, i, y);
+		val += temp;
+		if (temp > 0.0f) count++;
 		i += blockDim.x;
 	}
 
 	data[thread] = val;
+	counts[thread] = count;
 
 	//Each thread puts its local sum into shared memory
 	__syncthreads();
 
 	//Do reduction in shared memory
-	if (thread < 512) data[thread] = val += data[thread + 512];
+	if (thread < 512) {
+		data[thread] = val += data[thread + 512];
+		counts[thread] = count += counts[thread + 512];
+	}
 	__syncthreads();
 
-	if (thread < 256) data[thread] = val += data[thread + 256];
+	if (thread < 256) {
+		data[thread] = val += data[thread + 256];
+		counts[thread] = count += counts[thread + 256];
+	}
 	__syncthreads();
 
-	if (thread < 128) data[thread] = val += data[thread + 128];
+	if (thread < 128) {
+		data[thread] = val += data[thread + 128];
+		counts[thread] = count += counts[thread + 128];
+	}
 	__syncthreads();
 
-	if (thread < 64) data[thread] = val += data[thread + 64];
+	if (thread < 64) {
+		data[thread] = val += data[thread + 64];
+		counts[thread] = count += counts[thread + 64];
+	}
 	__syncthreads();
 
 	if (thread < 32) {
 		// Fetch final intermediate sum from 2nd warp
 		data[thread] = val += data[thread + 32];
+		counts[thread] = count += counts[thread + 32];
 		// Reduce final warp using shuffle
 		for (int offset = warpSize / 2; offset > 0; offset /= 2) {
 			val += __shfl_down(val, offset);
+			count += __shfl_down(count, offset);
 		}
 	}
 
 	//write the result for this block to global memory
 	if (thread == 0) {
-		sum[y] = val;
+		if (cols) val *= consts.Py;
+		else val *= consts.Px;
+		if (count > 0)
+			sum[y] = val / (float)count;
+		else sum[y] = 0.0f;
 	}
 }
 
