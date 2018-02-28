@@ -749,9 +749,35 @@ __global__ void backProject(float * proj, float * error, float * weights, int vi
 		//Update the value based on the error scaled and save the scale
 		if (y >= 0 && y < consts.Ry && x >= 0 && x < consts.Rx) {
 			//value += tex2D(textSino, x, y + slice*consts.Ry);
-			float returnVal, delta;
+			float returnVal = 0.0f, delta;
 			//surf3Dread(&returnVal, surfRecon, x * sizeof(float), y, slice);
-			returnVal = tex3D(textRecon, x + 0.5f, y + 0.5f, slice);
+			//returnVal = tex3D(textRecon, x + 0.5f, y + 0.5f, slice);
+			{
+				float tempVal;
+				int tempCount = 0;
+				tempVal = tex3D(textRecon, x, y, slice);
+				if (tempVal > 0.0f) {
+					returnVal += tempVal;
+					tempCount++;
+				}
+				tempVal = tex3D(textRecon, x, y + 1.0f, slice);
+				if (tempVal > 0.0f) {
+					returnVal += tempVal;
+					tempCount++;
+				}
+				tempVal = tex3D(textRecon, x + 1.0f, y + 1.0f, slice);
+				if (tempVal > 0.0f) {
+					returnVal += tempVal;
+					tempCount++;
+				}
+				tempVal = tex3D(textRecon, x + 1.0f, y, slice);
+				if (tempVal > 0.0f) {
+					returnVal += tempVal;
+					tempCount++;
+				}
+				if (tempCount > 0) returnVal /= tempCount;
+				else returnVal = 0.0f;
+			}
 			//surf3Dread(&delta, surfDelta, i * sizeof(float), j, slice);
 			//deltaSum += abs(delta);
 			deltaSum++;
@@ -1199,7 +1225,7 @@ TomoError TomoRecon::initGPU(){
 	textImage.addressMode[0] = cudaAddressModeClamp;
 	textImage.addressMode[1] = cudaAddressModeClamp;
 
-	textError.filterMode = cudaFilterModeLinear;
+	textError.filterMode = cudaFilterModePoint;
 	textError.addressMode[0] = cudaAddressModeClamp;
 	textError.addressMode[1] = cudaAddressModeClamp;
 
@@ -1211,7 +1237,7 @@ TomoError TomoRecon::initGPU(){
 	textSino.addressMode[0] = cudaAddressModeClamp;
 	textSino.addressMode[1] = cudaAddressModeClamp;
 
-	textRecon.filterMode = cudaFilterModeLinear;
+	textRecon.filterMode = cudaFilterModePoint;
 	textRecon.addressMode[0] = cudaAddressModeClamp;
 	textRecon.addressMode[1] = cudaAddressModeClamp;
 

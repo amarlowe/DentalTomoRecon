@@ -29,8 +29,6 @@
 
 *.ini
 
-*.vcxproj
-
 *.filters
 
 *.user
