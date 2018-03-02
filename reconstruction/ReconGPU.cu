@@ -1233,7 +1233,7 @@ TomoError TomoRecon::initGPU(){
 	textWeight.addressMode[0] = cudaAddressModeClamp;
 	textWeight.addressMode[1] = cudaAddressModeClamp;
 
-	textSino.filterMode = cudaFilterModePoint;
+	textSino.filterMode = cudaFilterModeLinear;
 	textSino.addressMode[0] = cudaAddressModeClamp;
 	textSino.addressMode[1] = cudaAddressModeClamp;
 
