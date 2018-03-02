@@ -33,7 +33,7 @@
 
 #define NUMVIEWS 7
 #define MAXZOOM 20
-#define ZOOMFACTOR 1.1f
+#define ZOOMFACTOR 1.12f
 #define LINEWIDTH 3
 #define BARHEIGHT 40
 

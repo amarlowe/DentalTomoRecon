@@ -326,12 +326,12 @@ __global__ void resizeKernelTex(int wIn, int hIn, int wOut, int hOut, float scal
 	bool saturate = false;
 
 	float sum = 0;
-	int i = (x - (wOut - wIn / scale) / 2)*scale + xOff;
-	int j = (y - (hOut - hIn / scale) / 2)*scale + yOff;
+	float i = (x - (wOut - wIn / scale) / 2.0f)*scale + xOff;
+	float j = (y - (hOut - hIn / scale) / 2.0f)*scale + yOff;
 	if (consts.orientation) i = wIn - 1 - i;
 	if (consts.flip) j = hIn - 1 - j;
 	if (i > 0 && j > 0 && i < wIn && j < hIn)
-		sum = tex2D(textImage, (float)i + 0.5f, (float)j + 0.5f);
+		sum = tex2D(textImage, i + 0.5f, j + 0.5f);
 
 	if (sum < 0) {
 		negative = true;
@@ -519,7 +519,7 @@ __global__ void projectSlice(float * IM, float distance, params consts) {
 
 		//Update the value based on the error scaled and save the scale
 		if (y > 0 && y < consts.Py && x > 0 && x < consts.Px) {
-			value = tex2D(textError, x + 0.5f, y + 0.5f + view*consts.Py);
+			value = tex2D(textSino, x + 0.5f, y + 0.5f + view*consts.Py);
 			float increment = 1.0f;
 			if (y < TAPERSIZE) increment *= y / TAPERSIZE;
 			if (y > consts.Py - TAPERSIZE) increment *= (consts.Py - y) / TAPERSIZE;
@@ -1225,7 +1225,7 @@ TomoError TomoRecon::initGPU(){
 	textImage.addressMode[0] = cudaAddressModeClamp;
 	textImage.addressMode[1] = cudaAddressModeClamp;
 
-	textError.filterMode = cudaFilterModePoint;
+	textError.filterMode = cudaFilterModeLinear;
 	textError.addressMode[0] = cudaAddressModeClamp;
 	textError.addressMode[1] = cudaAddressModeClamp;
 
@@ -1233,7 +1233,7 @@ TomoError TomoRecon::initGPU(){
 	textWeight.addressMode[0] = cudaAddressModeClamp;
 	textWeight.addressMode[1] = cudaAddressModeClamp;
 
-	textSino.filterMode = cudaFilterModeLinear;
+	textSino.filterMode = cudaFilterModePoint;
 	textSino.addressMode[0] = cudaAddressModeClamp;
 	textSino.addressMode[1] = cudaAddressModeClamp;
 
@@ -1832,9 +1832,11 @@ TomoError TomoRecon::singleFrame(bool outputFrame, float** output, unsigned int 
 	switch (constants.dataDisplay) {
 	case reconstruction:
 		if (derDisplay != square_mag) {//only case frequently used that doesn't need this, leads to 3/2x speedup in autofocus
-			cuda(BindTexture2D(NULL, textError, d_Raw, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
+			//cuda(BindTexture2D(NULL, textError, d_Raw, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
+			cuda(BindTexture2D(NULL, textSino, d_Raw, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
 			KERNELCALL2(projectSlice, contBlocks, contThreads, d_Image, distance, constants);
-			cuda(UnbindTexture(textError));
+			cuda(UnbindTexture(textSino));
+			//cuda(UnbindTexture(textError));
 		}
 		break;
 	case projections:
@@ -2741,9 +2743,11 @@ inline TomoError TomoRecon::imageKernel(float xK[KERNELSIZE], float yK[KERNELSIZ
 }
 
 inline TomoError TomoRecon::project(float * projections, float * reconstruction) {
-	cuda(BindTexture2D(NULL, textError, projections, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
+	//cuda(BindTexture2D(NULL, textError, projections, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
+	cuda(BindTexture2D(NULL, textSino, d_Raw, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
 	KERNELCALL2(projectSlice, contBlocks, contThreads, reconstruction, distance, constants);
-	cuda(UnbindTexture(textError));
+	cuda(UnbindTexture(textSino));
+	//cuda(UnbindTexture(textError));
 }
 
 TomoError TomoRecon::resetLight() {
