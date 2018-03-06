@@ -38,7 +38,7 @@
 #define BARHEIGHT 40
 
 //Projection correction parameters
-#define HIGHTHRESH 0.95f
+#define HIGHTHRESH 1.0f
 
 //Autofocus parameters
 #define STARTSTEP 1.0f
@@ -211,6 +211,7 @@ struct Proj_Data {
 	int Nx;									//The number of detector pixels in x direction
 	int Ny;									//The number of detector pixels in y direction
 	int Flip;								//Flip the orientation of the detector
+	bool * activeBeams;
 };
 
 ///Parameters for the particular x-ray system

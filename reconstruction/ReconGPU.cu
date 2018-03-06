@@ -448,8 +448,9 @@ __global__ void LogCorrectProj(float * Sino, int view, unsigned short *Proj, uns
 			if (val > HIGHTHRESH) val = 0.0f;
 			val *= USHRT_MAX;
 		}
+		else val *= 32.0f;//conversion from 10 to 16 bit
 
-		Sino[(y + view*consts.Py)*consts.ProjPitchNum + x] = val;
+		Sino[(y + view * consts.Py)*consts.ProjPitchNum + x] = val;
 
 		//large noise correction
 		if (consts.useMaxNoise) {
@@ -751,8 +752,8 @@ __global__ void backProject(float * proj, float * error, float * weights, int vi
 			//value += tex2D(textSino, x, y + slice*consts.Ry);
 			float returnVal = 0.0f, delta;
 			//surf3Dread(&returnVal, surfRecon, x * sizeof(float), y, slice);
-			//returnVal = tex3D(textRecon, x + 0.5f, y + 0.5f, slice);
-			{
+			returnVal = tex3D(textRecon, x + 0.5f, y + 0.5f, slice);
+			/*{
 				float tempVal;
 				int tempCount = 0;
 				tempVal = tex3D(textRecon, x, y, slice);
@@ -777,7 +778,7 @@ __global__ void backProject(float * proj, float * error, float * weights, int vi
 				}
 				if (tempCount > 0) returnVal /= tempCount;
 				else returnVal = 0.0f;
-			}
+			}*/
 			//surf3Dread(&delta, surfDelta, i * sizeof(float), j, slice);
 			//deltaSum += abs(delta);
 			deltaSum++;
@@ -1365,7 +1366,7 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 	tomo_err_throw(autoLight(histogram, 1, &minVal, &maxVal));
 
 	for (int view = 0; view < NumViews; view++) {
-		if (view == (NumViews / 2)) continue;
+		if (view == (NumViews / 2) || !Sys.Proj.activeBeams[view]) continue;
 		float thisMax, thisMin;
 		unsigned int thisHistogram[HIST_BIN_COUNT];
 		tomo_err_throw(getHistogram(d_Sino + view*projPitch / sizeof(float)*Sys.Proj.Ny, projPitch*Sys.Proj.Ny, thisHistogram));
@@ -1394,6 +1395,7 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 		(ny + block_size.y - 1) / block_size.y);
 
 	for (int view = 0; view < NumViews; view++) {
+		if (!Sys.Proj.activeBeams[view]) continue;
 		float bestScale = 1.0f;
 		unsigned int histogram2[HIST_BIN_COUNT];
 		tomo_err_throw(getHistogram(d_Sino + view*projPitch / sizeof(float)*Sys.Proj.Ny, projPitch*Sys.Proj.Ny, histogram2));
@@ -1410,9 +1412,9 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 				//for (int offset = -20; offset < 10; offset++) {
 					//find average error
 					float avgError = 0.0f;
-					for (int test = 0; test < 255; test++) {
+					for (int test = 0; test < 256; test++) {
 						float index2 = test*scale + offset;
-						if (index2 >= 0 && index2 < 255) {
+						if (index2 >= 0 && index2 < 256) {
 							int lower = floor(index2);
 							int upper = ceil(index2);
 							float intopVal;
@@ -1532,7 +1534,8 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 	for (int beam = 0; beam < 7; beam++) {
 		unsigned int histogram2[HIST_BIN_COUNT];
 		tomo_err_throw(getHistogram(d_Sino + beam*projPitch / sizeof(float)*Sys.Proj.Ny, projPitch*Sys.Proj.Ny, histogram2));
-		for (int i = 0; i < HIST_BIN_COUNT; i++) inputHistogram[i] += histogram2[i];
+		if(Sys.Proj.activeBeams[beam])
+			for (int i = 0; i < HIST_BIN_COUNT; i++) inputHistogram[i] += histogram2[i];
 		std::ofstream outputFile;
 		char outFilename[250];
 		sprintf(outFilename, "./histogramOut%d.txt", beam);
@@ -2643,13 +2646,15 @@ TomoError TomoRecon::finalizeIter() {
 	float scales[HIST_BIN_COUNT];
 	float offsets[HIST_BIN_COUNT];
 	int yIndex = 0;
-	float y1 = 0.0f, y2, h2 = (float)inputHistogram[yIndex] / (float)NumViews;
+	int activeViews = 0;
+	for (int i = 0; i < NumViews; i++) if (Sys.Proj.activeBeams[i]) activeViews++;
+	float y1 = 0.0f, y2, h2 = (float)inputHistogram[yIndex] / (float)activeViews;
 	for (int i = 0; i < HIST_BIN_COUNT; i++) {
 		float h1 = (float)histogram[i] / (float)constants.slices;
 		while (h1 > h2) {
 			h1 -= h2;
 			if (++yIndex >= HIST_BIN_COUNT) break;
-			h2 = inputHistogram[yIndex] / (float)NumViews;
+			h2 = inputHistogram[yIndex] / (float)activeViews;
 		}
 		if (yIndex >= HIST_BIN_COUNT) {
 			//Overflow logic
@@ -2659,7 +2664,7 @@ TomoError TomoRecon::finalizeIter() {
 		}
 		h2 -= h1;
 
-		float maxH2 = inputHistogram[yIndex] / (float)NumViews;
+		float maxH2 = inputHistogram[yIndex] / (float)activeViews;
 		if(maxH2 > 0) y2 = yIndex + (maxH2 - h2) / maxH2;
 		else y2 = yIndex;
 		scales[i] = y2 - y1;//scale * (x2 - x1) = (y2 - y1)
@@ -2675,7 +2680,7 @@ TomoError TomoRecon::finalizeIter() {
 
 	//cuda(BindSurfaceToArray(surfRecon, d_Recon2));
 	for (int slice = 0; slice < Sys.Recon.Nz; slice++)
-		KERNELCALL2(scaleRecon, contBlocks, contThreads, slice, d_scales, d_offsets, constants, surfReconObj);
+		//KERNELCALL2(scaleRecon, contBlocks, contThreads, slice, d_scales, d_offsets, constants, surfReconObj);
 
 	cuda(UnbindTexture(textSino));
 	cuda(BindTexture2D(NULL, textSino, d_Raw, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
