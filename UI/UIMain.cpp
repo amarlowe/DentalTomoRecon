@@ -493,12 +493,14 @@ TomoError DTRMainWindow::genSys(struct SystemControl * Sys) {
 	Sys->Proj.Ny = pConfig->ReadLong(wxT("/pixelHeight"), 1440l);
 	Sys->Proj.Pitch_x = pConfig->ReadDouble(wxT("/pitchHeight"), 0.0185f);
 	Sys->Proj.Pitch_y = pConfig->ReadDouble(wxT("/pitchWidth"), 0.0185f);
-	for (int j = 0; j < NUMVIEWS; j++) {
+	for (int j = 0; j < NumViews; j++) {
 		Sys->Geo.EmitX[j] = pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"), j, 0), 0.0f);
 		Sys->Geo.EmitY[j] = pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"), j, 1), 0.0f);
 		Sys->Geo.EmitZ[j] = pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"), j, 2), 0.0f);
 	}
 	Sys->Geo.raw = pConfig->ReadLong(wxT("/rawInput"), 0l) == 1 ? true : false;
+	Sys->Proj.activeBeams = (bool*)malloc(NumViews * sizeof(bool));
+	for (int j = 0; j < NumViews; j++) Sys->Proj.activeBeams[j] = true;
 
 	return Tomo_OK;
 }
@@ -687,12 +689,28 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 
 		for (int view = 0; view < NumViews; view++) {
 			ProjPath = ProjPath.substr(0, ProjPath.length() - 5);
-			ProjPath += std::to_string(view) + ".raw";
+			if (recon->hasRawInput())
+				ProjPath += std::to_string(view + 1) + ".raw";
+			else
+				ProjPath += std::to_string(view) + ".raw";
 
 			fopen_s(&fileptr, ProjPath.c_str(), "rb");
-			if (fileptr == NULL) return;
-			fread(RawData + view*width*height, sizeof(unsigned short), width*height, fileptr);
-			fclose(fileptr);
+			if (fileptr == NULL) {
+				memset(&RawData[view*width*height], 0, width*height * sizeof(unsigned short));
+			}
+			else {
+				if (recon->hasRawInput()) {
+					unsigned short * temp = new unsigned short[width*height];
+					fread(temp, sizeof(unsigned short), width*height, fileptr);
+					for (int i = 0; i < width; i++)
+						for (int j = 0; j < height; j++)
+							RawData[(view*height + j) * width + i] = ((temp[i * height + j] & 0xFF00) >> 8) | ((temp[i * height + j] & 0x00FF) << 8);
+					delete temp;
+				}
+				else fread(&RawData[view*width*height], sizeof(unsigned short), width*height, fileptr);
+
+				fclose(fileptr);
+			}
 		}
 	}
 
@@ -1134,6 +1152,28 @@ void DTRMainWindow::onAutoGeo(wxCommandEvent& event) {
 	delete[] image;
 }
 
+void DTRMainWindow::onAutoGeoS(wxCommandEvent& event) {
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	if (recon->selBoxReady()) {
+		//if they're greater than 0, the box was clicked and dragged successfully
+		recon->autoFocus(true);
+		while (recon->autoFocus(false) == Tomo_OK);
+		recon->autoLight();
+	}
+	else {
+		recon->resetFocus();
+		recon->resetLight();
+	}
+	currentFrame->m_canvas->paint();
+	if (recon->getDataDisplay() == iterRecon) currentFrame->showScrollBar(recon->getNumSlices(), recon->getActiveProjection());
+
+	//Run tests about this point
+}
+
 void DTRMainWindow::onAbout(wxCommandEvent& WXUNUSED(event)){
 	wxMessageBox(wxString::Format(
 		"Welcome to Xinvivo's reconstruction app!\n"
@@ -1152,6 +1192,7 @@ void DTRMainWindow::refreshToolbars(GLFrame* currentFrame) {
 		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Save")), true);
 		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export Reconstruction")), true);
 		m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), true);
+		m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry (Selection)")), true);
 		distanceValue->Enable();
 		autoFocus->Enable();
 		autoLight->Enable();
@@ -1206,7 +1247,8 @@ void DTRMainWindow::deactivateMenus(TomoRecon* recon) {
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), false);
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Set Resolution Phantoms")), false);
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Test Geometries")), false);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry")), false);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry (Bead)")), false);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry (Selection)")), false);
 	dataDisplay->Disable();
 
 	//Make sure we're on navigation section
@@ -1235,7 +1277,8 @@ void DTRMainWindow::activateMenus(TomoRecon* recon) {
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), true);
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Set Resolution Phantoms")), true);
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Test Geometries")), true);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry")), true);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry (Bead)")), true);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry (Selection)")), true);
 	dataDisplay->Enable();
 	optionBox->Enable();
 
@@ -1255,6 +1298,7 @@ void DTRMainWindow::onPageChange(wxAuiNotebookEvent& event) {
 		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Save")), false);
 		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export Reconstruction")), false);
 		m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), false);
+		m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry (Selection)")), false);
 		distanceValue->Enable(false);
 		autoFocus->Enable(false);
 		autoLight->Enable(false);
@@ -1586,13 +1630,10 @@ ReconCon::ReconCon(wxWindow* parent, wxString filename, wxString gainFile) : rec
 	wxStreamToTextRedirector redirect(typedParent->m_textCtrl8);
 	drawPanel = new GLFrame(this, &Sys, filename);
 	TomoRecon* recon = ((GLFrame*)drawPanel)->m_canvas->recon;
-	parseFile(recon, gainFilepath.mb_str(), filename.mb_str());
+	//parseFile(recon, gainFilepath.mb_str(), filename.mb_str());
 	recon->enableGain(false);
 	recon->setDisplay(no_der);
 	recon->setDataDisplay(reconstruction);
-
-	recon->resetFocus();
-	recon->resetLight();
 
 	((GLFrame*)drawPanel)->m_canvas->paint(false, distance);
 
@@ -1756,6 +1797,8 @@ void ReconCon::setValues() {
 	GLFrame* currentFrame = (GLFrame*)drawPanel;
 	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
 	recon->singleFrame();
+	recon->resetFocus();
+	recon->resetLight();
 	currentFrame->m_canvas->paint();
 }
 
@@ -2275,6 +2318,7 @@ DTRConfigDialog::DTRConfigDialog(wxWindow* parent) : configDialog(parent){
 	for (int i = 0; i < m_grid1->GetNumberCols(); i++)
 		for (int j = 0; j < m_grid1->GetNumberRows(); j++) 
 			m_grid1->SetCellValue(j, i, wxString::Format(wxT("%.4f"), pConfig->ReadDouble(wxString::Format(wxT("/beamLoc%d-%d"),j,i), 0.0f)));
+	rawCheckBox->SetValue(pConfig->ReadLong(wxT("/rawInput"), 0) == 1);
 
 	//Get filepath for last opened/saved file
 	configFilepath = std::string(pConfig->Read(wxT("/configFilePath"), "").mb_str());
@@ -2944,8 +2988,8 @@ void GLFrame::OnMousewheel(wxMouseEvent& event) {
 	if (event.m_controlDown && event.m_altDown)
 		m_canvas->recon->appendMinLight(newScrollPos);
 	else if (event.m_controlDown) {
-		m_canvas->recon->appendZoom(newScrollPos);
-		m_canvas->recon->appendOffsets((event.GetX() - GetSize().x / 2) / SCROLLFACTOR * newScrollPos, (event.GetY() - GetSize().y / 2) / SCROLLFACTOR * newScrollPos);
+		if (m_canvas->recon->appendZoom(newScrollPos) == Tomo_OK)
+			m_canvas->recon->appendOffsets((event.GetX() - GetSize().x / 2) / SCROLLFACTOR * newScrollPos, (event.GetY() - GetSize().y / 2) / SCROLLFACTOR * newScrollPos);
 	}
 	else if (event.m_altDown)
 		m_canvas->recon->appendMaxLight(newScrollPos);
@@ -3000,8 +3044,8 @@ void GLWindow::OnMousewheel(wxMouseEvent& event) {
 	if (event.m_controlDown && event.m_altDown)
 		m_canvas->recon->appendMinLight(newScrollPos);
 	else if (event.m_controlDown) {
-		m_canvas->recon->appendZoom(newScrollPos);
-		m_canvas->recon->appendOffsets((event.GetX() - GetSize().x / 2) / SCROLLFACTOR * newScrollPos, (event.GetY() - GetSize().y / 2) / SCROLLFACTOR * newScrollPos);
+		if(m_canvas->recon->appendZoom(newScrollPos) == Tomo_OK)
+			m_canvas->recon->appendOffsets((event.GetX() - GetSize().x / 2) / SCROLLFACTOR * newScrollPos, (event.GetY() - GetSize().y / 2) / SCROLLFACTOR * newScrollPos);
 	}
 	else if (event.m_altDown)
 		m_canvas->recon->appendMaxLight(newScrollPos);
@@ -3063,7 +3107,10 @@ void CudaGLCanvas::paint(bool disChanged, wxTextCtrl* dis, wxSlider* zoom, wxSta
 	if (!disChanged) {
 		unsigned int window, level;
 		recon->getLight(&level, &window);
-		if(distanceControl) distanceControl->SetValue(wxString::Format(wxT("%.2f"), recon->getDistance()));
+		if (distanceControl) {
+			distanceControl->SetValue(wxString::Format(wxT("%.2f"), recon->getDistance()));
+			distanceControl->Update();
+		}
 		if (zoomSlider) zoomSlider->SetValue(recon->getZoom());
 		if (windowSlider) windowSlider->SetValue(window / WINLVLFACTOR);
 		if (levelSlider) levelSlider->SetValue(level / WINLVLFACTOR);

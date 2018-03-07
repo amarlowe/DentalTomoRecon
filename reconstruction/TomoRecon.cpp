@@ -39,7 +39,7 @@ TomoError TomoRecon::ReadProjectionsFromFile(const char * gainFile, const char *
 	//Read projections
 	unsigned short ** RawData = new unsigned short *[NumViews];
 	unsigned short ** GainData = new unsigned short *[NumViews];
-	unsigned short * temp = new unsigned short[(5 + Sys.Proj.Nx)*Sys.Proj.Ny];
+	unsigned short * temp = new unsigned short[(Sys.Proj.Nx)*Sys.Proj.Ny];
 	FILE * fileptr = NULL;
 	std::string ProjPath = mainFile;
 	std::string GainPath = gainFile;
@@ -58,17 +58,21 @@ TomoError TomoRecon::ReadProjectionsFromFile(const char * gainFile, const char *
 		GainPath += std::to_string(view) + ".raw";
 
 		fopen_s(&fileptr, ProjPath.c_str(), "rb");
-		if (fileptr == NULL) return Tomo_file_err;
-
-		if (raw) {
-			fread(temp, sizeof(unsigned short), (5 + Sys.Proj.Nx) * Sys.Proj.Ny, fileptr);
-			for (int i = 5; i < Sys.Proj.Nx; i++)
-				for (int j = 0; j < Sys.Proj.Ny; j++)
-					RawData[view][j * Sys.Proj.Nx + i] = ((temp[i * Sys.Proj.Ny + j] & 0xFF00) >> 8) | ((temp[i * Sys.Proj.Ny + j] & 0x00FF) << 8);
+		if (fileptr == NULL) {
+			Sys.Proj.activeBeams[view] = false;
+			memset(RawData[view], 0, Sys.Proj.Nx*Sys.Proj.Ny * sizeof(unsigned short));
 		}
-		else fread(RawData[view], sizeof(unsigned short), Sys.Proj.Nx * Sys.Proj.Ny, fileptr);
+		else {
+			if (raw) {
+				fread(temp, sizeof(unsigned short), (Sys.Proj.Nx) * Sys.Proj.Ny, fileptr);
+				for (int i = 0; i < Sys.Proj.Nx; i++)
+					for (int j = 0; j < Sys.Proj.Ny; j++)
+						RawData[view][j * Sys.Proj.Nx + i] = ((temp[i * Sys.Proj.Ny + j] & 0xFF00) >> 8) | ((temp[i * Sys.Proj.Ny + j] & 0x00FF) << 8);
+			}
+			else fread(RawData[view], sizeof(unsigned short), Sys.Proj.Nx * Sys.Proj.Ny, fileptr);
 
-		fclose(fileptr);
+			fclose(fileptr);
+		}
 
 		fopen_s(&fileptr, GainPath.c_str(), "rb");
 		if (fileptr == NULL) return Tomo_file_err;

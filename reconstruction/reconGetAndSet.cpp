@@ -312,7 +312,10 @@ bool TomoRecon::lowerTickReady() {
 TomoError TomoRecon::appendZoom(int amount) {
 	zoom += amount;
 	if (zoom < 0) zoom = 0;
-	if (zoom > MAXZOOM) zoom = MAXZOOM;
+	if (zoom > MAXZOOM) {
+		zoom = MAXZOOM;
+		return Tomo_invalid_arg;
+	}
 	return Tomo_OK;
 }
 
