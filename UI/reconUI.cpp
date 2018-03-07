@@ -82,8 +82,13 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	calibration->Append( testGeo );
 	
 	wxMenuItem* autoGeo;
-	autoGeo = new wxMenuItem( calibration, wxID_ANY, wxString( wxT("Auto-detect Geometry") ) , wxEmptyString, wxITEM_NORMAL );
+	autoGeo = new wxMenuItem( calibration, wxID_ANY, wxString( wxT("Auto-detect Geometry (Bead)") ) , wxEmptyString, wxITEM_NORMAL );
 	calibration->Append( autoGeo );
+	
+	wxMenuItem* autoGeoS;
+	autoGeoS = new wxMenuItem( calibration, wxID_ANY, wxString( wxT("Auto-detect Geometry (Selection)") ) + wxT('\t') + wxT("Ctrl+G"), wxEmptyString, wxITEM_NORMAL );
+	calibration->Append( autoGeoS );
+	autoGeoS->Enable( false );
 	
 	m_menubar1->Append( calibration, wxT("Calibration") ); 
 	
@@ -245,6 +250,7 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	this->Connect( runTest->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onRunTest ) );
 	this->Connect( testGeo->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onTestGeo ) );
 	this->Connect( autoGeo->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onAutoGeo ) );
+	this->Connect( autoGeoS->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onAutoGeoS ) );
 	this->Connect( about->GetId(), wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onAbout ) );
 	optionBox->Connect( wxEVT_COMMAND_CHOICE_SELECTED, wxCommandEventHandler( mainWindow::onToolbarChoice ), NULL, this );
 	distanceValue->Connect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( mainWindow::onDistance ), NULL, this );
@@ -317,6 +323,7 @@ mainWindow::~mainWindow()
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onRunTest ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onTestGeo ) );
 	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onAutoGeo ) );
+	this->Disconnect( wxID_ANY, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onAutoGeoS ) );
 	this->Disconnect( wxID_ABOUT, wxEVT_COMMAND_MENU_SELECTED, wxCommandEventHandler( mainWindow::onAbout ) );
 	optionBox->Disconnect( wxEVT_COMMAND_CHOICE_SELECTED, wxCommandEventHandler( mainWindow::onToolbarChoice ), NULL, this );
 	distanceValue->Disconnect( wxEVT_COMMAND_TEXT_ENTER, wxCommandEventHandler( mainWindow::onDistance ), NULL, this );

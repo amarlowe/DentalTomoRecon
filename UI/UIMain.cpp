@@ -689,12 +689,28 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 
 		for (int view = 0; view < NumViews; view++) {
 			ProjPath = ProjPath.substr(0, ProjPath.length() - 5);
-			ProjPath += std::to_string(view) + ".raw";
+			if (recon->hasRawInput())
+				ProjPath += std::to_string(view + 1) + ".raw";
+			else
+				ProjPath += std::to_string(view) + ".raw";
 
 			fopen_s(&fileptr, ProjPath.c_str(), "rb");
-			if (fileptr == NULL) return;
-			fread(RawData + view*width*height, sizeof(unsigned short), width*height, fileptr);
-			fclose(fileptr);
+			if (fileptr == NULL) {
+				memset(&RawData[view*width*height], 0, width*height * sizeof(unsigned short));
+			}
+			else {
+				if (recon->hasRawInput()) {
+					unsigned short * temp = new unsigned short[width*height];
+					fread(temp, sizeof(unsigned short), width*height, fileptr);
+					for (int i = 0; i < width; i++)
+						for (int j = 0; j < height; j++)
+							RawData[(view*height + j) * width + i] = ((temp[i * height + j] & 0xFF00) >> 8) | ((temp[i * height + j] & 0x00FF) << 8);
+					delete temp;
+				}
+				else fread(&RawData[view*width*height], sizeof(unsigned short), width*height, fileptr);
+
+				fclose(fileptr);
+			}
 		}
 	}
 
@@ -1136,6 +1152,28 @@ void DTRMainWindow::onAutoGeo(wxCommandEvent& event) {
 	delete[] image;
 }
 
+void DTRMainWindow::onAutoGeoS(wxCommandEvent& event) {
+	if (checkForConsole()) return;
+
+	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	if (recon->selBoxReady()) {
+		//if they're greater than 0, the box was clicked and dragged successfully
+		recon->autoFocus(true);
+		while (recon->autoFocus(false) == Tomo_OK);
+		recon->autoLight();
+	}
+	else {
+		recon->resetFocus();
+		recon->resetLight();
+	}
+	currentFrame->m_canvas->paint();
+	if (recon->getDataDisplay() == iterRecon) currentFrame->showScrollBar(recon->getNumSlices(), recon->getActiveProjection());
+
+	//Run tests about this point
+}
+
 void DTRMainWindow::onAbout(wxCommandEvent& WXUNUSED(event)){
 	wxMessageBox(wxString::Format(
 		"Welcome to Xinvivo's reconstruction app!\n"
@@ -1154,6 +1192,7 @@ void DTRMainWindow::refreshToolbars(GLFrame* currentFrame) {
 		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Save")), true);
 		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export Reconstruction")), true);
 		m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), true);
+		m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry (Selection)")), true);
 		distanceValue->Enable();
 		autoFocus->Enable();
 		autoLight->Enable();
@@ -1208,7 +1247,8 @@ void DTRMainWindow::deactivateMenus(TomoRecon* recon) {
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), false);
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Set Resolution Phantoms")), false);
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Test Geometries")), false);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry")), false);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry (Bead)")), false);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry (Selection)")), false);
 	dataDisplay->Disable();
 
 	//Make sure we're on navigation section
@@ -1237,7 +1277,8 @@ void DTRMainWindow::activateMenus(TomoRecon* recon) {
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), true);
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Set Resolution Phantoms")), true);
 	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Test Geometries")), true);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry")), true);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry (Bead)")), true);
+	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry (Selection)")), true);
 	dataDisplay->Enable();
 	optionBox->Enable();
 
@@ -1257,6 +1298,7 @@ void DTRMainWindow::onPageChange(wxAuiNotebookEvent& event) {
 		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Save")), false);
 		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export Reconstruction")), false);
 		m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), false);
+		m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry (Selection)")), false);
 		distanceValue->Enable(false);
 		autoFocus->Enable(false);
 		autoLight->Enable(false);
@@ -1593,9 +1635,6 @@ ReconCon::ReconCon(wxWindow* parent, wxString filename, wxString gainFile) : rec
 	recon->setDisplay(no_der);
 	recon->setDataDisplay(reconstruction);
 
-	recon->resetFocus();
-	recon->resetLight();
-
 	((GLFrame*)drawPanel)->m_canvas->paint(false, distance);
 
 	bSizer6->Add(drawPanel, 10, wxEXPAND | wxALL);
@@ -1758,6 +1797,8 @@ void ReconCon::setValues() {
 	GLFrame* currentFrame = (GLFrame*)drawPanel;
 	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
 	recon->singleFrame();
+	recon->resetFocus();
+	recon->resetLight();
 	currentFrame->m_canvas->paint();
 }
 

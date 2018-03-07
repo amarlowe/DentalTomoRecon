@@ -103,6 +103,7 @@ class mainWindow : public wxFrame
 		virtual void onRunTest( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onTestGeo( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onAutoGeo( wxCommandEvent& event ) { event.Skip(); }
+		virtual void onAutoGeoS( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onAbout( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onToolbarChoice( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onDistance( wxCommandEvent& event ) { event.Skip(); }

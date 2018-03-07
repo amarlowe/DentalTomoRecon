@@ -66,6 +66,7 @@
 #define AUTOTHRESHOLD 5000
 #define HISTLIMIT 10
 #define HIST_BIN_COUNT 256
+#define SATURATIONLIMIT 0.1
 
 //Code use parameters
 //#define PROFILER
@@ -212,6 +213,7 @@ struct Proj_Data {
 	int Ny;									//The number of detector pixels in y direction
 	int Flip;								//Flip the orientation of the detector
 	bool * activeBeams;
+	bool saturated = false;
 };
 
 ///Parameters for the particular x-ray system

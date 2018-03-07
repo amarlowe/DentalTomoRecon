@@ -1375,6 +1375,7 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 		if (thisMin < minVal) minVal = thisMin;
 	}
 	cuda(Memcpy(d_MinVal, &minVal, sizeof(float), cudaMemcpyHostToDevice));
+	if (histogram[HIST_BIN_COUNT - 1] > SATURATIONLIMIT * Sys.Proj.Nx * Sys.Proj.Ny) Sys.Proj.saturated = true;
 
 	float *g, *z1, *z2;
 	size_t size;
@@ -2679,8 +2680,9 @@ TomoError TomoRecon::finalizeIter() {
 	cudaMemcpy(d_offsets, offsets, HIST_BIN_COUNT * sizeof(float), cudaMemcpyHostToDevice);
 
 	//cuda(BindSurfaceToArray(surfRecon, d_Recon2));
-	for (int slice = 0; slice < Sys.Recon.Nz; slice++)
-		//KERNELCALL2(scaleRecon, contBlocks, contThreads, slice, d_scales, d_offsets, constants, surfReconObj);
+	if(!Sys.Proj.saturated)
+		for (int slice = 0; slice < Sys.Recon.Nz; slice++)
+			KERNELCALL2(scaleRecon, contBlocks, contThreads, slice, d_scales, d_offsets, constants, surfReconObj);
 
 	cuda(UnbindTexture(textSino));
 	cuda(BindTexture2D(NULL, textSino, d_Raw, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));

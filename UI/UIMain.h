@@ -378,6 +378,7 @@ protected:
 	void onRunTest(wxCommandEvent& event);
 	void onTestGeo(wxCommandEvent& event);
 	void onAutoGeo(wxCommandEvent& event);
+	void onAutoGeoS(wxCommandEvent& event);
 	void deactivateMenus(TomoRecon* recon);
 	void activateMenus(TomoRecon* recon);
 	void onPageChange(wxAuiNotebookEvent& event);
