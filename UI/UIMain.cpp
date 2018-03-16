@@ -95,6 +95,8 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 				if (outErr == EC_Normal) recon->enableMetal(tempShrt == 1);
 				outErr = dset->findAndGetFloat32(PRV_MetalThresh, tempFlt);
 				if (outErr == EC_Normal) recon->setMetalThreshold(tempFlt);
+				outErr = dset->findAndGetUint16(PRV_UseRev, tempShrt);
+				if (outErr == EC_Normal) recon->enableReverseGeometry(tempShrt == 1);
 			}
 
 			returnError = Tomo_proj_file;
@@ -332,6 +334,9 @@ TomoError DTRMainWindow::launchReconConfig(TomoRecon * recon, wxString filename)
 	rc->metalIsEnabled = recon->metalIsEnabled();
 	rc->metalThresh = recon->getMetalThreshold();
 
+	//Reverse Geometry
+	rc->reverseGeometry = recon->reverseGeometryIsEnabled();
+
 	//Scan line removal
 	rc->scanVertIsEnabled = recon->scanVertIsEnabled();
 	rc->scanHorIsEnabled = recon->scanHorIsEnabled();
@@ -368,6 +373,9 @@ TomoError DTRMainWindow::launchReconConfig(TomoRecon * recon, wxString filename)
 	//metal
 	recon->enableMetal(rc->metalIsEnabled);
 	recon->setMetalThreshold(rc->metalThresh);
+
+	//Reverse Geometry
+	recon->enableReverseGeometry(rc->reverseGeometry);
 
 	//Scan line removal
 	recon->enableScanVert(rc->scanVertIsEnabled);
@@ -444,6 +452,7 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 	}
 	m_statusBar1->SetStatusText(_("Reconstructing:"));
 	setDataDisplay(currentFrame, iterRecon);
+	refreshToolbars(currentFrame);
 	deactivateMenus(recon);
 
 	wxConfigBase *pConfig = wxConfigBase::Get();
@@ -469,7 +478,6 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 	delete progress;
 
 	activateMenus(recon);
-	refreshToolbars(currentFrame);
 
 	currentFrame->m_canvas->paint();
 }
@@ -559,6 +567,7 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	(*m_textCtrl8) << "Opening new project titled: \"" << name << "\"\n";
 	m_auinotebook6->SetPageText(m_auinotebook6->GetSelection(), name);
 
+	refreshToolbars(currentFrame);
 	deactivateMenus(recon);
 
 	setDataDisplay(currentFrame, iterRecon);
@@ -601,7 +610,6 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	delete progress;
 
 	activateMenus(recon);
-	refreshToolbars(currentFrame);
 
 	currentFrame->m_canvas->paint();
 }
@@ -739,6 +747,7 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 	dict.addEntry(new DcmDictEntry(PRIVATE_EXPSR_TAG, EVR_US, "Exposure time", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
 	dict.addEntry(new DcmDictEntry(PRIVATE_USEMTL_TAG, EVR_US, "Use metal artifact correction", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
 	dict.addEntry(new DcmDictEntry(PRIVATE_MTLTHRS_TAG, EVR_FL, "Metal artifact threshold", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
+	dict.addEntry(new DcmDictEntry(PRIVATE_USEREV_TAG, EVR_US, "Reverse Geometries", 1, 1, "private", OFTrue, PRIVATE_CREATOR_NAME));
 	dcmDataDict.unlock();
 
 	dataset->putAndInsertString(PRV_PrivateCreator, PRIVATE_CREATOR_NAME);
@@ -765,6 +774,7 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 	dataset->putAndInsertUint16(PRV_Exposure, recon->getExposure());
 	dataset->putAndInsertUint16(PRV_UseMetal, recon->metalIsEnabled() ? 1 : 0);
 	dataset->putAndInsertFloat32(PRV_MetalThresh, recon->getMetalThreshold());
+	dataset->putAndInsertUint16(PRV_UseRev, recon->reverseGeometryIsEnabled() ? 1 : 0);
 
 	//Output just the tags for reference
 	fileformat.print(COUT);
@@ -980,6 +990,7 @@ void DTRMainWindow::onTestGeo(wxCommandEvent& event) {
 			recon->setHorFlip(false);
 			recon->setVertFlip(true);
 			recon->setShowNegative(true);
+			recon->enableReverseGeometry(true);
 		}
 		recon->ReadProjectionsFromFile(gainFilepath.mb_str(), filename.GetFullPath().mb_str(), recon->hasRawInput());
 		recon->singleFrame();
@@ -1158,20 +1169,40 @@ void DTRMainWindow::onAutoGeoS(wxCommandEvent& event) {
 	GLFrame* currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
-	if (recon->selBoxReady()) {
-		//if they're greater than 0, the box was clicked and dragged successfully
-		recon->autoFocus(true);
-		while (recon->autoFocus(false) == Tomo_OK);
-		recon->autoLight();
-	}
-	else {
-		recon->resetFocus();
-		recon->resetLight();
-	}
-	currentFrame->m_canvas->paint();
-	if (recon->getDataDisplay() == iterRecon) currentFrame->showScrollBar(recon->getNumSlices(), recon->getActiveProjection());
-
 	//Run tests about this point
+	std::ofstream FILE;
+	FILE.open("testResults.txt");
+
+	float maxXVals[NUMVIEWS];
+	float maxYVals[NUMVIEWS];
+	float returnVal;
+	int yIters, oldIter;
+	//for (int view = 0; view < NUMVIEWS; view++)
+	int view = 0;
+	{
+		//if (view == 1 || view == 3) continue;
+		recon->autoGeo(true, view, returnVal, yIters, maxXVals[view], maxYVals[view]);
+		recon->autoLight();
+		oldIter = yIters;
+		FILE << returnVal << ",";
+		while (recon->autoGeo(false, view, returnVal, yIters, maxXVals[view], maxYVals[view]) == Tomo_OK) {
+			if (yIters != oldIter) {
+				oldIter = yIters;
+				FILE << std::setprecision(10) << returnVal << "\n";
+			}
+			else {
+				FILE << std::setprecision(10) << returnVal << ",";
+			}
+			currentFrame->m_canvas->paint();
+		}
+		FILE << std::setprecision(10) << returnVal;
+		FILE.close();
+		(*m_textCtrl8) << "beam " << view << ": x: " << maxXVals[view] << " mm, y: " << maxYVals[view] << " mm\n";
+	}
+
+	recon->singleFrame();
+	recon->autoLight();
+	currentFrame->m_canvas->paint();
 }
 
 void DTRMainWindow::onAbout(wxCommandEvent& WXUNUSED(event)){
@@ -1652,6 +1683,9 @@ void ReconCon::setValues() {
 	recon->enableMetal(metalIsEnabled);
 	recon->setMetalThreshold(metalThresh);
 
+	//Reverse Geometry
+	recon->enableReverseGeometry(reverseGeometry);
+
 	//Scan line removal
 	recon->enableScanVert(scanVertIsEnabled);
 	recon->enableScanHor(scanHorIsEnabled);
@@ -1720,6 +1754,9 @@ void ReconCon::setValues() {
 		resetMetal->Enable(false);
 		metalSlider->Enable(false);
 	}
+
+	//Reverse Geometry
+	invGeo->SetValue(recon->reverseGeometryIsEnabled());
 
 	//Scan line removal
 	if (recon->scanVertIsEnabled()) {
@@ -1887,6 +1924,7 @@ void ReconCon::onOk(wxCommandEvent& event) {
 	exposure = recon->getExposure();
 	metalIsEnabled = recon->metalIsEnabled();
 	metalThresh = recon->getMetalThreshold();
+	reverseGeometry = recon->reverseGeometryIsEnabled();
 	canceled = false;
 	Close();
 }
@@ -2149,6 +2187,16 @@ void ReconCon::onMetal(wxScrollEvent& event) {
 
 	recon->setMetalThreshold(value * METALFACTOR);
 	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
+	recon->singleFrame();
+	currentFrame->m_canvas->paint();
+}
+
+//Reverse Geometry
+void ReconCon::onInvGeo(wxCommandEvent& WXUNUSED(event)) {
+	GLFrame* currentFrame = (GLFrame*)drawPanel;
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	recon->enableReverseGeometry(invGeo->IsChecked());
 	recon->singleFrame();
 	currentFrame->m_canvas->paint();
 }

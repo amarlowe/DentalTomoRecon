@@ -80,6 +80,7 @@
 #define PRIVATE_EXPSR_TAG		0x0029, 0x1014
 #define PRIVATE_USEMTL_TAG		0x0029, 0x1015
 #define PRIVATE_MTLTHRS_TAG		0x0029, 0x1016
+#define PRIVATE_USEREV_TAG		0x0029, 0x1017
 
 #define PRV_PrivateCreator  DcmTag(PRIVATE_CREATOR_TAG)
 #define PRV_StepSize		DcmTag(PRIVATE_STEP_TAG, PRIVATE_CREATOR_NAME)
@@ -105,6 +106,7 @@
 #define PRV_Exposure		DcmTag(PRIVATE_EXPSR_TAG, PRIVATE_CREATOR_NAME)
 #define PRV_UseMetal		DcmTag(PRIVATE_USEMTL_TAG, PRIVATE_CREATOR_NAME)
 #define PRV_MetalThresh		DcmTag(PRIVATE_MTLTHRS_TAG, PRIVATE_CREATOR_NAME)
+#define PRV_UseRev			DcmTag(PRIVATE_USEREV_TAG, PRIVATE_CREATOR_NAME)
 
 typedef enum {
 	Status = 0,
@@ -157,6 +159,9 @@ protected:
 	void onResetMetal(wxCommandEvent& event);
 	void onMetal(wxScrollEvent& event);
 
+	//Reverse Geometry
+	void onInvGeo(wxCommandEvent& event);
+
 	//Scanline correction
 	void onScanVertEnable(wxCommandEvent& event);
 	void onScanVert(wxScrollEvent& event);
@@ -202,6 +207,7 @@ public:
 	bool canceled = true;
 	bool metalIsEnabled;
 	int metalThresh;
+	bool reverseGeometry;
 };
 
 class DTRConfigDialog : public configDialog {

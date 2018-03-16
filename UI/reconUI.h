@@ -183,6 +183,7 @@ class reconConfig : public wxDialog
 		wxStaticText* stepVal;
 		wxStaticText* stepUnits;
 		wxSlider* stepSlider;
+		wxCheckBox* invGeo;
 		wxToolBar* scanToolbar;
 		wxCheckBox* scanVertEnable;
 		wxStaticText* scanVertValue;
@@ -231,6 +232,7 @@ class reconConfig : public wxDialog
 		virtual void onSetStartDis( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onSetEndDis( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onStepSlider( wxScrollEvent& event ) { event.Skip(); }
+		virtual void onInvGeo( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onScanVertEnable( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onResetScanVert( wxCommandEvent& event ) { event.Skip(); }
 		virtual void onScanVert( wxScrollEvent& event ) { event.Skip(); }

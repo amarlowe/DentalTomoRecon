@@ -112,6 +112,13 @@ TomoError TomoRecon::setReconBox(int index) {
 	return Tomo_OK;
 }
 
+TomoError TomoRecon::setProjBox(int index) {
+	R2P(&currX, &currY, constants.currXr, constants.currYr, index);
+	R2P(&baseX, &baseY, constants.baseXr, constants.baseYr, index);
+
+	return Tomo_OK;
+}
+
 TomoError TomoRecon::setInputVeritcal(bool vert) {
 	vertical = vert;
 	return Tomo_OK;
@@ -538,4 +545,13 @@ void TomoRecon::getReconstructionDimensions(int* width, int* height) {
 
 bool TomoRecon::hasRawInput() {
 	return Sys.Geo.raw;
+}
+
+TomoError TomoRecon::enableReverseGeometry(bool reverse) {
+	constants.revGeo = reverse;
+	return Tomo_OK;
+}
+
+bool TomoRecon::reverseGeometryIsEnabled() {
+	return constants.revGeo;
 }

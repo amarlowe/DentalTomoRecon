@@ -38,7 +38,7 @@
 #define BARHEIGHT 40
 
 //Projection correction parameters
-#define HIGHTHRESH 1.0f
+#define HIGHTHRESH 0.95f
 
 //Autofocus parameters
 #define STARTSTEP 1.0f
@@ -83,8 +83,8 @@
 #define KERNELRADIUS 3
 #define KERNELSIZE (2*KERNELRADIUS + 1)
 #else
-#define SIGMA 1.0f
-#define KERNELRADIUS 10
+#define SIGMA 2.0f
+#define KERNELRADIUS 4
 #define KERNELSIZE (2*KERNELRADIUS + 1)
 #endif
 
@@ -259,11 +259,14 @@ struct params {
 	float * d_Beamx;
 	float * d_Beamy;
 	float * d_Beamz;
+	bool * useBeams;
 	int ReconPitchNum;
 	int ProjPitchNum;
 	bool orientation;
 	bool flip;
 	bool log;
+	bool revGeo = false;
+	bool geoTesting = false;
 
 	//Internal display variable
 	bool isReconstructing = false;
@@ -353,6 +356,10 @@ public:
 		///Projection number that the selection box is from.
 		int index);
 
+	TomoError setProjBox(
+		///Projection number that the selection box is from.
+		int index);
+
 	///Get a histogram of brightness value accross an entire image. Limited to values between 0 and USHRT_MAX.
 	template<typename T>
 	TomoError getHistogram(
@@ -378,7 +385,12 @@ public:
 	///Function must be called in a loop until Tomo_Done is returned.
 	TomoError autoGeo(
 		///True for initialization before the loop, false while in the loop.
-		bool firstRun);
+		bool firstRun,
+		int beam,
+		float &returnVal,
+		int &yIter,
+		float &maxXVal,
+		float &maxYVal);
 
 	///Function used to automattically find the window and level of the current selection.
 	TomoError autoLight(
@@ -951,6 +963,9 @@ public:
 	///Modifications like edge filters and current lighting will be computed before saving to disk; it will save as currently displayed.
 	TomoError exportRecon(unsigned short * exportData);
 
+	TomoError enableReverseGeometry(bool reverse);
+	bool reverseGeometryIsEnabled();
+
 private:
 	/********************************************************************************************/
 	/* Function to interface the CPU with the GPU:												*/
@@ -984,14 +999,8 @@ private:
 	int I2D(int i, bool xDir);
 	int D2I(int d, bool xDir);
 	TomoError P2R(int* rX, int* rY, int pX, int pY, int view);
-	TomoError R2P(int* pX, int* pY, int rX, int rY, int view);
+	TomoError R2P(float* pX, float* pY, int rX, int rY, int view);
 	TomoError I2D(int* dX, int* dY, int iX, int iY);
-
-	//DICOM writing helpers
-	void ConvertImage();
-	void CreatePatientandSetSystem(struct PatientInfo * Patient, struct SystemSettings * Set);
-	void CreateScanInsitution(struct ExamInstitution * Institute);
-	void FreeStrings(struct PatientInfo * Patient, struct ExamInstitution * Institute);
 
 	//Variables
 
@@ -1012,10 +1021,10 @@ private:
 	//Selection variables
 
 	//box
-	int baseX = -1;
-	int baseY = -1;
-	int currX = -1;
-	int currY = -1;
+	float baseX = -1;
+	float baseY = -1;
+	float currX = -1;
+	float currY = -1;
 
 	//lower tick
 	int lowX = -1;
