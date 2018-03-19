@@ -74,6 +74,7 @@
 //#define ENABLEZDER
 //#define ENABLESOLVER
 //#define PRINTMEMORYUSAGE
+#define PRINTINTENSITIES
 #define USEITERATIVE
 //#define SHOWERROR
 

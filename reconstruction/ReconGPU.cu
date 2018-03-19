@@ -1562,6 +1562,7 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 	}
 #endif
 
+#ifdef PRINTINTENSITIES
 	for (int i = 0; i < HIST_BIN_COUNT; i++) inputHistogram[i] = 0;
 	for (int beam = 0; beam < 7; beam++) {
 		unsigned int histogram2[HIST_BIN_COUNT];
@@ -1575,6 +1576,7 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 		for (int test = 1; test < HIST_BIN_COUNT; test++) outputFile << histogram2[test] << "\n";
 		outputFile.close();
 	}
+#endif //PRINTINTENSITIES
 
 	/* free device memory */
 	cuda(Free(g));
@@ -2774,6 +2776,7 @@ TomoError TomoRecon::finalizeIter() {
 	}
 	cuda(UnbindTexture(textSino));
 
+#ifdef PRINTINTENSITIES
 	tomo_err_throw(getHistogramRecon(histogram, true, false));
 	std::ofstream outputFile;
 	char outFilename[250];
@@ -2781,6 +2784,7 @@ TomoError TomoRecon::finalizeIter() {
 	outputFile.open(outFilename);
 	for (int test = 1; test < HIST_BIN_COUNT; test++) outputFile << histogram[test] / Sys.Recon.Nz << "\n";// / Sys.Recon.Nz
 	outputFile.close();
+#endif //PRINTINTENSITIES
 
 	constants.baseXr = -1;
 	constants.baseYr = -1;

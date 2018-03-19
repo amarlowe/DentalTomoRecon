@@ -42,6 +42,14 @@
 #include "../sample.xpm"
 #endif
 
+//Versioning
+#define VERSIONMAJOR	0
+#define VERSIONMINOR	1
+#define RELEASENUM		00
+#define RELEASEMONTH	03
+#define RELEASEDAY		19
+#define RELEASEYEAR		2018
+
 //Enable to remove many options not necessary to show early users
 #define SHOWMODE
 

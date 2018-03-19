@@ -275,7 +275,7 @@ DTRMainWindow::DTRMainWindow(wxWindow* parent) : mainWindow(parent){
 	}
 
 	//Get filepath for last opened/saved file
-	gainFilepath = pConfig->Read(wxT("/gainFilepath"), wxT(""));
+	gainFilepath = pConfig->Read(wxT("/gainFilepath"), wxT("./Gain Files/AcquiredImage1_0.raw"));
 
 	int statusWidths[] = { -4, -1, -1 };
 	m_statusBar1->SetFieldsCount(3, statusWidths);
@@ -654,6 +654,8 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 	recon->getProjectionDimensions(&width, &height);
 
 	char uid[100];
+	char version[100];
+	sprintf(version, "%01d.%01d.%02d", VERSIONMAJOR, VERSIONMINOR, RELEASENUM);
 	DcmFileFormat fileformat;
 	DcmDataset *dataset = fileformat.getDataset();
 	dataset->putAndInsertString(DCM_SOPClassUID, UID_CTImageStorage);
@@ -661,6 +663,10 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 	dataset->putAndInsertString(DCM_NumberOfFrames, std::to_string(NumViews).c_str());
 	dataset->putAndInsertString(DCM_Rows, std::to_string(height).c_str());
 	dataset->putAndInsertString(DCM_Columns, std::to_string(width).c_str());
+	dataset->putAndInsertString(DCM_BitsStored, std::to_string(16).c_str());
+	dataset->putAndInsertString(DCM_BitsAllocated, std::to_string(16).c_str());
+	dataset->putAndInsertString(DCM_HighBit, std::to_string(15).c_str());
+	dataset->putAndInsertString(DCM_SoftwareVersions, version);
 	unsigned short * RawData = new unsigned short[width*height*NumViews];
 
 	if (!ProjPath.substr(ProjPath.length() - 3, ProjPath.length()).compare("dcm")) {
@@ -829,6 +835,8 @@ void DTRMainWindow::onExportRecon(wxCommandEvent& event) {
 	recon->getReconstructionDimensions(&width, &height);
 
 	char uid[100];
+	char version[100];
+	sprintf(version, "%01d.%01d.%02d", VERSIONMAJOR, VERSIONMINOR, RELEASENUM);
 	DcmFileFormat fileformat;
 	DcmDataset *dataset = fileformat.getDataset();
 	dataset->putAndInsertString(DCM_SOPClassUID, UID_CTImageStorage);
@@ -836,6 +844,10 @@ void DTRMainWindow::onExportRecon(wxCommandEvent& event) {
 	dataset->putAndInsertString(DCM_NumberOfFrames, std::to_string(numFrames).c_str());
 	dataset->putAndInsertString(DCM_Rows, std::to_string(height).c_str());
 	dataset->putAndInsertString(DCM_Columns, std::to_string(width).c_str());
+	dataset->putAndInsertString(DCM_BitsStored, std::to_string(16).c_str());
+	dataset->putAndInsertString(DCM_BitsAllocated, std::to_string(16).c_str());
+	dataset->putAndInsertString(DCM_HighBit, std::to_string(15).c_str());
+	dataset->putAndInsertString(DCM_SoftwareVersions, version);
 	unsigned short * RawData = new unsigned short[width*height*numFrames];
 
 	recon->exportRecon(RawData);
@@ -1234,7 +1246,11 @@ void DTRMainWindow::onAbout(wxCommandEvent& WXUNUSED(event)){
 	wxMessageBox(wxString::Format(
 		"Welcome to Xinvivo's reconstruction app!\n"
 		"\n"
-		"This app was built for %s.",
+		"Version: %d.%d.%d (beta)\n"
+		"Released: %02d/%02d/%04d\n"
+		"Built for %s.",
+		VERSIONMAJOR, VERSIONMINOR, RELEASENUM,
+		RELEASEMONTH, RELEASEDAY, RELEASEYEAR,
 		wxGetOsDescription()),
 		"About Tomography Reconstruction",
 		wxOK | wxICON_INFORMATION,
