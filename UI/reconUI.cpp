@@ -586,7 +586,6 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	noiseToolbar->Hide();
 	
 	outlierEnable = new wxCheckBox( noiseToolbar, wxID_ANY, wxT("Large noise hard removal over value:  "), wxDefaultPosition, wxDefaultSize, 0 );
-	outlierEnable->SetValue(true); 
 	noiseToolbar->AddControl( outlierEnable );
 	noiseMaxVal = new wxStaticText( noiseToolbar, wxID_ANY, wxT("700"), wxDefaultPosition, wxDefaultSize, 0 );
 	noiseMaxVal->Wrap( -1 );
@@ -596,7 +595,6 @@ reconConfig::reconConfig( wxWindow* parent, wxWindowID id, const wxString& title
 	noiseMaxSlider = new wxSlider( noiseToolbar, wxID_ANY, 700, 300, 800, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL );
 	noiseToolbar->AddControl( noiseMaxSlider );
 	TVEnable = new wxCheckBox( noiseToolbar, wxID_ANY, wxT("TV denoising with lambda: "), wxDefaultPosition, wxDefaultSize, 0 );
-	TVEnable->SetValue(true); 
 	noiseToolbar->AddControl( TVEnable );
 	lambdaVal = new wxStaticText( noiseToolbar, wxID_ANY, wxT("2"), wxDefaultPosition, wxDefaultSize, 0 );
 	lambdaVal->Wrap( -1 );

@@ -240,6 +240,11 @@ bool MyApp::OnInit(){
 	//GLFrame* initFrame = new GLFrame(frame->m_auinotebook6, &Sys, filename, frame->m_statusBar1);
 	CudaGLCanvas* m_canvas = new CudaGLCanvas(frame, frame->m_statusBar1, &Sys);
 	delete m_canvas;
+#ifdef SHOWMODE
+	frame->m_menubar1->Enable(frame->m_menubar1->FindMenuItem(_("Calibration"), _("Set Resolution Phantoms")), false);
+	frame->m_menubar1->Enable(frame->m_menubar1->FindMenuItem(_("Calibration"), _("Test Geometries")), false);
+	frame->m_menubar1->Enable(frame->m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry (Bead)")), false);
+#endif //SHOWMODE
 	frame->Show(true);
 #endif
 
@@ -400,7 +405,11 @@ TomoError DTRMainWindow::launchReconConfig(TomoRecon * recon, wxString filename)
 
 // event handlers
 void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
-	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
+	wxConfigBase *pConfig = wxConfigBase::Get();
+	if (pConfig == NULL)
+		return;
+
+	wxFileDialog openFileDialog(this, _("Select one raw image file"), pConfig->Read(wxT("/lastFilepath"), wxT("")), pConfig->Read(wxT("/lastFilepath"), wxT("")),
 		"Raw or DICOM Files (*.raw, *.dcm)|*.raw;*.dcm|Raw File (*.raw)|*.raw|DICOM File (*.dcm)|*.dcm", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
 	if (openFileDialog.ShowModal() == wxID_CANCEL)
@@ -409,6 +418,7 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 	m_auinotebook6->SetSelection(0);//Set to console to not interfere with current recon on cancel
 
 	wxString filename = openFileDialog.GetPath();
+	pConfig->Write(wxT("/lastFilepath"), filename);
 	GLFrame * currentFrame = (GLFrame*)CreateNewPage(filename);
 	if (currentFrame->m_canvas->launchError != Tomo_OK) {
 		(*m_textCtrl8) << "Error creating new reconstruction. Please close other tabs, or use the \"open\" command on another reconstruction instead of \"new\". " <<
@@ -455,10 +465,6 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 	refreshToolbars(currentFrame);
 	deactivateMenus(recon);
 
-	wxConfigBase *pConfig = wxConfigBase::Get();
-	if (pConfig == NULL)
-		return;
-
 	runIterations = pConfig->Read(wxT("/iterations"), ITERATIONS);
 
 	wxGauge* progress = new wxGauge(m_statusBar1, wxID_ANY, runIterations, wxPoint(100, 3));
@@ -467,6 +473,10 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 		recon->iterStep();
 		recon->singleFrame();
 		recon->resetLight();
+		if (i == 0) {
+			recon->resetFocus();
+			currentFrame->showScrollBar(recon->getNumSlices(), recon->getActiveProjection());
+		}
 		progress->SetValue(i);
 		currentFrame->m_canvas->paint();
 		wxYield();
@@ -526,13 +536,18 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 		return;
 	}
 
-	wxFileDialog openFileDialog(this, _("Select one raw image file"), "", "",
+	wxConfigBase *pConfig = wxConfigBase::Get();
+	if (pConfig == NULL)
+		return;
+
+	wxFileDialog openFileDialog(this, _("Select one raw image file"), pConfig->Read(wxT("/lastFilepath"), ""), pConfig->Read(wxT("/lastFilepath"), wxT("")),
 		"Raw or DICOM Files (*.raw, *.dcm)|*.raw;*.dcm|Raw File (*.raw)|*.raw|DICOM File (*.dcm)|*.dcm", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 
 	if (openFileDialog.ShowModal() == wxID_CANCEL)
 		return;
 
 	wxString filename = openFileDialog.GetPath();
+	pConfig->Write(wxT("/lastFilepath"), filename);
 
 	wxFileName file = filename;
 	wxArrayString dirs = file.GetDirs();
@@ -570,6 +585,8 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	refreshToolbars(currentFrame);
 	deactivateMenus(recon);
 
+	wxStreamToTextRedirector redirect(m_textCtrl8);
+
 	setDataDisplay(currentFrame, iterRecon);
 	if (recon->resetIterative() != Tomo_OK) {
 		(*m_textCtrl8) << "Error remaking iterative memory\n";
@@ -578,10 +595,6 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 		return;
 	}
 	m_statusBar1->SetStatusText(_("Reconstructing:"));
-
-	wxConfigBase *pConfig = wxConfigBase::Get();
-	if (pConfig == NULL)
-		return;
 
 	runIterations = pConfig->Read(wxT("/iterations"), ITERATIONS);
 
@@ -596,6 +609,10 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 		}
 		recon->singleFrame();
 		recon->resetLight();
+		if (i == 0) {
+			recon->resetFocus();
+			currentFrame->showScrollBar(recon->getNumSlices(), recon->getActiveProjection());
+		}
 		progress->SetValue(i);
 		currentFrame->m_canvas->paint();
 		wxYield();
@@ -883,12 +900,16 @@ void DTRMainWindow::onGainSelect(wxCommandEvent& WXUNUSED(event)) {
 	ofn.lpstrTitle = (LPCWSTR)"Select a gain file";
 	ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST;
 
-	GetOpenFileNameA((LPOPENFILENAMEA)&ofn);
+	if (!GetOpenFileNameA((LPOPENFILENAMEA)&ofn)) return;
 
 	gainFilepath = wxString::FromUTF8(temp);
 
 	//Save filepath for next session
 	wxConfigBase::Get()->Write(wxT("/gainFilepath"), gainFilepath);
+
+	wxMessageBox(wxT("Gain image set has been successfully edited."),
+		wxT("Gain Success"),
+		wxICON_INFORMATION | wxOK);
 }
 
 void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
@@ -930,6 +951,10 @@ void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 		recon->iterStep();
 		recon->singleFrame();
 		recon->resetLight();
+		if (i == 0) {
+			recon->resetFocus();
+			currentFrame->showScrollBar(recon->getNumSlices(), recon->getActiveProjection());
+		}
 		progress->SetValue(i);
 		currentFrame->m_canvas->paint();
 		wxYield();
@@ -1223,7 +1248,9 @@ void DTRMainWindow::refreshToolbars(GLFrame* currentFrame) {
 		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Save")), true);
 		m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export Reconstruction")), true);
 		m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), true);
+#ifndef SHOWMODE
 		m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry (Selection)")), true);
+#endif // !SHOWMODE
 		distanceValue->Enable();
 		autoFocus->Enable();
 		autoLight->Enable();
@@ -1269,17 +1296,10 @@ void DTRMainWindow::refreshToolbars(GLFrame* currentFrame) {
 }
 
 void DTRMainWindow::deactivateMenus(TomoRecon* recon) {
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("New")), false);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Open")), false);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Save")), false);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export Reconstruction")), false);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Settings")), false);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Gain Files")), false);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), false);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Set Resolution Phantoms")), false);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Test Geometries")), false);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry (Bead)")), false);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry (Selection)")), false);
+	if (m_OldMenuBar == NULL) {
+		m_OldMenuBar = GetMenuBar();
+		SetMenuBar(NULL);
+	}
 	dataDisplay->Disable();
 
 	//Make sure we're on navigation section
@@ -1296,20 +1316,16 @@ void DTRMainWindow::deactivateMenus(TomoRecon* recon) {
 
 	m_auinotebook6->SetWindowStyle(NULL);
 	activeRecon = m_auinotebook6->GetSelection();
+
+	Refresh();
 }
 
 void DTRMainWindow::activateMenus(TomoRecon* recon) {
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("New")), true);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Open")), true);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Save")), true);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("File"), _("Export Reconstruction")), true);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Settings")), true);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Gain Files")), true);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Config"), _("Edit Reconstruction Settings")), true);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Set Resolution Phantoms")), true);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Test Geometries")), true);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry (Bead)")), true);
-	m_menubar1->Enable(m_menubar1->FindMenuItem(_("Calibration"), _("Auto-detect Geometry (Selection)")), true);
+	if (m_OldMenuBar != NULL) {
+		SetMenuBar(m_OldMenuBar);
+		m_OldMenuBar = NULL;
+	}
+
 	dataDisplay->Enable();
 	optionBox->Enable();
 
@@ -1318,6 +1334,7 @@ void DTRMainWindow::activateMenus(TomoRecon* recon) {
 
 	m_auinotebook6->SetSelection(activeRecon);
 	activeRecon = 0;
+	Refresh();
 }
 
 void DTRMainWindow::onPageChange(wxAuiNotebookEvent& event) {
@@ -1665,6 +1682,12 @@ ReconCon::ReconCon(wxWindow* parent, wxString filename, wxString gainFile) : rec
 	recon->enableGain(false);
 	recon->setDisplay(no_der);
 	recon->setDataDisplay(reconstruction);
+
+#ifdef SHOWMODE
+	optionBox->Delete(4);
+	optionBox->Delete(3);
+	optionBox->Delete(2);
+#endif //SHOWMODE
 
 	((GLFrame*)drawPanel)->m_canvas->paint(false, distance);
 

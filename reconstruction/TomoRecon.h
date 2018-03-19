@@ -73,7 +73,7 @@
 //#define PRINTSCANCORRECTIONS
 //#define ENABLEZDER
 //#define ENABLESOLVER
-#define PRINTMEMORYUSAGE
+//#define PRINTMEMORYUSAGE
 #define USEITERATIVE
 //#define SHOWERROR
 
@@ -120,6 +120,7 @@
 #define MEDIANFAC 0.0f
 #define TAPERSIZE 200.0f
 #define TRISIZE 155 
+#define ALPHA 0.97f
 
 //#define RECONDERIVATIVE
 //#define SQUAREMAGINX
@@ -1007,7 +1008,6 @@ private:
 	struct SystemControl Sys;
 	int NumViews;
 
-	int iteration = 0;
 	bool continuousMode = false;
 	int sliceIndex = 0;
 	int zoom = 0;
@@ -1101,7 +1101,7 @@ private:
 	params constants;
 
 	//TV variables
-	bool useTV = true;
+	bool useTV = false;
 	float lambda = LAMBDADEFAULT * UCHAR_MAX;
 	float iter = ITERDEFAULT;
 
@@ -1109,6 +1109,10 @@ private:
 	cudaSurfaceObject_t surfReconObj = 0;
 	cudaSurfaceObject_t surfErrorObj = 0;
 	cudaSurfaceObject_t surfDeltaObj = 0;
+
+	//Iterative loop parameters
+	float iteration = 0.0f;
+	float decay = 1.0f;
 
 	//Input histogram for end recon matching
 	unsigned int inputHistogram[HIST_BIN_COUNT];

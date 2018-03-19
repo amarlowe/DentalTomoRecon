@@ -572,7 +572,7 @@ __global__ void projectSlice(float * IM, float distance, params consts) {
 #ifdef SHOWERROR
 __global__ void projectIter(float * oldRecon, int slice, float iteration, bool skipTV, params consts, cudaSurfaceObject_t surfRecon, cudaSurfaceObject_t errorRecon) {
 #else
-__global__ void projectIter(float * proj, float * oldRecon, float * weights, int slice, float iteration, bool skipTV, params consts, cudaSurfaceObject_t surfRecon, cudaSurfaceObject_t surfDelta, bool firstRun = false) {
+__global__ void projectIter(float * proj, float * oldRecon, float * weights, int slice, float iteration, bool skipTV, float alpha, params consts, cudaSurfaceObject_t surfRecon, cudaSurfaceObject_t surfDelta, bool firstRun = false) {
 #endif
 	//Define pixel location in x, y, and z
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -636,9 +636,9 @@ __global__ void projectIter(float * proj, float * oldRecon, float * weights, int
 	else
 		error = 0.0f;
 
-	float returnVal, delta;
+	float returnVal;// , delta;
 	surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice);
-	surf3Dread(&delta, surfDelta, i * sizeof(float), j, slice);
+	//surf3Dread(&delta, surfDelta, i * sizeof(float), j, slice);
 
 	if (!skipTV && returnVal > 0.0f) {
 		float AX = 0, BX = 0, temp;
@@ -663,18 +663,7 @@ __global__ void projectIter(float * proj, float * oldRecon, float * weights, int
 		surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice);
 		if (AX > 0.0f) error += BX - AX*returnVal;
 	}
-
-	//error -= 0.5 * delta;
-	
-	if (firstRun) delta = 1;
-	else {
-		if (error * delta > 0) delta *= 0.97f;
-		else {
-			delta *= -0.97f;
-			//returnVal = 0.0f;
-		}
-	}
-	error *= abs(delta);
+	error *= abs(alpha);
 
 	returnVal += error;
 	//maximum /= (float)count;
@@ -698,7 +687,7 @@ __global__ void projectIter(float * proj, float * oldRecon, float * weights, int
 	else surf3Dwrite(returnVal, surfRecon, i * sizeof(float), j, slice);
 #else
 	//surf3Dwrite(error, surfDelta, i * sizeof(float), j, slice);
-	surf3Dwrite(delta, surfDelta, i * sizeof(float), j, slice);
+	//surf3Dwrite(delta, surfDelta, i * sizeof(float), j, slice);
 	surf3Dwrite(returnVal, surfRecon, i * sizeof(float), j, slice);
 #endif // RECONDERIVATIVE
 }
@@ -2588,12 +2577,14 @@ TomoError TomoRecon::initIterative() {
 	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
 #endif // PRINTMEMORYUSAGE
 
+	iteration = 0;
+	decay = 1.0f;
 	iterativeInitialized = true;
 	constants.isReconstructing = true;
 	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
 	cudaExtent vol = { Sys.Recon.Nx, Sys.Recon.Ny, Sys.Recon.Nz };
 	cuda(Malloc3DArray(&d_Recon2, &channelDesc, vol, cudaArraySurfaceLoadStore));
-	cuda(Malloc3DArray(&d_ReconDelta, &channelDesc, vol, cudaArraySurfaceLoadStore));
+	//cuda(Malloc3DArray(&d_ReconDelta, &channelDesc, vol, cudaArraySurfaceLoadStore));
 #ifdef SHOWERROR
 	cuda(Malloc3DArray(&d_ReconError, &channelDesc, vol, cudaArraySurfaceLoadStore));
 #endif
@@ -2607,8 +2598,8 @@ TomoError TomoRecon::initIterative() {
 	resDesc.resType = cudaResourceTypeArray;
 	resDesc.res.array.array = d_Recon2;
 	cuda(CreateSurfaceObject(&surfReconObj, &resDesc));
-	resDesc.res.array.array = d_ReconDelta;
-	cuda(CreateSurfaceObject(&surfDeltaObj, &resDesc));
+	//resDesc.res.array.array = d_ReconDelta;
+	//cuda(CreateSurfaceObject(&surfDeltaObj, &resDesc));
 #ifdef SHOWERROR
 	resDesc.res.array.array = d_ReconError;
 	cuda(CreateSurfaceObject(&surfErrorObj, &resDesc));
@@ -2631,12 +2622,12 @@ TomoError TomoRecon::initIterative() {
 	cuda(BindTexture2D(NULL, textWeight, d_Weights, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
 	for (int slice = 0; slice < Sys.Recon.Nz; slice++) {
 		KERNELCALL2(initArray, contBlocks, contThreads, slice, 0.0f, constants, surfReconObj);
-		KERNELCALL2(initArray, contBlocks, contThreads, slice, DELTA0, constants, surfDeltaObj);
+		//KERNELCALL2(initArray, contBlocks, contThreads, slice, DELTA0, constants, surfDeltaObj);
 		KERNELCALL2(copySlice, contBlocks, contThreads, d_ReconOld, slice, constants, surfReconObj);
 #ifdef SHOWERROR
 		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, 1.0f, true, constants, surfReconObj, surfErrorObj);
 #else 
-		KERNELCALL2(projectIter, contBlocks, contThreads, d_Sino, d_ReconOld, d_Weights, slice, 1.0f, true, constants, surfReconObj, surfDeltaObj, true);
+		KERNELCALL2(projectIter, contBlocks, contThreads, d_Sino, d_ReconOld, d_Weights, slice, 1.0f, true, decay, constants, surfReconObj, surfDeltaObj, true);
 #endif
 	}
 	cuda(UnbindTexture(textError));
@@ -2659,7 +2650,8 @@ TomoError TomoRecon::resetIterative() {
 }
 
 TomoError TomoRecon::iterStep() {
-	static float iteration = 1.0f;
+	iteration = 1.0f;
+	decay *= ALPHA;
 
 	cuda(BindTextureToArray(textRecon, d_Recon2));
 #ifdef RECONDERIVATIVE
@@ -2682,7 +2674,7 @@ TomoError TomoRecon::iterStep() {
 #ifdef SHOWERROR
 		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, iteration, SKIPITERTV, constants, surfReconObj, surfErrorObj);
 #else 
-		KERNELCALL2(projectIter, contBlocks, contThreads, d_Sino, d_ReconOld, d_Weights, slice, iteration, SKIPITERTV, constants, surfReconObj, surfDeltaObj);
+		KERNELCALL2(projectIter, contBlocks, contThreads, d_Sino, d_ReconOld, d_Weights, slice, iteration, SKIPITERTV, decay, constants, surfReconObj, surfDeltaObj);
 #endif
 		/*for (int i = 0; i < TVITERATIONS; i++) {
 			KERNELCALL2(copySlice, contBlocks, contThreads, d_ReconOld, slice, constants);
@@ -2699,8 +2691,13 @@ TomoError TomoRecon::iterStep() {
 
 TomoError TomoRecon::finalizeIter() {
 	//no longer need gradient records
-	cuda(FreeArray(d_ReconDelta)); 
-	cuda(DestroySurfaceObject(surfDeltaObj));
+	//cuda(FreeArray(d_ReconDelta)); 
+	//cuda(DestroySurfaceObject(surfDeltaObj));
+#ifdef PRINTMEMORYUSAGE
+	size_t avail_mem, total_mem;
+	cudaMemGetInfo(&avail_mem, &total_mem);
+	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
+#endif // PRINTMEMORYUSAGE
 
 	constants.isReconstructing = false;
 
@@ -2767,6 +2764,9 @@ TomoError TomoRecon::finalizeIter() {
 		for (int slice = 0; slice < Sys.Recon.Nz; slice++)
 			KERNELCALL2(scaleRecon, contBlocks, contThreads, slice, d_scales, d_offsets, constants, surfReconObj);
 
+	cuda(Free(d_scales));
+	cuda(Free(d_offsets));
+
 	cuda(UnbindTexture(textSino));
 	cuda(BindTexture2D(NULL, textSino, d_Raw, cudaCreateChannelDesc<float>(), Sys.Proj.Nx, Sys.Proj.Ny*Sys.Proj.NumViews, projPitch));
 	for (int slice = 0; slice < Sys.Recon.Nz; slice++) {
@@ -2786,6 +2786,11 @@ TomoError TomoRecon::finalizeIter() {
 	constants.baseYr = -1;
 	constants.currXr = -1;
 	constants.currYr = -1;
+
+#ifdef PRINTMEMORYUSAGE
+	cudaMemGetInfo(&avail_mem, &total_mem);
+	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
+#endif // PRINTMEMORYUSAGE
 
 	return Tomo_OK;
 }

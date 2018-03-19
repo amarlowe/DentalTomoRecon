@@ -42,6 +42,9 @@
 #include "../sample.xpm"
 #endif
 
+//Enable to remove many options not necessary to show early users
+#define SHOWMODE
+
 #define MOUSEWHEELMAG 120
 #define SCROLLFACTOR 10
 #define ENHANCEFACTOR 100.0f
@@ -432,6 +435,7 @@ public:
 
 	DTRConfigDialog* cfgDialog = NULL;
 	wxPanel * CreateNewPage(wxString filename);
+	wxMenuBar * m_OldMenuBar = NULL;
 
 	//User generated filenames
 	wxString gainFilepath;

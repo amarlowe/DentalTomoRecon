@@ -50,10 +50,8 @@ class mainWindow : public wxFrame
 	private:
 	
 	protected:
-		wxMenuBar* m_menubar1;
 		wxMenu* file;
 		wxMenu* config;
-		wxMenu* calibration;
 		wxMenu* help;
 		wxChoice* optionBox;
 		wxToolBar* navToolbar;
@@ -127,6 +125,8 @@ class mainWindow : public wxFrame
 		
 	
 	public:
+		wxMenuBar* m_menubar1;
+		wxMenu* calibration;
 		wxAuiNotebook* m_auinotebook6;
 		wxTextCtrl* m_textCtrl8;
 		wxStatusBar* m_statusBar1;
