@@ -565,8 +565,8 @@ __global__ void projectSlice(float * IM, float distance, params consts) {
 	}
 
 	if (count > 0)
-		IM[j*consts.ReconPitchNum + i] = error / count;
-	else IM[j*consts.ReconPitchNum + i] = 0.0f;
+		IM[j*consts.DisplayPitchNum + i] = error / count;
+	else IM[j*consts.DisplayPitchNum + i] = 0.0f;
 }
 
 #ifdef SHOWERROR
@@ -1048,8 +1048,14 @@ __global__ void histogram256Kernel(unsigned int *d_Histogram, T *d_Data, unsigne
 
 	//if (consts.orientation) i = consts.Px - 1 - i;
 	//if (consts.flip) j = consts.Py - 1 - j;
-
-	float data = abs(d_Data[MUL_ADD(j, consts.ReconPitchNum, i)]);//whatever it currently is, cast it to ushort
+	float data;
+	if (consts.dataDisplay == projections) {
+		data = abs(d_Data[MUL_ADD(j, consts.ProjPitchNum, i)]);
+	}
+	else {
+		data = abs(d_Data[MUL_ADD(j, consts.ReconPitchNum, i)]);
+	}
+	//whatever it currently is, cast it to ushort
 	//if (data <= 0.0f) return;
 	if (consts.log) {
 		if (data > 0) {
@@ -1218,20 +1224,24 @@ TomoError TomoRecon::initGPU(){
 	reductionBlocks.y = Sys.Proj.Ny;
 
 	//Set up display and buffer regions
-	cuda(MallocPitch((void**)&d_Image, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny));
+	if (redFac <= 1.0f) {
+		cuda(MallocPitch((void**)&d_Image, &displayPitch, Sys.Recon.Nx * sizeof(float), Sys.Recon.Ny));
+	}
+	else {
+		cuda(MallocPitch((void**)&d_Image, &displayPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny));
+	}
+	constants.DisplayPitchNum = displayPitch / sizeof(float);
+	constants.ReconPitchNum = constants.DisplayPitchNum;
 	cuda(MallocPitch((void**)&d_Sino, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
 	cuda(MallocPitch((void**)&d_Raw, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
 	cuda(MallocPitch((void**)&d_Weights, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
 	cuda(MallocPitch((void**)&inXBuff, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
 	cuda(MallocPitch((void**)&inYBuff, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
 #ifdef USEITERATIVE
-	cuda(MallocPitch((void**)&d_Error, &reconPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
+	cuda(MallocPitch((void**)&d_Error, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
 #else
-	cuda(MallocPitch((void**)&d_Error, &reconPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny));
+	cuda(MallocPitch((void**)&d_Error, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny));
 #endif
-
-	reconPitchNum = (int)reconPitch / sizeof(float);
-	constants.ReconPitchNum = reconPitchNum;
 
 	//Define the size of each of the memory spaces on the gpu in number of bytes
 	sizeProj = Sys.Proj.Nx * Sys.Proj.Ny * sizeof(unsigned short);
@@ -1366,6 +1376,9 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 
 	bool oldLog = constants.log;
 	constants.log = false;
+
+	sourceData oldData = constants.dataDisplay;
+	constants.dataDisplay = projections;
 
 	//setStep(1.0);
 
@@ -1584,6 +1597,7 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 	cuda(Free(z2));
 
 	constants.log = oldLog;
+	constants.dataDisplay = oldData;
 
 	constants.baseXr = -1;
 	constants.baseYr = -1;
@@ -2311,7 +2325,13 @@ TomoError TomoRecon::autoLight(unsigned int histogram[HIST_BIN_COUNT], int thres
 	if (histogram == NULL) {
 		emptyHist = true;
 		histogram = new unsigned int[HIST_BIN_COUNT];
+		if (constants.dataDisplay == projections) {
+			tomo_err_throw(getHistogram(d_Image, projPitch*Sys.Proj.Ny, histogram));
+		}
+		else {
 			tomo_err_throw(getHistogram(d_Image, reconPitch*Sys.Recon.Ny, histogram));
+		}
+			
 		innerThresh = abs(constants.baseXr - constants.currXr) * abs(constants.baseYr - constants.currYr) / AUTOTHRESHOLD;
 		minVal = &constants.minVal;
 		maxVal = &constants.maxVal;
@@ -2782,7 +2802,8 @@ TomoError TomoRecon::finalizeIter() {
 	char outFilename[250];
 	sprintf(outFilename, "./histogramOutRecon.txt");
 	outputFile.open(outFilename);
-	for (int test = 1; test < HIST_BIN_COUNT; test++) outputFile << histogram[test] / Sys.Recon.Nz << "\n";// / Sys.Recon.Nz
+	float scaleFactor = (float)Sys.Proj.Nx / (float)Sys.Recon.Nx * (float)Sys.Proj.Ny / (float)Sys.Recon.Ny / (float)Sys.Recon.Nz;
+	for (int test = 1; test < HIST_BIN_COUNT; test++) outputFile << histogram[test] * scaleFactor << "\n";// / Sys.Recon.Nz
 	outputFile.close();
 #endif //PRINTINTENSITIES
 

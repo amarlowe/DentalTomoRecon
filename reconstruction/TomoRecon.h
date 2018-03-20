@@ -264,6 +264,7 @@ struct params {
 	bool * useBeams;
 	int ReconPitchNum;
 	int ProjPitchNum;
+	int DisplayPitchNum;
 	bool orientation;
 	bool flip;
 	bool log;
@@ -1092,6 +1093,7 @@ private:
 	//cuda pitch variables generated from 2d mallocs
 	size_t reconPitch;
 	size_t projPitch;
+	size_t displayPitch;
 	int reconPitchNum;
 
 	//Parameters for 2d geometry search
