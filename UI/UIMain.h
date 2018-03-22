@@ -51,7 +51,7 @@
 #define RELEASEYEAR		2018
 
 //Enable to remove many options not necessary to show early users
-#define SHOWMODE
+//#define SHOWMODE
 
 #define MOUSEWHEELMAG 120
 #define SCROLLFACTOR 10
@@ -247,7 +247,7 @@ public:
 // The OpenGL-enabled canvas
 class CudaGLCanvas : public wxGLCanvas{
 public:
-	CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemControl * Sys,
+	CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemControl * Sys, wxTextCtrl* m_textCtrl,
 		wxWindowID id = wxID_ANY, int *gl_attrib = NULL, wxSize size = wxDefaultSize);
 
 	virtual ~CudaGLCanvas();
@@ -269,6 +269,7 @@ public:
 	wxStaticText* windowLabel = NULL;
 	wxSlider* levelSlider = NULL;
 	wxStaticText* levelLabel = NULL;
+	wxTextCtrl* m_textCtrl = NULL;
 
 	TomoError launchError;
 
@@ -284,7 +285,7 @@ private:
 
 class GLFrame : public wxPanel {
 public:
-	GLFrame(wxWindow *frame, struct SystemControl * Sys, wxString filename,
+	GLFrame(wxWindow *frame, struct SystemControl * Sys, wxString filename, wxTextCtrl* m_textCtrl,
 		wxStatusBar* status = NULL,
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
@@ -339,7 +340,7 @@ private:
 
 class GLWindow : public wxDialog {
 public:
-	GLWindow(wxWindow *parent, bool vertical, struct SystemControl * Sys, wxString gainFile, wxString filename,
+	GLWindow(wxWindow *parent, bool vertical, struct SystemControl * Sys, wxString gainFile, wxString filename, 
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize,
 		long style = wxDEFAULT_FRAME_STYLE);
@@ -378,6 +379,8 @@ protected:
 	derivative_t getEnhance();
 	TomoError launchReconConfig(TomoRecon * recon, wxString filename);
 	void refreshToolbars(GLFrame* currentFrame);
+	TomoError initializeFrame(GLFrame * currentFrame, wxString filename, wxString &name);
+	TomoError reconstruct(GLFrame * currentFrame);
 
 	// Handlers for mainWindow events.
 	void onNew(wxCommandEvent& event);

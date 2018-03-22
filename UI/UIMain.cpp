@@ -237,8 +237,7 @@ bool MyApp::OnInit(){
 	//Run initialization on a dummy frame that will never display, moves interop initialization time to program startup
 	struct SystemControl Sys;
 	frame->genSys(&Sys);
-	//GLFrame* initFrame = new GLFrame(frame->m_auinotebook6, &Sys, filename, frame->m_statusBar1);
-	CudaGLCanvas* m_canvas = new CudaGLCanvas(frame, frame->m_statusBar1, &Sys);
+	CudaGLCanvas* m_canvas = new CudaGLCanvas(frame, frame->m_statusBar1, &Sys, frame->m_textCtrl8);
 	delete m_canvas;
 #ifdef SHOWMODE
 	frame->m_menubar1->Enable(frame->m_menubar1->FindMenuItem(_("Calibration"), _("Set Resolution Phantoms")), false);
@@ -403,6 +402,90 @@ TomoError DTRMainWindow::launchReconConfig(TomoRecon * recon, wxString filename)
 	return Tomo_OK;
 }
 
+TomoError DTRMainWindow::initializeFrame(GLFrame * currentFrame, wxString filename, wxString &name) {
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+
+	wxFileName file(filename);
+	wxArrayString dirs = file.GetDirs();
+	name = dirs[file.GetDirCount() - 1];
+
+	wxStreamToTextRedirector redirect(m_textCtrl8);
+
+	TomoError fileType = parseFile(recon, gainFilepath.mb_str(), filename.mb_str());
+	if (fileType != Tomo_proj_file) {
+		if (fileType == Tomo_image_stack) {
+			(*m_textCtrl8) << "Standard DICOM stack viewing not yet supported.\n";
+			return Tomo_file_err;
+		}
+		if (launchReconConfig(recon, filename) != Tomo_OK) {
+			return Tomo_file_err;
+		}
+	}
+	else name = file.GetName();
+
+	if (recon->initIterative() != Tomo_OK) {
+		(*m_textCtrl8) << "Error creating new reconstruction. Please close other tabs, or use the \"open\" command on another reconstruction instead of \"new\". " <<
+			"If this is your first tab or you would like more active tabs, consider using/purchasing a Nvidia graphics card with more VRAM.\n";
+		m_auinotebook6->DeletePage(m_auinotebook6->GetPageIndex(currentFrame));
+		m_auinotebook6->SetSelection(0);
+		return Tomo_file_err;
+	}
+	recon->resetFocus();
+	setDataDisplay(currentFrame, iterRecon);
+	recon->singleFrame();
+	recon->resetLight();
+	currentFrame->m_canvas->paint(false, distanceValue, zoomSlider, zoomVal, windowSlider, windowVal, levelSlider, levelVal);
+	currentFrame->filename = filename;
+
+	return Tomo_OK;
+}
+
+TomoError DTRMainWindow::reconstruct(GLFrame * currentFrame) {
+	wxConfigBase *pConfig = wxConfigBase::Get();
+	if (pConfig == NULL)
+		return Tomo_file_err;
+
+	TomoRecon* recon = currentFrame->m_canvas->recon;
+	wxStreamToTextRedirector redirect(m_textCtrl8);
+
+	m_statusBar1->SetStatusText(_("Reconstructing:"));
+	recon->resetFocus();
+	setDataDisplay(currentFrame, iterRecon);
+	refreshToolbars(currentFrame);
+	deactivateMenus(recon);
+
+	runIterations = pConfig->Read(wxT("/iterations"), ITERATIONS);
+
+	wxGauge* progress = new wxGauge(m_statusBar1, wxID_ANY, runIterations, wxPoint(100, 3));
+	progress->SetValue(0);
+
+	for (int i = 0; i < runIterations; i++) {
+		if (recon->iterStep() != Tomo_OK) {
+			(*m_textCtrl8) << "Error during iterative step\n";
+			return Tomo_CUDA_err;
+		}
+		recon->singleFrame();
+		recon->resetLight();
+		progress->SetValue(i);
+		currentFrame->m_canvas->paint();
+		wxYield();
+	}
+	if (recon->finalizeIter() != Tomo_OK) {
+		(*m_textCtrl8) << "Error finalizing iterations\n";
+		return Tomo_CUDA_err;
+	}
+	recon->singleFrame();
+	recon->resetLight();
+	m_statusBar1->SetStatusText(_(""));
+	delete progress;
+
+	activateMenus(recon);
+
+	currentFrame->m_canvas->paint();
+
+	return Tomo_OK;
+}
+
 // event handlers
 void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 	wxConfigBase *pConfig = wxConfigBase::Get();
@@ -426,70 +509,18 @@ void DTRMainWindow::onNew(wxCommandEvent& WXUNUSED(event)) {
 		delete currentFrame;
 		return;
 	}
-	TomoRecon* recon = currentFrame->m_canvas->recon;
 
-	wxFileName file(filename);
-	wxArrayString dirs = file.GetDirs();
-	wxString name = dirs[file.GetDirCount() - 1];
-
-	TomoError fileType = parseFile(recon, gainFilepath.mb_str(), filename.mb_str());
-	if (fileType != Tomo_proj_file) {
-		if (fileType == Tomo_image_stack) {
-			(*m_textCtrl8) << "Standard DICOM stack viewing not yet supported.\n";
-			delete currentFrame;
-			m_auinotebook6->SetSelection(0);
-			return;
-		}
-		if (launchReconConfig(recon, filename) != Tomo_OK) {
-			//delete everything
-			delete currentFrame;
-			return;
-		}
-	}
-	else name = file.GetName();
-
-	(*m_textCtrl8) << "Opening new tab titled: \"" << name << "\"\n";
-
-	m_auinotebook6->AddPage(currentFrame, name, true);
-	onContinuous();
-
-	if (recon->initIterative() != Tomo_OK) {
-		(*m_textCtrl8) << "Error creating new reconstruction. Please close other tabs, or use the \"open\" command on another reconstruction instead of \"new\". " <<
-			"If this is your first tab or you would like more active tabs, consider using/purchasing a Nvidia graphics card with more VRAM.\n";
-		m_auinotebook6->DeletePage(m_auinotebook6->GetPageIndex(currentFrame));
+	wxString name;
+	if (initializeFrame(currentFrame, filename, name) != Tomo_OK) {
+		delete currentFrame;
 		m_auinotebook6->SetSelection(0);
-		return;
 	}
-	m_statusBar1->SetStatusText(_("Reconstructing:"));
-	setDataDisplay(currentFrame, iterRecon);
-	refreshToolbars(currentFrame);
-	deactivateMenus(recon);
+	else {
+		(*m_textCtrl8) << "Opening new tab titled: \"" << name << "\"\n";
+		m_auinotebook6->AddPage(currentFrame, name, true);
 
-	runIterations = pConfig->Read(wxT("/iterations"), ITERATIONS);
-
-	wxGauge* progress = new wxGauge(m_statusBar1, wxID_ANY, runIterations, wxPoint(100, 3));
-	progress->SetValue(0);
-	for (int i = 0; i < runIterations; i++) {
-		recon->iterStep();
-		recon->singleFrame();
-		recon->resetLight();
-		if (i == 0) {
-			recon->resetFocus();
-			currentFrame->showScrollBar(recon->getNumSlices(), recon->getActiveProjection());
-		}
-		progress->SetValue(i);
-		currentFrame->m_canvas->paint();
-		wxYield();
+		reconstruct(currentFrame);
 	}
-	recon->finalizeIter();
-	recon->singleFrame();
-	recon->resetLight();
-	m_statusBar1->SetStatusText(_(""));
-	delete progress;
-
-	activateMenus(recon);
-
-	currentFrame->m_canvas->paint();
 }
 
 TomoError DTRMainWindow::genSys(struct SystemControl * Sys) {
@@ -527,7 +558,7 @@ wxPanel *DTRMainWindow::CreateNewPage(wxString filename) {
 	struct SystemControl Sys;
 	genSys(&Sys);
 	wxStreamToTextRedirector redirect(m_textCtrl8);
-	return new GLFrame(m_auinotebook6, &Sys, filename, m_statusBar1);
+	return new GLFrame(m_auinotebook6, &Sys, filename, m_textCtrl8, m_statusBar1);
 }
 
 void DTRMainWindow::onOpen(wxCommandEvent& event) {
@@ -549,86 +580,22 @@ void DTRMainWindow::onOpen(wxCommandEvent& event) {
 	wxString filename = openFileDialog.GetPath();
 	pConfig->Write(wxT("/lastFilepath"), filename);
 
-	wxFileName file = filename;
-	wxArrayString dirs = file.GetDirs();
-	wxString name = dirs[file.GetDirCount() - 1];
-
 	GLFrame * currentFrame = (GLFrame*)m_auinotebook6->GetCurrentPage();
+
+	wxString name;
 	TomoRecon* recon = currentFrame->m_canvas->recon;
-
-	TomoError fileType = parseFile(recon, gainFilepath.mb_str(), filename.mb_str());
-	if (fileType != Tomo_proj_file) {
-		if (fileType == Tomo_image_stack) {
-			(*m_textCtrl8) << "Standard DICOM stack viewing not yet supported.\n";
-			//reset to previous display
-			parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
-			recon->singleFrame();
-			currentFrame->m_canvas->paint();
-			m_auinotebook6->SetSelection(0);//Switch to show there was an error
-			return;
-		}
-		if (launchReconConfig(recon, filename) != Tomo_OK) {
-			//reset to previous display
-			parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
-			recon->singleFrame();
-			currentFrame->m_canvas->paint();
-			return;
-		}
+	recon->resetIterative();
+	if (initializeFrame(currentFrame, filename, name) != Tomo_OK) {
+		//cleanup on failure
+		parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+		m_auinotebook6->SetSelection(0);//Switch to show there was an error
 	}
-	else name = file.GetName();
+	else {
+		(*m_textCtrl8) << "Opening new project titled: \"" << name << "\"\n";
+		m_auinotebook6->SetPageText(m_auinotebook6->GetSelection(), name);
 
-	currentFrame->filename = filename;
-
-	(*m_textCtrl8) << "Opening new project titled: \"" << name << "\"\n";
-	m_auinotebook6->SetPageText(m_auinotebook6->GetSelection(), name);
-
-	refreshToolbars(currentFrame);
-	deactivateMenus(recon);
-
-	wxStreamToTextRedirector redirect(m_textCtrl8);
-
-	setDataDisplay(currentFrame, iterRecon);
-	if (recon->resetIterative() != Tomo_OK) {
-		(*m_textCtrl8) << "Error remaking iterative memory\n";
-		m_auinotebook6->DeletePage(m_auinotebook6->GetPageIndex(currentFrame));
-		m_auinotebook6->SetSelection(0);
-		return;
+		reconstruct(currentFrame);
 	}
-	m_statusBar1->SetStatusText(_("Reconstructing:"));
-
-	runIterations = pConfig->Read(wxT("/iterations"), ITERATIONS);
-
-	wxGauge* progress = new wxGauge(m_statusBar1, wxID_ANY, runIterations, wxPoint(100, 3));
-	progress->SetValue(0);
-	currentFrame->showScrollBar(recon->getNumSlices(), 0);
-	recon->setActiveProjection(0);
-	for (int i = 0; i < runIterations; i++) {
-		if (recon->iterStep() != Tomo_OK) {
-			(*m_textCtrl8) << "Error during iterative step\n";
-			return;
-		}
-		recon->singleFrame();
-		recon->resetLight();
-		if (i == 0) {
-			recon->resetFocus();
-			currentFrame->showScrollBar(recon->getNumSlices(), recon->getActiveProjection());
-		}
-		progress->SetValue(i);
-		currentFrame->m_canvas->paint();
-		wxYield();
-	}
-	if (recon->finalizeIter() != Tomo_OK) {
-		(*m_textCtrl8) << "Error finalizing iterations\n";
-		return;
-	}
-	recon->singleFrame();
-	recon->resetLight();
-	m_statusBar1->SetStatusText(_(""));
-	delete progress;
-
-	activateMenus(recon);
-
-	currentFrame->m_canvas->paint();
 }
 
 void DTRMainWindow::onSave(wxCommandEvent& event) {
@@ -934,53 +901,23 @@ void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 		return;
 	}
 
-	wxFileName file = filename;
-	wxArrayString dirs = file.GetDirs();
-	wxString name = dirs[file.GetDirCount() - 1];
-
-	setDataDisplay(currentFrame, iterRecon);
-	currentFrame->showScrollBar(recon->getNumSlices(), 0);
-	recon->setActiveProjection(0);
-	if (recon->resetIterative() != Tomo_OK) {
-		(*m_textCtrl8) << "Error remaking iterative memory\n";
-		m_auinotebook6->DeletePage(m_auinotebook6->GetPageIndex(currentFrame));
-		m_auinotebook6->SetSelection(0);
+	wxString name;
+	recon->resetIterative();
+	if (recon->initIterative() != Tomo_OK) {
+		(*m_textCtrl8) << "Error creating new reconstruction. Please close other tabs, or use the \"open\" command on another reconstruction instead of \"new\". " <<
+			"If this is your first tab or you would like more active tabs, consider using/purchasing a Nvidia graphics card with more VRAM.\n";
+		//cleanup on failure
+		parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str());
+		m_auinotebook6->SetSelection(0);//Switch to show there was an error
 		return;
 	}
-	m_statusBar1->SetStatusText(_("Reconstructing:"));
-
-	wxConfigBase *pConfig = wxConfigBase::Get();
-	if (pConfig == NULL)
-		return;
-
-	runIterations = pConfig->Read(wxT("/iterations"), ITERATIONS);
-
-	deactivateMenus(recon);
-
-	wxGauge* progress = new wxGauge(m_statusBar1, wxID_ANY, runIterations, wxPoint(100, 3));
-	progress->SetValue(0);
-	for (int i = 0; i < runIterations; i++) {
-		recon->iterStep();
+	else {
+		recon->resetFocus();
+		setDataDisplay(currentFrame, iterRecon);
 		recon->singleFrame();
 		recon->resetLight();
-		if (i == 0) {
-			recon->resetFocus();
-			currentFrame->showScrollBar(recon->getNumSlices(), recon->getActiveProjection());
-		}
-		progress->SetValue(i);
-		currentFrame->m_canvas->paint();
-		wxYield();
+		reconstruct(currentFrame);
 	}
-	recon->finalizeIter();
-	recon->singleFrame();
-	recon->resetLight();
-	m_statusBar1->SetStatusText(_(""));
-	delete progress;
-
-	activateMenus(recon);
-	refreshToolbars(currentFrame);
-
-	currentFrame->m_canvas->paint();
 }
 
 void DTRMainWindow::onResList(wxCommandEvent& event) {
@@ -1692,7 +1629,7 @@ ReconCon::ReconCon(wxWindow* parent, wxString filename, wxString gainFile) : rec
 	struct SystemControl Sys;
 	typedParent->genSys(&Sys);
 	wxStreamToTextRedirector redirect(typedParent->m_textCtrl8);
-	drawPanel = new GLFrame(this, &Sys, filename);
+	drawPanel = new GLFrame(this, &Sys, filename, typedParent->m_textCtrl8);
 	TomoRecon* recon = ((GLFrame*)drawPanel)->m_canvas->recon;
 	//parseFile(recon, gainFilepath.mb_str(), filename.mb_str());
 	recon->enableGain(false);
@@ -3025,11 +2962,11 @@ EVT_SCROLL(GLFrame::OnScroll)
 EVT_MOUSEWHEEL(GLFrame::OnMousewheel)
 wxEND_EVENT_TABLE()
 
-GLFrame::GLFrame(wxWindow *frame, struct SystemControl * Sys, wxString filename, wxStatusBar* status,
-	const wxPoint& pos, const wxSize& size, long style)
+GLFrame::GLFrame(wxWindow *frame, struct SystemControl * Sys, wxString filename, wxTextCtrl* m_textCtrl,
+	wxStatusBar* status, const wxPoint& pos, const wxSize& size, long style)
 	: wxPanel(frame, wxID_ANY, pos, size), m_canvas(NULL), m_status(status), filename(filename){
 	//initialize the canvas to this object
-	m_canvas = new CudaGLCanvas(this, status, Sys, wxID_ANY, NULL, GetClientSize());
+	m_canvas = new CudaGLCanvas(this, status, Sys, m_textCtrl, wxID_ANY, NULL, GetClientSize());
 	m_scrollBar = new wxScrollBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSB_HORIZONTAL);
 	bSizer = new wxBoxSizer(wxVERTICAL);
 
@@ -3072,13 +3009,13 @@ void GLFrame::OnMousewheel(wxMouseEvent& event) {
 	wxKeyboardState keyboard;
 	int newScrollPos = event.GetWheelRotation() / MOUSEWHEELMAG;
 
-	if (event.m_controlDown && event.m_altDown)
+	if (event.m_controlDown && event.m_shiftDown)
 		m_canvas->recon->appendMinLight(newScrollPos);
 	else if (event.m_controlDown) {
 		if (m_canvas->recon->appendZoom(newScrollPos) == Tomo_OK)
 			m_canvas->recon->appendOffsets((event.GetX() - GetSize().x / 2) / SCROLLFACTOR * newScrollPos, (event.GetY() - GetSize().y / 2) / SCROLLFACTOR * newScrollPos);
 	}
-	else if (event.m_altDown)
+	else if (event.m_shiftDown)
 		m_canvas->recon->appendMaxLight(newScrollPos);
 	else {
 		if (m_canvas->recon->getDataDisplay() == reconstruction) {
@@ -3150,19 +3087,21 @@ EVT_CHAR(CudaGLCanvas::OnChar)
 EVT_MOUSE_EVENTS(CudaGLCanvas::OnMouseEvent)
 wxEND_EVENT_TABLE()
 
-CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemControl * Sys,
+CudaGLCanvas::CudaGLCanvas(wxWindow *parent, wxStatusBar* status, struct SystemControl * Sys, wxTextCtrl* m_textCtrl,
 	wxWindowID id, int* gl_attrib, wxSize size)
-	: wxGLCanvas(parent, id, gl_attrib, wxDefaultPosition, size, wxFULL_REPAINT_ON_RESIZE), m_status(status){
+	: wxGLCanvas(parent, id, gl_attrib, wxDefaultPosition, size, wxFULL_REPAINT_ON_RESIZE), m_status(status), m_textCtrl(m_textCtrl){
 	// Explicitly create a new rendering context instance for this canvas.
 	m_glRC = new wxGLContext(this);
 
 	SetCurrent(*m_glRC);
 
+	wxStreamToTextRedirector redirect(m_textCtrl);
 	recon = new TomoRecon(GetSize().x, GetSize().y, Sys);
 	launchError = recon->init();
 }
 
 CudaGLCanvas::~CudaGLCanvas(){
+	wxStreamToTextRedirector redirect(m_textCtrl);
 	delete recon;
 	delete m_glRC;
 }

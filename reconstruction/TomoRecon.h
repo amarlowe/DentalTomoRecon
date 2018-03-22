@@ -73,7 +73,8 @@
 //#define PRINTSCANCORRECTIONS
 //#define ENABLEZDER
 //#define ENABLESOLVER
-//#define PRINTMEMORYUSAGE
+#define PRINTMEMORYUSAGE
+//#define VERBOSEMEMORY
 #define PRINTINTENSITIES
 #define USEITERATIVE
 //#define SHOWERROR
@@ -111,7 +112,7 @@
 #define DELTAGROWTH 1.0f
 #define DELTADECAY 0.99f
 
-#define SKIPITERTV false
+#define SKIPITERTV true
 #define TVX 0.02f
 #define TVY 0.02f
 #define TVZ 0.00f

@@ -565,8 +565,8 @@ __global__ void projectSlice(float * IM, float distance, params consts) {
 	}
 
 	if (count > 0)
-		IM[j*consts.DisplayPitchNum + i] = error / count;
-	else IM[j*consts.DisplayPitchNum + i] = 0.0f;
+		IM[j*consts.ReconPitchNum + i] = error / count;
+	else IM[j*consts.ReconPitchNum + i] = 0.0f;
 }
 
 #ifdef SHOWERROR
@@ -765,7 +765,7 @@ __global__ void backProject(float * proj, float * error, float * weights, int vi
 			//value += tex2D(textSino, x, y + slice*consts.Ry);
 			float returnVal = 0.0f, delta;
 			//surf3Dread(&returnVal, surfRecon, x * sizeof(float), y, slice);
-			returnVal = tex3D(textRecon, x + 0.5f, y + 0.5f, slice);
+			returnVal = tex3D(textRecon, x + 0.5f, y + 0.5f, slice + 0.5f);
 			/*{
 				float tempVal;
 				int tempCount = 0;
@@ -1196,7 +1196,7 @@ TomoError TomoRecon::initGPU(){
 	size_t avail_mem;
 	size_t total_mem;
 	cudaMemGetInfo(&avail_mem, &total_mem);
-	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
+	std::cout << "Init start available memory: " << avail_mem << "/" << total_mem << "\n";
 #endif // PRINTMEMORYUSAGE
 
 	//Get Device Number
@@ -1215,8 +1215,6 @@ TomoError TomoRecon::initGPU(){
 	//Thread and block sizes for standard kernel calls (2d optimized)
 	contThreads.x = WARPSIZE;
 	contThreads.y = MAXTHREADS / WARPSIZE;
-	contBlocks.x = (Sys.Proj.Nx + contThreads.x - 1) / contThreads.x;
-	contBlocks.y = (Sys.Proj.Ny + contThreads.y - 1) / contThreads.y;
 
 	//Thread and block sizes for reductions (1d optimized)
 	reductionThreads.x = MAXTHREADS;
@@ -1224,14 +1222,19 @@ TomoError TomoRecon::initGPU(){
 	reductionBlocks.y = Sys.Proj.Ny;
 
 	//Set up display and buffer regions
+	//cuda(MallocPitch((void**)&d_Image, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny));
 	if (redFac <= 1.0f) {
 		cuda(MallocPitch((void**)&d_Image, &displayPitch, Sys.Recon.Nx * sizeof(float), Sys.Recon.Ny));
+		contBlocks.x = (Sys.Recon.Nx + contThreads.x - 1) / contThreads.x;
+		contBlocks.y = (Sys.Recon.Ny + contThreads.y - 1) / contThreads.y;
 	}
 	else {
 		cuda(MallocPitch((void**)&d_Image, &displayPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny));
+		contBlocks.x = (Sys.Proj.Nx + contThreads.x - 1) / contThreads.x;
+		contBlocks.y = (Sys.Proj.Ny + contThreads.y - 1) / contThreads.y;
 	}
 	constants.DisplayPitchNum = displayPitch / sizeof(float);
-	constants.ReconPitchNum = constants.DisplayPitchNum;
+
 	cuda(MallocPitch((void**)&d_Sino, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
 	cuda(MallocPitch((void**)&d_Raw, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
 	cuda(MallocPitch((void**)&d_Weights, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny * Sys.Proj.NumViews));
@@ -1242,6 +1245,10 @@ TomoError TomoRecon::initGPU(){
 #else
 	cuda(MallocPitch((void**)&d_Error, &projPitch, Sys.Proj.Nx * sizeof(float), Sys.Proj.Ny));
 #endif
+
+	reconPitch = max(projPitch, displayPitch);
+	reconPitchNum = (int)reconPitch / sizeof(float);
+	constants.ReconPitchNum = reconPitchNum;
 
 	//Define the size of each of the memory spaces on the gpu in number of bytes
 	sizeProj = Sys.Proj.Nx * Sys.Proj.Ny * sizeof(unsigned short);
@@ -1340,7 +1347,7 @@ TomoError TomoRecon::initGPU(){
 
 #ifdef PRINTMEMORYUSAGE
 	cudaMemGetInfo(&avail_mem, &total_mem);
-	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
+	std::cout << "Init end available memory: " << avail_mem << "/" << total_mem << "\n";
 #endif // PRINTMEMORYUSAGE
 
 	return Tomo_OK;
@@ -1354,6 +1361,14 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 	float * horOff = new float[NumViews * Sys.Proj.Ny];
 	float * d_SumValsVert;
 	float * d_SumValsHor;
+
+#ifdef VERBOSEMEMORY
+	size_t avail_mem;
+	size_t total_mem;
+	cudaMemGetInfo(&avail_mem, &total_mem);
+	std::cout << "Read start available memory: " << avail_mem << "/" << total_mem << "\n";
+#endif // VERBOSEMEMORY
+
 	cuda(Malloc((void**)&d_SumValsVert, Sys.Proj.Nx * sizeof(float)));
 	cuda(Malloc((void**)&d_SumValsHor, Sys.Proj.Ny * sizeof(float)));
 
@@ -1620,20 +1635,17 @@ TomoError TomoRecon::ReadProjections(unsigned short ** GainData, unsigned short 
 
 	cuda(Malloc(&d_Recon, matrixSize));
 	cuda(Memset(d_Recon, 0, matrixSize));
-
-#ifdef PRINTMEMORYUSAGE
-	size_t avail_mem;
-	size_t total_mem;
-	cudaMemGetInfo(&avail_mem, &total_mem);
-	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
-#endif // PRINTMEMORYUSAGE
 #endif // ENABLESOLVER
+#ifdef VERBOSEMEMORY
+	cudaMemGetInfo(&avail_mem, &total_mem);
+	std::cout << "Read end available memory: " << avail_mem << "/" << total_mem << "\n";
+#endif // VERBOSEMEMORY
 
 	return Tomo_OK;
 }
 
 TomoError TomoRecon::exportRecon(unsigned short * exportData) {
-	float * RawData = new float[reconPitch / sizeof(float)*Sys.Proj.Ny];
+	float * RawData = new float[reconPitch / sizeof(float)*Sys.Recon.Ny];
 	int oldProjection = getActiveProjection();
 
 	//Create the reconstruction volume around the current location
@@ -1747,6 +1759,17 @@ TomoError TomoRecon::scanLineDetect(int view, float * d_sum, float * sum, float 
 
 //Fucntion to free the gpu memory after program finishes
 TomoError TomoRecon::FreeGPUMemory(void){
+	if (iterativeInitialized) {
+		resetIterative();
+	}
+
+#ifdef PRINTMEMORYUSAGE
+	size_t avail_mem;
+	size_t total_mem;
+	cudaMemGetInfo(&avail_mem, &total_mem);
+	std::cout << "Free start available memory: " << avail_mem << "/" << total_mem << "\n";
+#endif // PRINTMEMORYUSAGE
+
 	//Free memory allocated on the GPU
 	cuda(Free(d_Image));
 	cuda(Free(d_Error));
@@ -1755,10 +1778,13 @@ TomoError TomoRecon::FreeGPUMemory(void){
 	cuda(Free(buff2));
 	cuda(Free(inXBuff));
 	cuda(Free(inYBuff));
+	cuda(Free(d_Raw));
+	cuda(Free(d_Weights));
 
 	cuda(Free(constants.d_Beamx));
 	cuda(Free(constants.d_Beamy));
 	cuda(Free(constants.d_Beamz));
+	cuda(Free(constants.useBeams));
 	cuda(Free(d_MaxVal));
 	cuda(Free(d_MinVal));
 
@@ -1779,15 +1805,10 @@ TomoError TomoRecon::FreeGPUMemory(void){
 	
 #endif // ENABLEZDER
 
-	//cuda(DeviceReset());
-
-	if (iterativeInitialized) {
-		cuda(DestroySurfaceObject(surfReconObj));
-		cuda(Free(d_ReconOld));
-		cuda(FreeArray(d_Recon2));
-	}
-
-	
+#ifdef PRINTMEMORYUSAGE
+	cudaMemGetInfo(&avail_mem, &total_mem);
+	std::cout << "Free end available memory: " << avail_mem << "/" << total_mem << "\n";
+#endif // PRINTMEMORYUSAGE
 
 	return Tomo_OK;
 }
@@ -2596,7 +2617,7 @@ TomoError TomoRecon::initIterative() {
 	size_t avail_mem;
 	size_t total_mem;
 	cudaMemGetInfo(&avail_mem, &total_mem);
-	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
+	std::cout << "Iter start vailable memory: " << avail_mem << "/" << total_mem << "\n";
 #endif // PRINTMEMORYUSAGE
 
 	iteration = 0;
@@ -2657,18 +2678,30 @@ TomoError TomoRecon::initIterative() {
 
 #ifdef PRINTMEMORYUSAGE
 	cudaMemGetInfo(&avail_mem, &total_mem);
-	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
+	std::cout << "Iter end available memory: " << avail_mem << "/" << total_mem << "\n";
 #endif // PRINTMEMORYUSAGE
 
 	return Tomo_OK;
 }
 
 TomoError TomoRecon::resetIterative() {
+#ifdef PRINTMEMORYUSAGE
+	size_t avail_mem;
+	size_t total_mem;
+	cudaMemGetInfo(&avail_mem, &total_mem);
+	std::cout << "Iter free start vailable memory: " << avail_mem << "/" << total_mem << "\n";
+#endif // PRINTMEMORYUSAGE
+
 	cuda(DestroySurfaceObject(surfReconObj));
 	cuda(Free(d_ReconOld));
 	cuda(FreeArray(d_Recon2));
 
-	return initIterative();
+#ifdef PRINTMEMORYUSAGE
+	cudaMemGetInfo(&avail_mem, &total_mem);
+	std::cout << "Iter free end vailable memory: " << avail_mem << "/" << total_mem << "\n";
+#endif // PRINTMEMORYUSAGE
+
+	return Tomo_OK;
 }
 
 TomoError TomoRecon::iterStep() {
@@ -2715,11 +2748,11 @@ TomoError TomoRecon::finalizeIter() {
 	//no longer need gradient records
 	//cuda(FreeArray(d_ReconDelta)); 
 	//cuda(DestroySurfaceObject(surfDeltaObj));
-#ifdef PRINTMEMORYUSAGE
+#ifdef VERBOSEMEMORY
 	size_t avail_mem, total_mem;
 	cudaMemGetInfo(&avail_mem, &total_mem);
-	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
-#endif // PRINTMEMORYUSAGE
+	std::cout << "Iter final start available memory: " << avail_mem << "/" << total_mem << "\n";
+#endif // VERBOSEMEMORY
 
 	constants.isReconstructing = false;
 
@@ -2812,10 +2845,10 @@ TomoError TomoRecon::finalizeIter() {
 	constants.currXr = -1;
 	constants.currYr = -1;
 
-#ifdef PRINTMEMORYUSAGE
+#ifdef VERBOSEMEMORY
 	cudaMemGetInfo(&avail_mem, &total_mem);
-	std::cout << "Available memory: " << avail_mem << "/" << total_mem << "\n";
-#endif // PRINTMEMORYUSAGE
+	std::cout << "Iter final end available memory: " << avail_mem << "/" << total_mem << "\n";
+#endif // VERBOSEMEMORY
 
 	return Tomo_OK;
 }
