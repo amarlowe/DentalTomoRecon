@@ -73,7 +73,7 @@
 //#define PRINTSCANCORRECTIONS
 //#define ENABLEZDER
 //#define ENABLESOLVER
-#define PRINTMEMORYUSAGE
+//#define PRINTMEMORYUSAGE
 //#define VERBOSEMEMORY
 #define PRINTINTENSITIES
 #define USEITERATIVE
@@ -122,7 +122,7 @@
 #define MEDIANFAC 0.0f
 #define TAPERSIZE 200.0f
 #define TRISIZE 155 
-#define ALPHA 0.97f
+#define ALPHA 1.0f
 
 //#define RECONDERIVATIVE
 //#define SQUAREMAGINX
@@ -735,7 +735,9 @@ public:
 	///Return the current value set for zoom.
 
 	///This value is the raw integer value, before exponentiation.
-	int getZoom();
+	int getZoomFactor();
+
+	float getZoom();
 
 	///Set the zoom value directly.
 	TomoError setZoom(
@@ -959,6 +961,8 @@ public:
 
 	///Return the dimensions of the projections.
 	void getReconstructionDimensions(int * width, int * height);
+
+	void getDisplayDimensions(int * width, int * height);
 
 	bool hasRawInput();
 

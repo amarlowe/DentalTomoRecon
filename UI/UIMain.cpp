@@ -434,7 +434,7 @@ TomoError DTRMainWindow::initializeFrame(GLFrame * currentFrame, wxString filena
 	setDataDisplay(currentFrame, iterRecon);
 	recon->singleFrame();
 	recon->resetLight();
-	currentFrame->m_canvas->paint(false, distanceValue, zoomSlider, zoomVal, windowSlider, windowVal, levelSlider, levelVal);
+	currentFrame->m_canvas->paint(false, distanceValue, zoomSlider, zoomVal, windowSlider, windowVal, levelSlider, levelVal, true);
 	currentFrame->filename = filename;
 
 	return Tomo_OK;
@@ -1228,7 +1228,7 @@ void DTRMainWindow::refreshToolbars(GLFrame* currentFrame) {
 	levelSlider->SetValue(minVal / WINLVLFACTOR);
 
 	//Zoom
-	int zoom = recon->getZoom();
+	int zoom = recon->getZoomFactor();
 	zoomVal->SetLabelText(wxString::Format(wxT("%5.2f"), pow(ZOOMFACTOR, zoom)));
 	zoomSlider->SetValue(zoom);
 
@@ -3120,7 +3120,7 @@ void CudaGLCanvas::OnPaint(wxPaintEvent& WXUNUSED(event)){
 }
 
 void CudaGLCanvas::paint(bool disChanged, wxTextCtrl* dis, wxSlider* zoom, wxStaticText* zLbl,
-	wxSlider* window, wxStaticText* wLbl, wxSlider* level, wxStaticText* lLbl) {
+	wxSlider* window, wxStaticText* wLbl, wxSlider* level, wxStaticText* lLbl, bool silentDraw) {
 	if (dis != NULL) distanceControl = dis;
 	if (zoom != NULL) zoomSlider = zoom;
 	if (zLbl != NULL) zoomLabel = zLbl;
@@ -3137,10 +3137,10 @@ void CudaGLCanvas::paint(bool disChanged, wxTextCtrl* dis, wxSlider* zoom, wxSta
 			distanceControl->SetValue(wxString::Format(wxT("%.2f"), recon->getDistance()));
 			distanceControl->Update();
 		}
-		if (zoomSlider) zoomSlider->SetValue(recon->getZoom());
+		if (zoomSlider) zoomSlider->SetValue(recon->getZoomFactor());
 		if (windowSlider) windowSlider->SetValue(window / WINLVLFACTOR);
 		if (levelSlider) levelSlider->SetValue(level / WINLVLFACTOR);
-		if (zoomLabel) zoomLabel->SetLabelText(wxString::Format(wxT("%.2f"), pow(ZOOMFACTOR, recon->getZoom())));
+		if (zoomLabel) zoomLabel->SetLabelText(wxString::Format(wxT("%.2f"), recon->getZoom()));
 		if (windowLabel) windowLabel->SetLabelText(wxString::Format(wxT("%d"), window));
 		if (levelLabel) levelLabel->SetLabelText(wxString::Format(wxT("%d"), level));
 	}
@@ -3152,9 +3152,10 @@ void CudaGLCanvas::paint(bool disChanged, wxTextCtrl* dis, wxSlider* zoom, wxSta
 		m_status->SetStatusText(wxString::Format(wxT("Y offset: %d px."), yOff), yOffset);
 	}
 
-	recon->draw(GetSize().x, GetSize().y);
-
-	SwapBuffers();
+	if (!silentDraw) {
+		recon->draw(GetSize().x, GetSize().y);
+		SwapBuffers();
+	}
 }
 
 void CudaGLCanvas::OnMouseEvent(wxMouseEvent& event) {

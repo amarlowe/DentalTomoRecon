@@ -630,8 +630,9 @@ __global__ void projectIter(float * proj, float * oldRecon, float * weights, int
 
 	if (count > 0) {
 		//if(firstRun) 
+		//	error /= ((float)count * (float)consts.slices / 5.0f);
+		//else 
 			error /= ((float)count * (float)consts.slices);
-		//else error /= count;
 	}
 	else
 		error = 0.0f;
@@ -2670,7 +2671,7 @@ TomoError TomoRecon::initIterative() {
 #ifdef SHOWERROR
 		KERNELCALL2(projectIter, contBlocks, contThreads, d_ReconOld, slice, 1.0f, true, constants, surfReconObj, surfErrorObj);
 #else 
-		KERNELCALL2(projectIter, contBlocks, contThreads, d_Sino, d_ReconOld, d_Weights, slice, 1.0f, true, decay, constants, surfReconObj, surfDeltaObj, true);
+		KERNELCALL2(projectIter, contBlocks, contThreads, d_Sino, d_ReconOld, d_Weights, slice, iteration, true, decay, constants, surfReconObj, surfDeltaObj, true);
 #endif
 	}
 	cuda(UnbindTexture(textError));

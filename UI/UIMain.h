@@ -258,7 +258,7 @@ public:
 	void OnScroll(int index);
 
 	void paint(bool disChanged = false, wxTextCtrl* dis = NULL, wxSlider* zoom = NULL, wxStaticText* zLbl = NULL,
-		wxSlider* window = NULL, wxStaticText* wLbl = NULL, wxSlider* level = NULL, wxStaticText* lLbl = NULL);
+		wxSlider* window = NULL, wxStaticText* wLbl = NULL, wxSlider* level = NULL, wxStaticText* lLbl = NULL, bool silentDraw = false);
 
 	TomoRecon* recon;
 	wxStatusBar* m_status = NULL;

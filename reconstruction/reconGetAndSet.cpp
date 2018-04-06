@@ -279,13 +279,13 @@ TomoError TomoRecon::getLowerTickRaw(int* x, int* y) {
 
 inline TomoError TomoRecon::checkBoundaries(int * x, int * y) {
 	int xLim, yLim;
-	if (constants.dataDisplay == reconstruction) {
-		xLim = Sys.Recon.Nx;
-		yLim = Sys.Recon.Ny;
-	}
-	else {
+	if (constants.dataDisplay == projections) {
 		xLim = Sys.Proj.Nx;
 		yLim = Sys.Proj.Ny;
+	}
+	else {
+		xLim = Sys.Recon.Nx;
+		yLim = Sys.Recon.Ny;
 	}
 	if (constants.flip) *y = yLim - 1 - *y;
 	if (constants.orientation) *x = xLim - 1 - *x;
@@ -326,8 +326,27 @@ TomoError TomoRecon::appendZoom(int amount) {
 	return Tomo_OK;
 }
 
-int TomoRecon::getZoom() {
+int TomoRecon::getZoomFactor() {
 	return zoom;
+}
+
+float TomoRecon::getZoom() {
+	int dataWidth, dataHeight;
+	if (constants.dataDisplay == projections) {
+		dataWidth = Sys.Proj.Nx;
+		dataHeight = Sys.Proj.Ny;
+	}
+	else {
+		dataWidth = Sys.Recon.Nx;
+		dataHeight = Sys.Recon.Ny;
+	}
+	if (dataWidth / scale - width > dataHeight / scale - height) {
+		;
+	}
+	else {
+		;
+	}
+	return 1 / scale;
 }
 
 TomoError TomoRecon::setZoom(int value) {
@@ -541,6 +560,11 @@ void TomoRecon::getProjectionDimensions(int* width, int* height) {
 void TomoRecon::getReconstructionDimensions(int* width, int* height) {
 	*width = Sys.Recon.Nx;
 	*height = Sys.Recon.Ny;
+}
+
+void TomoRecon::getDisplayDimensions(int* width, int* height) {
+	*width = this->width;
+	*height = this->height;
 }
 
 bool TomoRecon::hasRawInput() {
