@@ -29,6 +29,8 @@
 
 #include "../UI/interop.h"
 
+#include "BinarySearch.h"
+
 #pragma comment(lib, "Shlwapi.lib")
 
 #define NUMVIEWS 7
@@ -50,6 +52,8 @@
 
 //Phantom reader parameters
 #define LINEPAIRS 5
+
+//Code use parameters
 #define INTENSITYTHRESH 150
 #define UPPERBOUND 20.0f
 #define LOWERBOUND 4.0f
@@ -67,13 +71,12 @@
 #define HISTLIMIT 10
 #define HIST_BIN_COUNT 256
 #define SATURATIONLIMIT 0.1
-
-//Code use parameters
 //#define PROFILER
 //#define PRINTSCANCORRECTIONS
 //#define ENABLEZDER
 //#define ENABLESOLVER
 //#define PRINTMEMORYUSAGE
+//#define VERBOSEMEMORY
 #define PRINTINTENSITIES
 #define USEITERATIVE
 //#define SHOWERROR
@@ -90,7 +93,7 @@
 #endif
 
 //Defaults
-#define EXPOSUREDEFAULT 75
+#define EXPOSUREDEFAULT 100
 #define VOLTAGEDEFAULT 70
 #define EXPOSUREBASE 50
 #define METALDEFAULT 8000
@@ -111,7 +114,7 @@
 #define DELTAGROWTH 1.0f
 #define DELTADECAY 0.99f
 
-#define SKIPITERTV false
+#define SKIPITERTV true
 #define TVX 0.02f
 #define TVY 0.02f
 #define TVZ 0.00f
@@ -121,7 +124,7 @@
 #define MEDIANFAC 0.0f
 #define TAPERSIZE 200.0f
 #define TRISIZE 155 
-#define ALPHA 0.97f
+#define ALPHA 1.0f
 
 //#define RECONDERIVATIVE
 //#define SQUAREMAGINX
@@ -157,6 +160,7 @@ typedef enum {
 	iterRecon = 0,
 	reconstruction,
 	projections,
+	synthetic2d,
 	error
 } sourceData;
 
@@ -264,6 +268,7 @@ struct params {
 	bool * useBeams;
 	int ReconPitchNum;
 	int ProjPitchNum;
+	int DisplayPitchNum;
 	bool orientation;
 	bool flip;
 	bool log;
@@ -288,6 +293,7 @@ struct params {
 	float ratio = ENHANCEDEFAULT;
 	bool useMaxNoise = true;
 	int maxNoise = NOISEMAXDEFAULT;
+	float projectionAngle = 0.0f;
 
 	sourceData dataDisplay = reconstruction;
 
@@ -303,7 +309,7 @@ struct params {
 
 ///Parameters used in CPU control systems, but not kernel calls
 struct CPUParams {
-	bool scanVertEnable = true;
+	bool scanVertEnable = false;
 	bool scanHorEnable = false;
 	float vertTau = SCANVERTDEFAULT;
 	float horTau = SCANHORDEFAULT;
@@ -382,6 +388,10 @@ public:
 		///Set to true before the loop, false in the loop. Used for initialization.
 		bool firstRun);
 
+	TomoError autoFocus2();
+
+	float binarySearch(float(TomoRecon::*getError)(), float ** var, float * startPos, int dimensions = 1, float startStep = 1.0f, float resolution = LASTSTEP, float limit = 3.0f);
+
 	///Experimental function used to automatically detect system geometries.
 
 	///Function must be called in a loop until Tomo_Done is returned.
@@ -393,6 +403,8 @@ public:
 		int &yIter,
 		float &maxXVal,
 		float &maxYVal);
+
+	TomoError autoGeo2(int beam, float & XVal, float & YVal);
 
 	///Function used to automattically find the window and level of the current selection.
 	TomoError autoLight(
@@ -733,7 +745,9 @@ public:
 	///Return the current value set for zoom.
 
 	///This value is the raw integer value, before exponentiation.
-	int getZoom();
+	int getZoomFactor();
+
+	float getZoom();
 
 	///Set the zoom value directly.
 	TomoError setZoom(
@@ -958,7 +972,12 @@ public:
 	///Return the dimensions of the projections.
 	void getReconstructionDimensions(int * width, int * height);
 
+	void getDisplayDimensions(int * width, int * height);
+
 	bool hasRawInput();
+
+	void appendSynthAngle(float amount);
+	float getSynthAngle();
 
 	///Save the current iterative reconstruction directly to disk.
 
@@ -990,6 +1009,7 @@ private:
 
 	//Kernel call helpers
 	float focusHelper();
+	float geoHelper();
 	TomoError imageKernel(float xK[KERNELSIZE], float yK[KERNELSIZE], float * output, bool projs);
 	TomoError project(float * projections, float * reconstruction);
 	TomoError scanLineDetect(int view, float * d_sum, float * sum, float * offset, bool vert, bool enable);
@@ -1048,6 +1068,7 @@ private:
 
 	//Define data buffer
 	float * d_Image;
+	float * d_Image2;
 	float * d_Error;
 	float * d_Sino;
 	float * d_Raw;
@@ -1092,6 +1113,7 @@ private:
 	//cuda pitch variables generated from 2d mallocs
 	size_t reconPitch;
 	size_t projPitch;
+	size_t displayPitch;
 	int reconPitchNum;
 
 	//Parameters for 2d geometry search

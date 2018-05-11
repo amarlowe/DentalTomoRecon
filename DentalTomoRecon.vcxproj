@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="fileIO\cJSON.c" />
+    <ClCompile Include="reconstruction\BinarySearch.cpp" />
     <ClCompile Include="reconstruction\geometry.cpp" />
     <ClCompile Include="reconstruction\reconGetAndSet.cpp" />
     <ClCompile Include="reconstruction\TomoRecon.cpp" />
@@ -36,6 +37,7 @@
     <ClInclude Include="fileIO\DICOM_Functions.h" />
     <ClInclude Include="fileIO\DICOM_IM_Settings.h" />
     <ClInclude Include="fileIO\DICOM_TAGS.h" />
+    <ClInclude Include="reconstruction\BinarySearch.h" />
     <ClInclude Include="reconstruction\geometry.h" />
     <ClInclude Include="reconstruction\intellisense.h" />
     <ClInclude Include="reconstruction\TomoRecon.h" />
@@ -213,7 +215,7 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>dcmimage.lib;dcmimgle.lib;dcmdata.lib;ofstd.lib;oflog.lib;glew32d.lib;cudart.lib;odbc32.lib;odbccp32.lib;opencv_world340d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>dcmjpeg.lib;dcmjpls.lib;dcmimage.lib;dcmimgle.lib;dcmdata.lib;ofstd.lib;oflog.lib;glew32d.lib;cudart.lib;odbc32.lib;odbccp32.lib;opencv_world340d.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>C:\Program Files\DCMTK\lib;C:\wxWidgets-3.1.0\lib\vc_x64_lib;C:\ProgramData\NVIDIA Corporation\CUDA Samples\v8.0\common\lib\x64;%OPENCV_DIR%\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
