@@ -25,6 +25,10 @@
 #include "dcmtk/config/osconfig.h" 
 #include "dcmtk/dcmdata/dctk.h"
 #include "dcmtk/dcmimgle/dcmimage.h"
+#include "dcmtk/dcmjpeg/djdecode.h"
+#include <dcmtk/dcmjpeg/djencode.h>
+#include "dcmtk/dcmjpeg/djrplol.h"
+#include "dcmtk/dcmjpeg/dipijpeg.h"
 
 #ifdef __BORLANDC__
 #pragma hdrstop
@@ -45,9 +49,9 @@
 //Versioning
 #define VERSIONMAJOR	0
 #define VERSIONMINOR	1
-#define RELEASENUM		00
-#define RELEASEMONTH	03
-#define RELEASEDAY		19
+#define RELEASENUM		01
+#define RELEASEMONTH	04
+#define RELEASEDAY		24
 #define RELEASEYEAR		2018
 
 //Enable to remove many options not necessary to show early users

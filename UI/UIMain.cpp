@@ -6,6 +6,8 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 	std::string ProjPath = mainFile;
 	std::string GainPath = gainFile;
 
+	DJDecoderRegistration::registerCodecs();
+
 	if (!ProjPath.substr(ProjPath.length() - 3, ProjPath.length()).compare("dcm")) {
 		//Read projections
 		int NumViews = recon->getNumViews();
@@ -30,13 +32,14 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 			 dset->findAndGetOFString(PRV_PrivateCreator, test);
 			 dset->findAndGetOFString(DCM_NumberOfFrames, frameString);
 		}
+		dset->chooseRepresentation(EXS_LittleEndianExplicit, NULL);
 
 		int frames = 1;
 		if(!frameString.empty()) frames = stoi(frameString);
 
 		if (test.compare(PRIVATE_CREATOR_NAME) == 0) {
 			const Uint16 *pixelData = NULL;
-			dset->findAndGetUint16Array(DCM_PixelData, pixelData);
+			OFCondition status = dset->findAndGetUint16Array(DCM_PixelData, pixelData);
 			if (pixelData != NULL) {
 				/*int readWidth = dset->getWidth();
 				for (int view = 0; view < NumViews; view++)
@@ -179,6 +182,8 @@ TomoError parseFile(TomoRecon * recon, const char * gainFile, const char * mainF
 		delete[] GainData;
 	}
 	else recon->ReadProjectionsFromFile(gainFile, mainFile, recon->hasRawInput());
+
+	DJDecoderRegistration::cleanup();
 
 	return returnError;
 }
@@ -450,7 +455,7 @@ TomoError DTRMainWindow::reconstruct(GLFrame * currentFrame) {
 
 	m_statusBar1->SetStatusText(_("Reconstructing:"));
 	recon->resetFocus();
-	setDataDisplay(currentFrame, iterRecon);
+	//setDataDisplay(currentFrame, iterRecon);
 	refreshToolbars(currentFrame);
 	deactivateMenus(recon);
 
@@ -623,16 +628,23 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 	char uid[100];
 	char version[100];
 	sprintf(version, "%01d.%01d.%02d", VERSIONMAJOR, VERSIONMINOR, RELEASENUM);
+	DJEncoderRegistration::registerCodecs();
 	DcmFileFormat fileformat;
 	DcmDataset *dataset = fileformat.getDataset();
 	dataset->putAndInsertString(DCM_SOPClassUID, UID_CTImageStorage);
 	dataset->putAndInsertString(DCM_SOPInstanceUID, dcmGenerateUniqueIdentifier(uid, SITE_INSTANCE_UID_ROOT));
 	dataset->putAndInsertString(DCM_NumberOfFrames, std::to_string(NumViews).c_str());
-	dataset->putAndInsertString(DCM_Rows, std::to_string(height).c_str());
-	dataset->putAndInsertString(DCM_Columns, std::to_string(width).c_str());
-	dataset->putAndInsertString(DCM_BitsStored, std::to_string(16).c_str());
-	dataset->putAndInsertString(DCM_BitsAllocated, std::to_string(16).c_str());
-	dataset->putAndInsertString(DCM_HighBit, std::to_string(15).c_str());
+	dataset->putAndInsertUint16(DCM_Rows, height);
+	dataset->putAndInsertUint16(DCM_Columns, width);
+	dataset->putAndInsertUint16(DCM_BitsStored, 16);
+	dataset->putAndInsertUint16(DCM_SamplesPerPixel, 1);
+	dataset->putAndInsertUint16(DCM_BitsAllocated, 16);
+	dataset->putAndInsertUint16(DCM_HighBit, 15);
+	dataset->putAndInsertUint16(DCM_PixelRepresentation, 1);
+	dataset->putAndInsertUint16(DCM_RescaleIntercept, 0);
+	dataset->putAndInsertString(DCM_PhotometricInterpretation, "MONOCHROME2");
+	dataset->putAndInsertString(DCM_PixelSpacing, "0.0815\\0.0815");
+	dataset->putAndInsertString(DCM_ImagerPixelSpacing, "0.0815\\0.0815");
 	dataset->putAndInsertString(DCM_SoftwareVersions, version);
 	unsigned short * RawData = new unsigned short[width*height*NumViews];
 
@@ -771,10 +783,16 @@ void DTRMainWindow::onSave(wxCommandEvent& event) {
 
 	//save the array afterwards to not print it
 	dataset->putAndInsertUint16Array(DCM_PixelData, RawData, width*height*NumViews);
+	DJ_RPLossless params;
+	OFCondition status = dataset->chooseRepresentation(EXS_JPEGProcess14SV1, &params);
+	bool test = dataset->canWriteXfer(EXS_JPEGProcess14SV1);
 
-	OFCondition status = fileformat.saveFile(saveFileDialog.GetPath().ToStdString(), EXS_LittleEndianExplicit);
+	//OFCondition status = fileformat.saveFile(saveFileDialog.GetPath().ToStdString(), EXS_LittleEndianExplicit);
+	status = fileformat.saveFile(saveFileDialog.GetPath().ToStdString(), EXS_JPEGProcess14SV1);//EXS_JPEGProcess14SV1
 	if (status.bad())
 		std::cout << "Error: cannot write DICOM file (" << status.text() << ")" << endl;
+
+	DJEncoderRegistration::cleanup();
 
 	delete[] RawData;
 
@@ -804,28 +822,39 @@ void DTRMainWindow::onExportRecon(wxCommandEvent& event) {
 	char uid[100];
 	char version[100];
 	sprintf(version, "%01d.%01d.%02d", VERSIONMAJOR, VERSIONMINOR, RELEASENUM);
+	DJEncoderRegistration::registerCodecs();
 	DcmFileFormat fileformat;
 	DcmDataset *dataset = fileformat.getDataset();
 	dataset->putAndInsertString(DCM_SOPClassUID, UID_CTImageStorage);
 	dataset->putAndInsertString(DCM_SOPInstanceUID, dcmGenerateUniqueIdentifier(uid, SITE_INSTANCE_UID_ROOT));
 	dataset->putAndInsertString(DCM_NumberOfFrames, std::to_string(numFrames).c_str());
-	dataset->putAndInsertString(DCM_Rows, std::to_string(height).c_str());
-	dataset->putAndInsertString(DCM_Columns, std::to_string(width).c_str());
-	dataset->putAndInsertString(DCM_BitsStored, std::to_string(16).c_str());
-	dataset->putAndInsertString(DCM_BitsAllocated, std::to_string(16).c_str());
-	dataset->putAndInsertString(DCM_HighBit, std::to_string(15).c_str());
+	dataset->putAndInsertUint16(DCM_Rows, height);
+	dataset->putAndInsertUint16(DCM_Columns, width);
+	dataset->putAndInsertUint16(DCM_BitsStored, 16);
+	dataset->putAndInsertUint16(DCM_SamplesPerPixel, 1);
+	dataset->putAndInsertUint16(DCM_BitsAllocated, 16);
+	dataset->putAndInsertUint16(DCM_HighBit, 15);
+	dataset->putAndInsertUint16(DCM_PixelRepresentation, 1);
+	dataset->putAndInsertUint16(DCM_RescaleIntercept, 0);
+	dataset->putAndInsertString(DCM_PhotometricInterpretation, "MONOCHROME2");
+	dataset->putAndInsertString(DCM_PixelSpacing, "0.0815\\0.0815");
+	dataset->putAndInsertString(DCM_ImagerPixelSpacing, "0.0815\\0.0815");
 	dataset->putAndInsertString(DCM_SoftwareVersions, version);
 	unsigned short * RawData = new unsigned short[width*height*numFrames];
 
 	recon->exportRecon(RawData);
 
 	dataset->putAndInsertUint16Array(DCM_PixelData, RawData, width*height*numFrames);
+	DJ_RPLossless params;
+	OFCondition status = dataset->chooseRepresentation(EXS_JPEGProcess14SV1, &params);
+	bool test = dataset->canWriteXfer(EXS_JPEGProcess14SV1);
 
-	OFCondition status = fileformat.saveFile(saveFileDialog.GetPath().ToStdString(), EXS_LittleEndianExplicit);
+	status = fileformat.saveFile(saveFileDialog.GetPath().ToStdString(), EXS_JPEGProcess14SV1);//EXS_LittleEndianExplicit
 	if (status.bad())
 		std::cout << "Error: cannot write DICOM file (" << status.text() << ")" << endl;
 
 	delete[] RawData;
+	DJEncoderRegistration::cleanup();
 
 	m_statusBar1->SetStatusText(_("DICOM saved!"));
 }
@@ -913,7 +942,6 @@ void DTRMainWindow::onReconSetup(wxCommandEvent& event) {
 	}
 	else {
 		recon->resetFocus();
-		setDataDisplay(currentFrame, iterRecon);
 		recon->singleFrame();
 		recon->resetLight();
 		reconstruct(currentFrame);
@@ -1147,14 +1175,18 @@ void DTRMainWindow::onAutoGeoS(wxCommandEvent& event) {
 	std::ofstream FILE;
 	FILE.open("testResults.txt");
 
+	recon->autoFocus(true);
+	while (recon->autoFocus(false) == Tomo_OK);
 	float maxXVals[NUMVIEWS];
 	float maxYVals[NUMVIEWS];
 	float returnVal;
 	int yIters, oldIter;
-	//for (int view = 0; view < NUMVIEWS; view++)
-	int view = 0;
+	for (int view = 0; view < NUMVIEWS; view++)
+	//int view = 0;
 	{
-		//if (view == 1 || view == 3) continue;
+		if (view == 1 || view == 3) continue;
+		recon->autoGeo2(view, maxXVals[view], maxYVals[view]);
+		/*(*m_textCtrl8) << "beam " << view << ": x: " << maxXVals[view] << " mm, y: " << maxYVals[view] << " mm\n";
 		recon->autoGeo(true, view, returnVal, yIters, maxXVals[view], maxYVals[view]);
 		recon->autoLight();
 		oldIter = yIters;
@@ -1170,7 +1202,7 @@ void DTRMainWindow::onAutoGeoS(wxCommandEvent& event) {
 			currentFrame->m_canvas->paint();
 		}
 		FILE << std::setprecision(10) << returnVal;
-		FILE.close();
+		FILE.close();*/
 		(*m_textCtrl8) << "beam " << view << ": x: " << maxXVals[view] << " mm, y: " << maxYVals[view] << " mm\n";
 	}
 
@@ -1253,7 +1285,7 @@ void DTRMainWindow::deactivateMenus(TomoRecon* recon) {
 		m_OldMenuBar = GetMenuBar();
 		SetMenuBar(NULL);
 	}
-	dataDisplay->Disable();
+	//dataDisplay->Disable();
 
 	//Make sure we're on navigation section
 	optionBox->SetSelection(0);
@@ -1344,6 +1376,7 @@ void DTRMainWindow::onAutoFocus(wxCommandEvent& event) {
 
 	if (recon->selBoxReady()) {
 		//if they're greater than 0, the box was clicked and dragged successfully
+		recon->autoFocus2();
 		recon->autoFocus(true);
 		while (recon->autoFocus(false) == Tomo_OK);
 	}
@@ -1479,6 +1512,8 @@ void DTRMainWindow::setDataDisplay(GLFrame* currentFrame, sourceData selection) 
 	dataDisplay->SetSelection(selection);
 
 	switch (recon->getDataDisplay()) {
+	case error:
+		recon->setShowNegative(false);
 	case projections:
 		projIndex = recon->getActiveProjection();
 		break;
@@ -1494,6 +1529,8 @@ void DTRMainWindow::setDataDisplay(GLFrame* currentFrame, sourceData selection) 
 
 	recon->setDataDisplay(selection);
 	switch (selection) {
+	case error:
+		recon->setShowNegative(true);
 	case projections:
 		currentFrame->showScrollBar(NUMVIEWS, projIndex);
 		recon->setActiveProjection(projIndex);
@@ -1731,9 +1768,6 @@ void ReconCon::setValues() {
 		metalSlider->Enable(false);
 	}
 
-	//Reverse Geometry
-	invGeo->SetValue(recon->reverseGeometryIsEnabled());
-
 	//Scan line removal
 	if (recon->scanVertIsEnabled()) {
 		scanVertValue->Enable(true);
@@ -1811,6 +1845,18 @@ void ReconCon::setValues() {
 	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
 	recon->singleFrame();
 	recon->resetFocus();
+
+	//Reverse Geometry
+	if (recon->getDistance() < 0) {
+		bool flip = recon->reverseGeometryIsEnabled();
+		invGeo->SetValue(!flip);
+		recon->enableReverseGeometry(!flip);
+		recon->resetFocus();
+	}
+	else {
+		invGeo->SetValue(recon->reverseGeometryIsEnabled());
+	}
+
 	recon->resetLight();
 	currentFrame->m_canvas->paint();
 }
@@ -3018,16 +3064,22 @@ void GLFrame::OnMousewheel(wxMouseEvent& event) {
 	else if (event.m_shiftDown)
 		m_canvas->recon->appendMaxLight(newScrollPos);
 	else {
-		if (m_canvas->recon->getDataDisplay() == reconstruction) {
+		switch (m_canvas->recon->getDataDisplay()) {
+		case reconstruction:
 			m_canvas->recon->stepDistance(newScrollPos);
 			m_canvas->recon->singleFrame();
-		}
-		else {
+			break;
+		case synthetic2d:
+			m_canvas->recon->appendSynthAngle(newScrollPos);
+			m_canvas->recon->singleFrame();
+			break;
+		default:
 			newScrollPos += m_scrollBar->GetThumbPosition();
 			if (newScrollPos < 0) newScrollPos = 0;
 			if (newScrollPos > m_scrollBar->GetRange() - 1) newScrollPos = m_scrollBar->GetRange() - 1;
 			m_scrollBar->SetThumbPosition(newScrollPos);
 			m_canvas->OnScroll(newScrollPos);
+			break;
 		}
 	}
 	m_canvas->paint();
@@ -3134,7 +3186,8 @@ void CudaGLCanvas::paint(bool disChanged, wxTextCtrl* dis, wxSlider* zoom, wxSta
 		unsigned int window, level;
 		recon->getLight(&level, &window);
 		if (distanceControl) {
-			distanceControl->SetValue(wxString::Format(wxT("%.2f"), recon->getDistance()));
+			if(recon->getDataDisplay() == synthetic2d) distanceControl->SetValue(wxString::Format(wxT("%.2f"), recon->getSynthAngle()));
+			else distanceControl->SetValue(wxString::Format(wxT("%.2f"), recon->getDistance()));
 			distanceControl->Update();
 		}
 		if (zoomSlider) zoomSlider->SetValue(recon->getZoomFactor());

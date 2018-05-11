@@ -58,10 +58,12 @@ interop::interop(int x, int y) {
 
 interop::~interop() {
 	// delete rbo's
-	gl(DeleteRenderbuffers(1, &rb));
+	glDeleteRenderbuffers(1, &rb);
 
 	// delete fbo's
-	gl(DeleteFramebuffers(1, &fb));
+	glDeleteFramebuffers(1, &fb);
+
+	glGetError();
 }
 
 void interop::resize(int x, int y) {

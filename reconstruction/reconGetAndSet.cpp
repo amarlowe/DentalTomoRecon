@@ -579,3 +579,20 @@ TomoError TomoRecon::enableReverseGeometry(bool reverse) {
 bool TomoRecon::reverseGeometryIsEnabled() {
 	return constants.revGeo;
 }
+
+float TomoRecon::getSynthAngle() {
+	return constants.projectionAngle;
+}
+
+void TomoRecon::appendSynthAngle(float amount) {
+	float min = Sys.Geo.EmitX[0] * 1.1;
+	float max = Sys.Geo.EmitX[NumViews - 1] * 1.1;
+	if (max < min) {
+		float temp = min;
+		min = max;
+		max = temp;
+	}
+	constants.projectionAngle += amount;
+	if (constants.projectionAngle > max) constants.projectionAngle = max;
+	if (constants.projectionAngle < min) constants.projectionAngle = min;
+}

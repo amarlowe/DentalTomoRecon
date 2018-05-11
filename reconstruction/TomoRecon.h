@@ -29,6 +29,8 @@
 
 #include "../UI/interop.h"
 
+#include "BinarySearch.h"
+
 #pragma comment(lib, "Shlwapi.lib")
 
 #define NUMVIEWS 7
@@ -50,6 +52,8 @@
 
 //Phantom reader parameters
 #define LINEPAIRS 5
+
+//Code use parameters
 #define INTENSITYTHRESH 150
 #define UPPERBOUND 20.0f
 #define LOWERBOUND 4.0f
@@ -67,8 +71,6 @@
 #define HISTLIMIT 10
 #define HIST_BIN_COUNT 256
 #define SATURATIONLIMIT 0.1
-
-//Code use parameters
 //#define PROFILER
 //#define PRINTSCANCORRECTIONS
 //#define ENABLEZDER
@@ -91,7 +93,7 @@
 #endif
 
 //Defaults
-#define EXPOSUREDEFAULT 75
+#define EXPOSUREDEFAULT 100
 #define VOLTAGEDEFAULT 70
 #define EXPOSUREBASE 50
 #define METALDEFAULT 8000
@@ -158,6 +160,7 @@ typedef enum {
 	iterRecon = 0,
 	reconstruction,
 	projections,
+	synthetic2d,
 	error
 } sourceData;
 
@@ -290,6 +293,7 @@ struct params {
 	float ratio = ENHANCEDEFAULT;
 	bool useMaxNoise = true;
 	int maxNoise = NOISEMAXDEFAULT;
+	float projectionAngle = 0.0f;
 
 	sourceData dataDisplay = reconstruction;
 
@@ -305,7 +309,7 @@ struct params {
 
 ///Parameters used in CPU control systems, but not kernel calls
 struct CPUParams {
-	bool scanVertEnable = true;
+	bool scanVertEnable = false;
 	bool scanHorEnable = false;
 	float vertTau = SCANVERTDEFAULT;
 	float horTau = SCANHORDEFAULT;
@@ -384,6 +388,10 @@ public:
 		///Set to true before the loop, false in the loop. Used for initialization.
 		bool firstRun);
 
+	TomoError autoFocus2();
+
+	float binarySearch(float(TomoRecon::*getError)(), float ** var, float * startPos, int dimensions = 1, float startStep = 1.0f, float resolution = LASTSTEP, float limit = 3.0f);
+
 	///Experimental function used to automatically detect system geometries.
 
 	///Function must be called in a loop until Tomo_Done is returned.
@@ -395,6 +403,8 @@ public:
 		int &yIter,
 		float &maxXVal,
 		float &maxYVal);
+
+	TomoError autoGeo2(int beam, float & XVal, float & YVal);
 
 	///Function used to automattically find the window and level of the current selection.
 	TomoError autoLight(
@@ -966,6 +976,9 @@ public:
 
 	bool hasRawInput();
 
+	void appendSynthAngle(float amount);
+	float getSynthAngle();
+
 	///Save the current iterative reconstruction directly to disk.
 
 	///Modifications like edge filters and current lighting will be computed before saving to disk; it will save as currently displayed.
@@ -996,6 +1009,7 @@ private:
 
 	//Kernel call helpers
 	float focusHelper();
+	float geoHelper();
 	TomoError imageKernel(float xK[KERNELSIZE], float yK[KERNELSIZE], float * output, bool projs);
 	TomoError project(float * projections, float * reconstruction);
 	TomoError scanLineDetect(int view, float * d_sum, float * sum, float * offset, bool vert, bool enable);
@@ -1054,6 +1068,7 @@ private:
 
 	//Define data buffer
 	float * d_Image;
+	float * d_Image2;
 	float * d_Error;
 	float * d_Sino;
 	float * d_Raw;
