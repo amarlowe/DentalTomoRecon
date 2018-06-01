@@ -596,3 +596,14 @@ void TomoRecon::appendSynthAngle(float amount) {
 	if (constants.projectionAngle > max) constants.projectionAngle = max;
 	if (constants.projectionAngle < min) constants.projectionAngle = min;
 }
+
+int TomoRecon::getPixelLine() {
+	return constants.pixelLine;
+}
+
+void TomoRecon::appendPixelLine(int amount) {
+	int max = Sys.Proj.Ny - 1;
+	constants.pixelLine += amount;
+	if (constants.pixelLine > max) constants.pixelLine = max;
+	if (constants.pixelLine < 0) constants.pixelLine = 0;
+}

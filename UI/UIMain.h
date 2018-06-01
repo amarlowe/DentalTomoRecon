@@ -49,9 +49,9 @@
 //Versioning
 #define VERSIONMAJOR	0
 #define VERSIONMINOR	1
-#define RELEASENUM		01
-#define RELEASEMONTH	04
-#define RELEASEDAY		24
+#define RELEASENUM		02
+#define RELEASEMONTH	06
+#define RELEASEDAY		01
 #define RELEASEYEAR		2018
 
 //Enable to remove many options not necessary to show early users

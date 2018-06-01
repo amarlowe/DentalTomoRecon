@@ -173,7 +173,7 @@ mainWindow::mainWindow( wxWindow* parent, wxWindowID id, const wxString& title, 
 	logView = new wxCheckBox( navToolbar, wxID_ANY, wxT("Log view"), wxDefaultPosition, wxDefaultSize, 0 );
 	logView->SetValue(true); 
 	navToolbar->AddControl( logView );
-	wxString dataDisplayChoices[] = { wxT("Reconstruction"), wxT("Single Pass Reconstruction"), wxT("Projections"), wxT("Synthetic 2D"), wxT("Error") };
+	wxString dataDisplayChoices[] = { wxT("Reconstruction"), wxT("Single Pass Reconstruction"), wxT("Projections"), wxT("Synthetic 2D"), wxT("Error"), wxT("Sinogram"), wxT("Experimental") };
 	int dataDisplayNChoices = sizeof( dataDisplayChoices ) / sizeof( wxString );
 	dataDisplay = new wxChoice( navToolbar, wxID_ANY, wxDefaultPosition, wxDefaultSize, dataDisplayNChoices, dataDisplayChoices, 0 );
 	dataDisplay->SetSelection( 0 );

@@ -422,9 +422,11 @@ TomoError DTRMainWindow::initializeFrame(GLFrame * currentFrame, wxString filena
 			(*m_textCtrl8) << "Standard DICOM stack viewing not yet supported.\n";
 			return Tomo_file_err;
 		}
-		if (launchReconConfig(recon, filename) != Tomo_OK) {
-			return Tomo_file_err;
-		}
+		
+		recon->setDataDisplay(reconstruction);
+		recon->setBoundaries(RECONDIS, RECONDIS + RECONSLICES * 0.5f);
+		recon->resetFocus(true);
+		recon->findStartDistance();
 	}
 	else name = file.GetName();
 
@@ -1172,8 +1174,8 @@ void DTRMainWindow::onAutoGeoS(wxCommandEvent& event) {
 	TomoRecon* recon = currentFrame->m_canvas->recon;
 
 	//Run tests about this point
-	std::ofstream FILE;
-	FILE.open("testResults.txt");
+	//std::ofstream FILE;
+	//FILE.open("testResults.txt");
 
 	recon->autoFocus(true);
 	while (recon->autoFocus(false) == Tomo_OK);
@@ -1512,6 +1514,8 @@ void DTRMainWindow::setDataDisplay(GLFrame* currentFrame, sourceData selection) 
 	dataDisplay->SetSelection(selection);
 
 	switch (recon->getDataDisplay()) {
+	case experimental:
+		recon->setDisplay(getEnhance());
 	case error:
 		recon->setShowNegative(false);
 	case projections:
@@ -1529,6 +1533,8 @@ void DTRMainWindow::setDataDisplay(GLFrame* currentFrame, sourceData selection) 
 
 	recon->setDataDisplay(selection);
 	switch (selection) {
+	case experimental:
+		recon->setDisplay(norm_der);
 	case error:
 		recon->setShowNegative(true);
 	case projections:
@@ -1715,9 +1721,9 @@ void ReconCon::setValues() {
 	recon->setTVIter(TVIterVal);
 
 	//Distance
-	recon->setBoundaries(startDis, endDis);
-	startDistance->SetValue(std::to_string(startDis));
-	endDistance->SetValue(std::to_string(endDis));
+	//recon->setBoundaries(startDis, endDis);
+	//startDistance->SetValue(std::to_string(startDis));
+	//endDistance->SetValue(std::to_string(endDis));
 	recon->setStep(stepSize);
 	recon->enableGain(gainIsEnabled);
 	useGain->SetValue(gainIsEnabled);
@@ -1844,18 +1850,15 @@ void ReconCon::setValues() {
 	GLFrame* currentFrame = (GLFrame*)drawPanel;
 	parseFile(recon, gainFilepath.mb_str(), currentFrame->filename.mb_str(), false);
 	recon->singleFrame();
-	recon->resetFocus();
+	recon->resetFocus(true);
 
 	//Reverse Geometry
-	if (recon->getDistance() < 0) {
-		bool flip = recon->reverseGeometryIsEnabled();
-		invGeo->SetValue(!flip);
-		recon->enableReverseGeometry(!flip);
-		recon->resetFocus();
-	}
-	else {
-		invGeo->SetValue(recon->reverseGeometryIsEnabled());
-	}
+	invGeo->SetValue(recon->reverseGeometryIsEnabled());
+
+	//Auto-Detect start and end distance
+	recon->findStartDistance();
+	startDistance->SetValue(std::to_string(recon->getStartBoundary()));
+	endDistance->SetValue(std::to_string(recon->getEndBoundary()));
 
 	recon->resetLight();
 	currentFrame->m_canvas->paint();
@@ -3066,11 +3069,16 @@ void GLFrame::OnMousewheel(wxMouseEvent& event) {
 	else {
 		switch (m_canvas->recon->getDataDisplay()) {
 		case reconstruction:
+		case experimental:
 			m_canvas->recon->stepDistance(newScrollPos);
 			m_canvas->recon->singleFrame();
 			break;
 		case synthetic2d:
 			m_canvas->recon->appendSynthAngle(newScrollPos);
+			m_canvas->recon->singleFrame();
+			break;
+		case sinogram:
+			m_canvas->recon->appendPixelLine(newScrollPos);
 			m_canvas->recon->singleFrame();
 			break;
 		default:
@@ -3187,7 +3195,10 @@ void CudaGLCanvas::paint(bool disChanged, wxTextCtrl* dis, wxSlider* zoom, wxSta
 		recon->getLight(&level, &window);
 		if (distanceControl) {
 			if(recon->getDataDisplay() == synthetic2d) distanceControl->SetValue(wxString::Format(wxT("%.2f"), recon->getSynthAngle()));
-			else distanceControl->SetValue(wxString::Format(wxT("%.2f"), recon->getDistance()));
+			else {
+				if (recon->getDataDisplay() == sinogram) distanceControl->SetValue(wxString::Format(wxT("%.0f"), (float)recon->getPixelLine()));
+				else distanceControl->SetValue(wxString::Format(wxT("%.2f"), recon->getDistance()));
+			}
 			distanceControl->Update();
 		}
 		if (zoomSlider) zoomSlider->SetValue(recon->getZoomFactor());

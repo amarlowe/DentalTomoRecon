@@ -77,7 +77,8 @@
 //#define ENABLESOLVER
 //#define PRINTMEMORYUSAGE
 //#define VERBOSEMEMORY
-#define PRINTINTENSITIES
+//#define PRINTINTENSITIES
+//#define PRINTLINEDER
 #define USEITERATIVE
 //#define SHOWERROR
 
@@ -129,7 +130,7 @@
 //#define RECONDERIVATIVE
 //#define SQUAREMAGINX
 
-#define ITERATIONS 70
+#define ITERATIONS 20
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {										\
@@ -161,7 +162,9 @@ typedef enum {
 	reconstruction,
 	projections,
 	synthetic2d,
-	error
+	error,
+	sinogram,
+	experimental
 } sourceData;
 
 ///Filters through which one can look at the data
@@ -187,7 +190,9 @@ typedef enum {
 	der3,
 	der_all,
 	mag_der,
-	z_der_mag
+	z_der_mag,
+	norm_der,
+	abs_norm_der
 } derivative_t;
 
 ///The catesian directions
@@ -294,6 +299,7 @@ struct params {
 	bool useMaxNoise = true;
 	int maxNoise = NOISEMAXDEFAULT;
 	float projectionAngle = 0.0f;
+	int pixelLine = 0;
 
 	sourceData dataDisplay = reconstruction;
 
@@ -386,7 +392,8 @@ public:
 	///Must be called in a loop until Tomo_Done is returned (useful if the caller wishes to paint each frame.
 	TomoError autoFocus(
 		///Set to true before the loop, false in the loop. Used for initialization.
-		bool firstRun);
+		bool firstRun,
+		bool checkFlip = false);
 
 	TomoError autoFocus2();
 
@@ -528,7 +535,7 @@ public:
 	///Auto-calibrate focus from a set selection window.
 
 	///The default selection window is the center quarter of the image.
-	TomoError resetFocus();
+	TomoError resetFocus(bool checkFlip = false);
 
 	///Returns whether or not the inverse log correction is currently in use.
 
@@ -979,6 +986,10 @@ public:
 	void appendSynthAngle(float amount);
 	float getSynthAngle();
 
+	void appendPixelLine(int amount);
+	int getPixelLine();
+	TomoError findStartDistance();
+
 	///Save the current iterative reconstruction directly to disk.
 
 	///Modifications like edge filters and current lighting will be computed before saving to disk; it will save as currently displayed.
@@ -1012,6 +1023,7 @@ private:
 	float geoHelper();
 	TomoError imageKernel(float xK[KERNELSIZE], float yK[KERNELSIZE], float * output, bool projs);
 	TomoError project(float * projections, float * reconstruction);
+	TomoError normProject(float * projections, float * reconstruction, float alignStr);
 	TomoError scanLineDetect(int view, float * d_sum, float * sum, float * offset, bool vert, bool enable);
 	float getMax(float * d_Image);
 
@@ -1139,6 +1151,8 @@ private:
 
 	//Input histogram for end recon matching
 	unsigned int inputHistogram[HIST_BIN_COUNT];
+
+	std::ofstream binFile;
 };
 
 /********************************************************************************************/
