@@ -2452,7 +2452,7 @@ TomoError TomoRecon::findStartDistance() {
 		singleFrame();
 
 		KERNELCALL3(sumReduction, reductionBlocks, reductionThreads, reductionSize, d_Image, reconPitchNum, d_MaxVal,
-			constants.Rx / 8.0f, 7.0f * constants.Rx / 8.0f, constants.Ry / 8.0f, 7.0f * constants.Ry / 8.0f);
+			0.0f, constants.Rx, 0.0f, constants.Ry);
 
 		cuda(Memcpy(&currentVal, d_MaxVal, sizeof(float), cudaMemcpyDeviceToHost));
 	} while (currentVal > focusVal / 20.0f);
