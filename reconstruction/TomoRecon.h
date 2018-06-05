@@ -99,7 +99,7 @@
 #define EXPOSUREBASE 50
 #define METALDEFAULT 8000
 #define ENHANCEDEFAULT 1.0f
-#define SCANVERTDEFAULT 0.25f
+#define SCANVERTDEFAULT 0.13f
 #define SCANHORDEFAULT 0.1f
 #define NOISEMAXDEFAULT 700
 #define LAMBDADEFAULT 2
@@ -131,6 +131,8 @@
 //#define SQUAREMAGINX
 
 #define ITERATIONS 20
+
+#define DERWEIGHTSTR 1.0f
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {										\
@@ -315,11 +317,11 @@ struct params {
 
 ///Parameters used in CPU control systems, but not kernel calls
 struct CPUParams {
-	bool scanVertEnable = false;
+	bool scanVertEnable = true;
 	bool scanHorEnable = false;
 	float vertTau = SCANVERTDEFAULT;
 	float horTau = SCANHORDEFAULT;
-	int iterations = 40;
+	int iterations = ITERATIONS;
 };
 
 ///Input and ouptuts of the geometry test CSV
@@ -1086,7 +1088,7 @@ private:
 	float * d_Raw;
 	float * d_Weights;
 	cudaArray_t d_Recon2 = NULL;
-	cudaArray_t d_ReconDelta = NULL;
+	cudaArray_t d_ReconWeight = NULL;
 	cudaArray_t d_ReconError = NULL;
 	float * d_ReconOld = NULL;
 
@@ -1143,7 +1145,7 @@ private:
 	bool iterativeInitialized = false;
 	cudaSurfaceObject_t surfReconObj = 0;
 	cudaSurfaceObject_t surfErrorObj = 0;
-	cudaSurfaceObject_t surfDeltaObj = 0;
+	cudaSurfaceObject_t surfWeightObj = 0;
 
 	//Iterative loop parameters
 	float iteration = 0.0f;
