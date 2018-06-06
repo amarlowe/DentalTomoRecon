@@ -132,7 +132,7 @@
 
 #define ITERATIONS 20
 
-#define DERWEIGHTSTR 1.0f
+#define DERWEIGHTSTR 0.0f
 
 //Macro for checking cuda errors following a cuda launch or api call
 #define voidChkErr(...) {										\
@@ -289,6 +289,7 @@ struct params {
 	float minVal = 0.0;
 	float maxVal = USHRT_MAX;
 	bool showNegative = false;
+	float weightMax = 10000;
 
 	//selection box parameters
 	int baseXr = -1;
@@ -954,7 +955,7 @@ public:
 	///Special use case for getting the histogram for the iterative reconstruction data for the current slice.
 
 	///Usually used to adjust window and level.
-	TomoError getHistogramRecon(unsigned int * histogram, bool useall, bool useLog);
+	TomoError getHistogramRecon(unsigned int * histogram, cudaSurfaceObject_t volume, bool useall, bool useLog);
 
 	///Allocates the necessary memory for the iterative reconstruction and required tools.
 

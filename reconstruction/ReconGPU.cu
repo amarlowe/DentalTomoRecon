@@ -764,9 +764,8 @@ __global__ void projectIter(float * proj, float * oldRecon, float * weights, int
 	else
 		error = 0.0f;
 
-	float returnVal;// , delta;
+	float returnVal;
 	surf3Dread(&returnVal, surfRecon, i * sizeof(float), j, slice);
-	//surf3Dread(&delta, surfDelta, i * sizeof(float), j, slice);
 
 	if (!skipTV && returnVal > 0.0f) {
 		float AX = 0, BX = 0, temp;
@@ -794,7 +793,7 @@ __global__ void projectIter(float * proj, float * oldRecon, float * weights, int
 	float weight;
 	surf3Dread(&weight, surfWeight, i * sizeof(float), j, slice);
 	error *= abs(alpha);
-	error *= weight / 15000.0f;
+	error *= weight / consts.weightMax;
 
 	returnVal += error;
 	//maximum /= (float)count;
@@ -2024,7 +2023,7 @@ TomoError TomoRecon::getHistogram(T * image, unsigned int byteSize, unsigned int
 	return Tomo_OK;
 }
 
-TomoError TomoRecon::getHistogramRecon(unsigned int *histogram, bool useall = false, bool useLog = true) {
+TomoError TomoRecon::getHistogramRecon(unsigned int *histogram, cudaSurfaceObject_t volume, bool useall = false, bool useLog = true) {
 	unsigned int * d_Histogram;
 
 	cuda(Malloc((void **)&d_Histogram, HIST_BIN_COUNT * sizeof(unsigned int)));
@@ -2033,11 +2032,11 @@ TomoError TomoRecon::getHistogramRecon(unsigned int *histogram, bool useall = fa
 	//cuda(BindSurfaceToArray(surfRecon, d_Recon2));
 	if (useall) {
 		for (int slice = 0; slice < Sys.Recon.Nz; slice++) {
-			KERNELCALL2(histogramReconKernel, contBlocks, contThreads, d_Histogram, slice, useLog, constants, surfReconObj);
+			KERNELCALL2(histogramReconKernel, contBlocks, contThreads, d_Histogram, slice, useLog, constants, volume);
 		}
 	}
 	else {
-		KERNELCALL2(histogramReconKernel, contBlocks, contThreads, d_Histogram, sliceIndex, useLog, constants, surfReconObj);
+		KERNELCALL2(histogramReconKernel, contBlocks, contThreads, d_Histogram, sliceIndex, useLog, constants, volume);
 	}
 
 	cuda(Memcpy(histogram, d_Histogram, HIST_BIN_COUNT * sizeof(unsigned int), cudaMemcpyDeviceToHost));
@@ -2411,9 +2410,10 @@ TomoError TomoRecon::singleFrame(bool outputFrame, float** output, unsigned int 
 		for (int test = 0; test < 1915; test++) outputFile << imageLine[test] << "\n";
 		outputFile.close();
 #else
-		tomo_err_throw(normProject(inXBuff, buff2, DERWEIGHTSTR));
+		tomo_err_throw(normProject(inXBuff, d_Image, DERWEIGHTSTR));
+		//tomo_err_throw(project(inXBuff, buff2));
 
-		KERNELCALL2(xConvIntegrate, contBlocks, contThreads, d_Image, buff2, buff1, 0, constants);
+		//KERNELCALL2(xIntegrate, contBlocks, contThreads, d_Image, buff2, buff1, 0, constants);
 #endif //PRINTLINEDER
 	}
 		break;
@@ -3095,7 +3095,8 @@ TomoError TomoRecon::initIterative() {
 		cuda(UnbindTexture(textSino));
 
 		tomo_err_throw(normProject(inXBuff, buff2, DERWEIGHTSTR));
-		KERNELCALL2(xConvIntegrate, contBlocks, contThreads, NULL, buff2, buff1, slice, constants, surfWeightObj);
+		//tomo_err_throw(project(inXBuff, buff2));
+		KERNELCALL2(xIntegrate, contBlocks, contThreads, NULL, buff2, buff1, slice, constants, surfWeightObj);
 		//KERNELCALL2(initArray, contBlocks, contThreads, slice, slice * 1000.0f, constants, surfWeightObj);
 
 		KERNELCALL2(initArray, contBlocks, contThreads, slice, 0.0f, constants, surfReconObj);
@@ -3108,6 +3109,22 @@ TomoError TomoRecon::initIterative() {
 	}
 	cuda(UnbindTexture(textError));
 	cuda(UnbindTexture(textWeight));
+
+	//Get normalization factor for weight volume
+	constants.baseXr = 0;
+	constants.baseYr = 0;
+	constants.currXr = Sys.Recon.Nx;
+	constants.currYr = Sys.Recon.Ny;
+
+	float minVal;
+	unsigned int histogram[HIST_BIN_COUNT];
+	tomo_err_throw(getHistogramRecon(histogram, surfWeightObj, true, false));
+	tomo_err_throw(autoLight(histogram, 20, &minVal, &constants.weightMax));
+
+	constants.baseXr = -1;
+	constants.baseYr = -1;
+	constants.currXr = -1;
+	constants.currYr = -1;
 
 #ifdef PRINTMEMORYUSAGE
 	cudaMemGetInfo(&avail_mem, &total_mem);
@@ -3202,7 +3219,7 @@ TomoError TomoRecon::finalizeIter() {
 
 	float maxVal, minVal;
 	unsigned int histogram[HIST_BIN_COUNT];
-	tomo_err_throw(getHistogramRecon(histogram, true, false));
+	tomo_err_throw(getHistogramRecon(histogram, surfReconObj, true, false));
 	tomo_err_throw(autoLight(histogram, 20, &minVal, &maxVal));
 
 	//histogram equalization approximation by width and offset
@@ -3264,7 +3281,7 @@ TomoError TomoRecon::finalizeIter() {
 	cuda(UnbindTexture(textSino));
 
 #ifdef PRINTINTENSITIES
-	tomo_err_throw(getHistogramRecon(histogram, true, false));
+	tomo_err_throw(getHistogramRecon(histogram, surfReconObj, true, false));
 	std::ofstream outputFile;
 	char outFilename[250];
 	sprintf(outFilename, "./histogramOutRecon.txt");
