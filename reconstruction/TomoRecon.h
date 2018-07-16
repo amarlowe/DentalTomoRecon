@@ -89,7 +89,7 @@
 #define KERNELSIZE (2*KERNELRADIUS + 1)
 #else
 #define SIGMA 2.0f
-#define KERNELRADIUS 4
+#define KERNELRADIUS 10
 #define KERNELSIZE (2*KERNELRADIUS + 1)
 #endif
 
@@ -194,7 +194,8 @@ typedef enum {
 	mag_der,
 	z_der_mag,
 	norm_der,
-	abs_norm_der
+	abs_norm_der,
+	square_norm_der
 } derivative_t;
 
 ///The catesian directions

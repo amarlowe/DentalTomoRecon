@@ -87,7 +87,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 9.1.props" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 9.2.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -143,7 +143,7 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;WIN64;_DEBUG;__WXMSW__;_UNICODE;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>C:\Program Files\DCMTK\include;C:\Users\jdean\Google Drive\software\Xinvivo_software\Recon\DentalTomoRecon_beta1_SB2_installed\DentalTomoRecon\DentalTomoRecon\UI\include;C:\ProgramData\NVIDIA Corporation\CUDA Samples\v8.0\common\inc;C:\wxWidgets-3.1.0\include\msvc;C:\wxWidgets-3.1.0\include;$(OPENCV_DIR)\..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Program Files\DCMTK\include;C:\Users\jdean\Google Drive\software\Xinvivo_software\Recon\DentalTomoRecon_beta1_SB2_installed\DentalTomoRecon\DentalTomoRecon\UI\include;C:\ProgramData\NVIDIA Corporation\CUDA Samples\v9.2\common\inc;C:\wxWidgets-3.1.0\include\msvc;C:\wxWidgets-3.1.0\include;$(OPENCV_DIR)\..\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <ShowIncludes>false</ShowIncludes>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
@@ -153,7 +153,7 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
       <AdditionalDependencies>opencv_world340d.lib;dcmimage.lib;dcmimgle.lib;dcmdata.lib;ofstd.lib;oflog.lib;glew32d.lib;cudart.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Program Files\DCMTK\lib;C:\wxWidgets-3.1.0\lib\vc_x64_lib;C:\ProgramData\NVIDIA Corporation\CUDA Samples\v8.0\common\lib\x64;%OPENCV_DIR%\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Program Files\DCMTK\lib;C:\wxWidgets-3.1.0\lib\vc_x64_lib;C:\ProgramData\NVIDIA Corporation\CUDA Samples\v9.2\common\lib\x64;%OPENCV_DIR%\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
       <Command>echo copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"
@@ -176,7 +176,7 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>C:\wxWidgets-3.1.0\lib\vc_x64_lib\mswu;C:\ProgramData\NVIDIA Corporation\CUDA Samples\v8.0\common\inc;C:\Users\jdean\Google Drive\software\Xinvivo_software\Recon\DentalTomoRecon_beta1_SB2_installed\DentalTomoRecon\DentalTomoRecon\UI\include;C:\wxWidgets-3.1.0\include\msvc;C:\wxWidgets-3.1.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\wxWidgets-3.1.0\lib\vc_x64_lib\mswu;C:\ProgramData\NVIDIA Corporation\CUDA Samples\v9.2\common\inc;C:\Users\jdean\Google Drive\software\Xinvivo_software\Recon\DentalTomoRecon_beta1_SB2_installed\DentalTomoRecon\DentalTomoRecon\UI\include;C:\wxWidgets-3.1.0\include\msvc;C:\wxWidgets-3.1.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -206,7 +206,7 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
       <PreprocessorDefinitions>WIN32;WIN64;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ShowIncludes>false</ShowIncludes>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <AdditionalIncludeDirectories>C:\Program Files\DCMTK\include;C:\Users\jdean\Google Drive\software\Xinvivo_software\Recon\DentalTomoRecon_beta1_SB2_installed\DentalTomoRecon\DentalTomoRecon\UI\include;C:\ProgramData\NVIDIA Corporation\CUDA Samples\v8.0\common\inc;C:\wxWidgets-3.1.0\include\msvc;C:\Users\jdean\Downloads\opencv\build\include;C:\wxWidgets-3.1.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\amarlowe\Desktop\Software_Repository\DCMTK\include\;C:\Users\amarlowe\Desktop\Software_Repository\DentalTomoRecon\DentalTomoRecon\UI\include;C:\Users\amarlowe\Desktop\Software_Repository\common\inc;C:\Users\amarlowe\Desktop\Software_Repository\wxWidgets-3.1.0\include\msvc;C:\Users\amarlowe\Desktop\Software_Repository\opencv\build\include;C:\Users\amarlowe\Desktop\Software_Repository\wxWidgets-3.1.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <WholeProgramOptimization>false</WholeProgramOptimization>
@@ -216,7 +216,7 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
       <AdditionalDependencies>dcmjpeg.lib;dcmjpls.lib;dcmimage.lib;dcmimgle.lib;dcmdata.lib;ofstd.lib;oflog.lib;glew32d.lib;cudart.lib;odbc32.lib;odbccp32.lib;opencv_world340d.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Program Files\DCMTK\lib;C:\wxWidgets-3.1.0\lib\vc_x64_lib;C:\ProgramData\NVIDIA Corporation\CUDA Samples\v8.0\common\lib\x64;%OPENCV_DIR%\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Users\amarlowe\Desktop\Software_Repository\DCMTK\lib;C:\Users\amarlowe\Desktop\Software_Repository\wxWidgets-3.1.0\lib\vc_x64_lib;C:\Users\amarlowe\Desktop\Software_Repository\common\lib\x64;C:\Users\amarlowe\Desktop\Software_Repository\opencv\build\x64\vc15\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
       <Command>echo copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"
@@ -235,6 +235,6 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 9.1.targets" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 9.2.targets" />
   </ImportGroup>
 </Project>

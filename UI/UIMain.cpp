@@ -1186,7 +1186,7 @@ void DTRMainWindow::onAutoGeoS(wxCommandEvent& event) {
 	for (int view = 0; view < NUMVIEWS; view++)
 	//int view = 0;
 	{
-		if (view == 1 || view == 3) continue;
+		if (view == 3) continue;
 		recon->autoGeo2(view, maxXVals[view], maxYVals[view]);
 		/*(*m_textCtrl8) << "beam " << view << ": x: " << maxXVals[view] << " mm, y: " << maxYVals[view] << " mm\n";
 		recon->autoGeo(true, view, returnVal, yIters, maxXVals[view], maxYVals[view]);
